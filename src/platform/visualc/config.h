@@ -19,12 +19,6 @@
 /* Define to 1 to enable internal debugger, requires libcurses */
 #define C_DEBUG 1
 
-/* Define to 1 to enable rendered screenshots, requires SDL_image */
-#define C_SDL_IMAGE 1
-
-/* Define to 1 to enable surface screenshots, requires libpng */
-#define C_SSHOT 1
-
 /* Define to 1 to use opengl display output support */
 #define C_OPENGL 1
 
@@ -128,12 +122,3 @@
 // On Windows, this path is not customizeable, so it's left blank here.
 //
 #define CUSTOM_DATADIR ""
-
-/* Loguru-related defines
- */
-
-// Prevent loguru from parsing command-line arguments with
-// with the hosts's locale-applied, because this can foul up
-// ncurses. (DOSBox also doesn't have foreign-language arguments).
-//
-#define LOGURU_USE_LOCALE 0

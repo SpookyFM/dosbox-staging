@@ -60,7 +60,10 @@ private:
 		assert(msg.length());
 		const uint16_t cp = get_utf8_code_page();
 		if (output_msg_by_codepage[cp].empty()) {
-			if (!utf8_to_dos(msg, output_msg_by_codepage[cp], cp)) {
+			if (!utf8_to_dos(msg,
+			                 output_msg_by_codepage[cp],
+			                 UnicodeFallback::Box,
+			                 cp)) {
 				LOG_WARNING("LANG: Problem converting UTF8 string '%s' to DOS code page",
 				            msg.c_str());
 			}
@@ -92,7 +95,10 @@ public:
 		assert(rendered_msg.length());
 		const uint16_t cp = get_utf8_code_page();
 		if (rendered_msg_by_codepage[cp].empty()) {
-			if (!utf8_to_dos(rendered_msg, rendered_msg_by_codepage[cp], cp)) {
+			if (!utf8_to_dos(rendered_msg,
+			                 rendered_msg_by_codepage[cp],
+			                 UnicodeFallback::Box,
+			                 cp)) {
 				LOG_WARNING("LANG: Problem converting UTF8 string '%s' to DOS code page",
 				            rendered_msg.c_str());
 			}
@@ -157,7 +163,7 @@ static bool load_message_file(const std_fs::path &filename)
 	/* Start out with empty strings */
 	name[0] = 0;
 	message[0] = 0;
-	while (fgets(linein, LINE_IN_MAXLEN, mfile) != 0) {
+	while (fgets(linein, LINE_IN_MAXLEN, mfile) != nullptr) {
 		/* Parse the read line */
 		/* First remove characters 10 and 13 from the line */
 		char * parser=linein;
@@ -193,19 +199,23 @@ static bool load_message_file(const std_fs::path &filename)
 	return true;
 }
 
-const char *MSG_Get(char const *requested_name)
+const char* MSG_Get(const char* requested_name)
 {
 	const auto it = messages.find(requested_name);
-	if (it != messages.end())
+	if (it != messages.end()) {
 		return it->second.GetRendered();
+	}
+	LOG_WARNING("LANG: Message '%s' not found", requested_name);
 	return msg_not_found;
 }
 
-const char* MSG_GetRaw(char const *requested_name)
+const char* MSG_GetRaw(const char* requested_name)
 {
 	const auto it = messages.find(requested_name);
-	if (it != messages.end())
+	if (it != messages.end()) {
 		return it->second.GetRaw();
+	}
+	LOG_WARNING("LANG: Message '%s' not found", requested_name);
 	return msg_not_found;
 }
 
@@ -246,7 +256,7 @@ void MSG_Init([[maybe_unused]] Section_prop *section)
 	const auto lang = SETUP_GetLanguage();
 
 	// If the language is english, then use the internal message
-	if (lang.empty() || starts_with("en", lang)) {
+	if (lang.empty() || starts_with(lang, "en")) {
 		LOG_MSG("LANG: Using internal English language messages");
 		return;
 	}

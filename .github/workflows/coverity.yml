@@ -78,14 +78,13 @@ jobs:
         run: |
           set -xeu
           CC="clang" CXX="clang++" meson setup \
-          -Dbuildtype=debug \
+          -Dbuildtype=minsize \
+          -Db_ndebug=false \
           -Dunit_tests=disabled \
           -Duse_alsa=false \
           -Duse_fluidsynth=false \
           -Duse_mt32emu=false \
           -Duse_opengl=false \
-          -Duse_png=false \
-          -Duse_sdl2_image=false \
           -Duse_sdl2_net=false \
           -Duse_slirp=false \
           -Duse_xinput2=false \

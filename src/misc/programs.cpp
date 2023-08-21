@@ -278,130 +278,6 @@ void Program::InjectMissingNewline()
 	last_written_character = '\n';
 }
 
-bool Program::GetEnvStr(const char* entry, std::string& result) const
-{
-	/* Walk through the internal environment and see for a match */
-	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
-
-	char env_string[1024 + 1];
-	result.erase();
-	if (!entry[0]) {
-		return false;
-	}
-	do {
-		MEM_StrCopy(env_read, env_string, 1024);
-		if (!env_string[0]) {
-			return false;
-		}
-		env_read += (PhysPt)(safe_strlen(env_string) + 1);
-		char* equal = strchr(env_string, '=');
-		if (!equal) {
-			continue;
-		}
-		/* replace the = with \0 to get the length */
-		*equal = 0;
-		if (strlen(env_string) != strlen(entry)) {
-			continue;
-		}
-		if (strcasecmp(entry, env_string) != 0) {
-			continue;
-		}
-		/* restore the = to get the original result */
-		*equal = '=';
-		result = env_string;
-		return true;
-	} while (1);
-	return false;
-}
-
-bool Program::GetEnvNum(Bitu num, std::string& result) const
-{
-	char env_string[1024 + 1];
-	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
-	do {
-		MEM_StrCopy(env_read, env_string, 1024);
-		if (!env_string[0]) {
-			break;
-		}
-		if (!num) {
-			result = env_string;
-			return true;
-		}
-		env_read += (PhysPt)(safe_strlen(env_string) + 1);
-		num--;
-	} while (1);
-	return false;
-}
-
-Bitu Program::GetEnvCount() const
-{
-	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
-	Bitu num        = 0;
-	while (mem_readb(env_read) != 0) {
-		for (; mem_readb(env_read); env_read++) {
-		};
-		env_read++;
-		num++;
-	}
-	return num;
-}
-
-bool Program::SetEnv(const char* entry, const char* new_string)
-{
-	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
-
-	// Get size of environment.
-	DOS_MCB mcb(psp->GetEnvironment() - 1);
-	uint16_t envsize = mcb.GetSize() * 16;
-
-	PhysPt env_write          = env_read;
-	PhysPt env_write_start    = env_read;
-	char env_string[1024 + 1] = {0};
-	do {
-		MEM_StrCopy(env_read, env_string, 1024);
-		if (!env_string[0]) {
-			break;
-		}
-		env_read += (PhysPt)(safe_strlen(env_string) + 1);
-		if (!strchr(env_string, '=')) {
-			continue; /* Remove corrupt entry? */
-		}
-		if ((strncasecmp(entry, env_string, strlen(entry)) == 0) &&
-		    env_string[strlen(entry)] == '=') {
-			continue;
-		}
-		MEM_BlockWrite(env_write,
-		               env_string,
-		               (Bitu)(safe_strlen(env_string) + 1));
-		env_write += (PhysPt)(safe_strlen(env_string) + 1);
-	} while (1);
-	/* TODO Maybe save the program name sometime. not really needed though */
-	/* Save the new entry */
-
-	// ensure room
-	if (envsize <= (env_write - env_write_start) + strlen(entry) + 1 +
-	                       strlen(new_string) + 2) {
-		return false;
-	}
-
-	if (new_string[0]) {
-		std::string bigentry(entry);
-		for (std::string::iterator it = bigentry.begin();
-		     it != bigentry.end();
-		     ++it) {
-			*it = toupper(*it);
-		}
-		snprintf(env_string, 1024 + 1, "%s=%s", bigentry.c_str(), new_string);
-		MEM_BlockWrite(env_write,
-		               env_string,
-		               (Bitu)(safe_strlen(env_string) + 1));
-		env_write += (PhysPt)(safe_strlen(env_string) + 1);
-	}
-	/* Clear out the final piece of the environment */
-	mem_writeb(env_write, 0);
-	return true;
-}
-
 bool Program::HelpRequested()
 {
 	return cmd->FindExist("/?", false) || cmd->FindExist("-h", false) ||
@@ -427,18 +303,13 @@ public:
 		               HELP_CmdType::Program,
 		               "CONFIG"};
 	}
-	void Run(void);
+	void Run(void) override;
 
 private:
 	void restart(const char* useconfig);
 
-	void writeconf(std::string name, bool configdir)
+	void WriteConfig(const std::string& name)
 	{
-		if (configdir) {
-			// write file to the default config directory
-			const auto config_path = get_platform_config_dir() / name;
-			name = config_path.string();
-		}
 		WriteOut(MSG_Get("PROGRAM_CONFIG_FILE_WHICH"), name.c_str());
 		if (!control->PrintConfig(name)) {
 			WriteOut(MSG_Get("PROGRAM_CONFIG_FILE_ERROR"), name.c_str());
@@ -459,17 +330,16 @@ private:
 void CONFIG::Run(void)
 {
 	static const char* const params[] = {
-	        "-r",          "-wcp",      "-wcd",       "-wc",
-	        "-writeconf",  "-l",        "-rmconf",    "-h",
-	        "-help",       "-?",        "-axclear",   "-axadd",
-	        "-axtype",     "-avistart", "-avistop",   "-startmapper",
-	        "-get",        "-set",      "-writelang", "-wl",
-	        "-securemode", ""};
+	        "-r",        "-wcd",       "-wc",          "-writeconf",
+	        "-l",        "-rmconf",    "-h",           "-help",
+	        "-?",        "-axclear",   "-axadd",       "-axtype",
+	        "-avistart", "-avistop",   "-startmapper", "-get",
+	        "-set",      "-writelang", "-wl",          "-securemode",
+	        ""};
 	enum prs {
 		P_NOMATCH,
 		P_NOPARAMS, // fixed return values for GetParameterFromList
 		P_RESTART,
-		P_WRITECONF_PORTABLE,
 		P_WRITECONF_DEFAULT,
 		P_WRITECONF,
 		P_WRITECONF2,
@@ -554,54 +424,40 @@ void CONFIG::Run(void)
 			}
 			break;
 		}
+		case P_WRITECONF_DEFAULT: {
+			if (securemode_check()) {
+				return;
+			}
+			if (pvars.size() > 0) {
+				WriteOut(MSG_Get("SHELL_TOO_MANY_PARAMETERS"));
+				return;
+			}
+			std::string name;
+			Cross::GetPlatformConfigName(name);
+
+			// write file to the default config directory
+			const auto config_path = get_platform_config_dir() / name;
+			name = config_path.string();
+			WriteConfig(name);
+			break;
+		}
 		case P_WRITECONF:
 		case P_WRITECONF2:
 			if (securemode_check()) {
 				return;
 			}
 			if (pvars.size() > 1) {
-				return;
-			} else if (pvars.size() == 1) {
-				// write config to specific file, except if it
-				// is an absolute path
-				writeconf(pvars[0],
-				          !Cross::IsPathAbsolute(pvars[0]));
-			} else {
-				// -wc without parameter: write primary config file
-				if (control->configfiles.size()) {
-					writeconf(control->configfiles[0], false);
-				} else {
-					WriteOut(MSG_Get("PROGRAM_CONFIG_NOCONFIGFILE"));
-				}
-			}
-			break;
-		case P_WRITECONF_DEFAULT: {
-			// write to /userdir/dosbox0.xx.conf
-			if (securemode_check()) {
+				WriteOut(MSG_Get("SHELL_TOO_MANY_PARAMETERS"));
 				return;
 			}
-			if (pvars.size() > 0) {
-				return;
-			}
-			std::string confname;
-			Cross::GetPlatformConfigName(confname);
-			writeconf(confname, true);
-			break;
-		}
-		case P_WRITECONF_PORTABLE:
-			if (securemode_check()) {
-				return;
-			}
-			if (pvars.size() > 1) {
-				return;
-			} else if (pvars.size() == 1) {
+
+			if (pvars.size() == 1) {
 				// write config to startup directory
-				writeconf(pvars[0], false);
+				WriteConfig(pvars[0]);
 			} else {
-				// -wcp without parameter: write dosbox.conf to
-				// startup directory
+				// -wc without parameter: write dosbox.conf to startup directory
 				if (control->configfiles.size()) {
-					writeconf(std::string("dosbox.conf"), false);
+					WriteConfig("dosbox.conf");
 				} else {
 					WriteOut(MSG_Get("PROGRAM_CONFIG_NOCONFIGFILE"));
 				}
@@ -626,7 +482,7 @@ void CONFIG::Run(void)
 					// list the sections
 					WriteOut(MSG_Get("PROGRAM_CONFIG_HLP_SECTLIST"));
 					for (const Section* sec : *control) {
-						WriteOut("%s\n", sec->GetName());
+						WriteOut("  - %s\n", sec->GetName());
 					}
 					return;
 				}
@@ -665,16 +521,16 @@ void CONFIG::Run(void)
 			// if we have one value in pvars, it's a section
 			// two values are section + property
 			Section* sec = control->GetSection(pvars[0].c_str());
-			if (sec == NULL) {
+			if (sec == nullptr) {
 				WriteOut(MSG_Get("PROGRAM_CONFIG_PROPERTY_ERROR"),
 				         pvars[0].c_str());
 				return;
 			}
 			Section_prop* psec = dynamic_cast<Section_prop*>(sec);
-			if (psec == NULL) {
+			if (psec == nullptr) {
 				// failed; maybe it's the autoexec section?
 				Section_line* pline = dynamic_cast<Section_line*>(sec);
-				if (pline == NULL) {
+				if (pline == nullptr) {
 					E_Exit("Section dynamic cast failed.");
 				}
 
@@ -693,17 +549,17 @@ void CONFIG::Run(void)
 				while (true) {
 					// list the properties
 					Property* p = psec->Get_prop(i++);
-					if (p == NULL) {
+					if (p == nullptr) {
 						break;
 					}
-					WriteOut("%s\n", p->propname.c_str());
+					WriteOut("  - %s\n", p->propname.c_str());
 				}
 			} else {
 				// find the property by it's name
 				size_t i = 0;
 				while (true) {
 					Property* p = psec->Get_prop(i++);
-					if (p == NULL) {
+					if (p == nullptr) {
 						break;
 					}
 					if (!strcasecmp(p->propname.c_str(),
@@ -724,7 +580,7 @@ void CONFIG::Run(void)
 							Prop_int* pint =
 							        dynamic_cast<Prop_int*>(
 							                p);
-							if (pint == NULL) {
+							if (pint == nullptr) {
 								E_Exit("Int property dynamic cast failed.");
 							}
 							if (pint->GetMin() !=
@@ -807,7 +663,7 @@ void CONFIG::Run(void)
 				return;
 			}
 			std::string line_dos = {};
-			utf8_to_dos(sec->data, line_dos);
+			utf8_to_dos(sec->data, line_dos, UnicodeFallback::Box);
 			WriteOut("\n%s", line_dos.c_str());
 			break;
 		}
@@ -845,11 +701,11 @@ void CONFIG::Run(void)
 					Bitu i = 0;
 					Section_prop* psec =
 					        dynamic_cast<Section_prop*>(sec);
-					if (psec == NULL) {
+					if (psec == nullptr) {
 						// autoexec section
 						Section_line* pline =
 						        dynamic_cast<Section_line*>(sec);
-						if (pline == NULL) {
+						if (pline == nullptr) {
 							E_Exit("Section dynamic cast failed.");
 						}
 
@@ -859,7 +715,7 @@ void CONFIG::Run(void)
 					while (true) {
 						// list the properties
 						Property* p = psec->Get_prop(i++);
-						if (p == NULL) {
+						if (p == nullptr) {
 							break;
 						}
 						WriteOut(
@@ -912,19 +768,6 @@ void CONFIG::Run(void)
 			return;
 		}
 		case P_SETPROP: {
-			// Code for the configuration changes
-			// Official format: config -set "section property=value"
-			// Accepted: with or without -set,
-			// "section property value"
-			// "section property=value"
-			// "property" "value"
-			// "section" "property=value"
-			// "section" "property=value" "value" "value" ...
-			// "section" "property" "value" "value" ...
-			// "section property" "value" "value" ...
-			// "property" "value" "value" ...
-			// "property=value" "value" "value" ...
-
 			if (pvars.size() == 0) {
 				WriteOut(MSG_Get("PROGRAM_CONFIG_SET_SYNTAX"));
 				return;
@@ -1015,76 +858,130 @@ void PROGRAMS_Destroy([[maybe_unused]] Section* sec)
 
 void PROGRAMS_Init(Section* sec)
 {
-	/* Setup a special callback to start virtual programs */
+	// Setup a special callback to start virtual programs
 	call_program = CALLBACK_Allocate();
 	CALLBACK_Setup(call_program, &PROGRAMS_Handler, CB_RETF, "internal program");
 
-	// Cleanup -- allows unit tests to run indefinitely & cleanly
+	// TODO Cleanup -- allows unit tests to run indefinitely & cleanly
 	sec->AddDestroyFunction(&PROGRAMS_Destroy);
 
-	// listconf
-	MSG_Add("PROGRAM_CONFIG_NOCONFIGFILE", "No config file loaded!\n");
-	MSG_Add("PROGRAM_CONFIG_PRIMARY_CONF", "Primary config file: \n%s\n");
-	MSG_Add("PROGRAM_CONFIG_ADDITIONAL_CONF", "Additional config files:\n");
+	// List config
+	MSG_Add("PROGRAM_CONFIG_NOCONFIGFILE", "No config file loaded\n");
+	MSG_Add("PROGRAM_CONFIG_PRIMARY_CONF", "[color=white]Primary config file:[reset]\n  %s\n");
+	MSG_Add("PROGRAM_CONFIG_ADDITIONAL_CONF", "\n[color=white]Additional config files:[reset]\n  ");
+
 	MSG_Add("PROGRAM_CONFIG_CONFDIR",
-	        "DOSBox Staging %s configuration directory: \n%s\n\n");
+	        "[color=white]DOSBox Staging %s configuration directory:[reset]\n  %s\n\n");
 
-	// writeconf
-	MSG_Add("PROGRAM_CONFIG_FILE_ERROR", "\nCan't open file %s\n");
-	MSG_Add("PROGRAM_CONFIG_FILE_WHICH", "Writing config file %s\n");
+	// Write config
+	MSG_Add("PROGRAM_CONFIG_FILE_ERROR", "\nCan't open config file '%s'\n");
+	MSG_Add("PROGRAM_CONFIG_FILE_WHICH", "Writing current config to '%s'\n");
 
-	// help
+	// Help
 	MSG_Add("SHELL_CMD_CONFIG_HELP_LONG",
-	        "Adjusts DOSBox Staging's configurable parameters.\n"
-	        "-writeconf or -wc without parameter: write to primary loaded config file.\n"
-	        "-writeconf or -wc with filename: write file to config directory.\n"
-	        "Use -writelang or -wl filename to write the current language strings.\n"
-	        "-r [parameters]\n"
-	        " Restart DOSBox, either using the previous parameters or any that are appended.\n"
-	        "-wcp [filename]\n"
-	        " Write config file to the program directory, dosbox.conf or the specified\n"
-	        " filename.\n"
-	        "-wcd\n"
-	        " Write to the default config file in the config directory.\n"
-	        "-l lists configuration parameters.\n"
-	        "-h, -help, -? sections / sectionname / propertyname\n"
-	        " Without parameters, displays this help screen. Add \"sections\" for a list of\n"
-	        " sections."
-	        " For info about a specific section or property add its name behind.\n"
-	        "-axclear clears the autoexec section.\n"
-	        "-axadd [line] adds a line to the autoexec section.\n"
-	        "-axtype prints the content of the autoexec section.\n"
-	        "-securemode switches to secure mode.\n"
-	        "-avistart starts AVI recording.\n"
-	        "-avistop stops AVI recording.\n"
-	        "-startmapper starts the keymapper.\n"
-	        "-get \"section property\" returns the value of the property.\n"
-	        "-set \"section property=value\" sets the value.\n");
+	        "Performs configuration management and other miscellaneous actions.\n"
+	        "\n"
+	        "Usage:\n"
+	        "  [color=green]config[reset] [color=white]COMMAND[reset] [color=cyan][PARAMETERS][reset]\n"
+	        "\n"
+	        "Where [color=white]COMMAND[reset] is one of:\n"
+	        "  -writeconf\n"
+	        "  -wc               Writes the config to `dosbox.conf` in the current working\n"
+	        "                    directory.\n"
+	        "\n"
+	        "  -writeconf [color=white]PATH[reset]\n"
+	        "  -wc [color=white]PATH          [reset]If [color=white]PATH[reset] is a filename, writes the config to that name\n"
+	        "                    in the current working directory, otherwise to the\n"
+	        "                    specified absolute or relative path.\n"
+	        "\n"
+	        "  -wcd              Writes the config to the global `dosbox-staging.conf`\n"
+	        "                    file in the configuration directory.\n"
+	        "\n"
+	        "  -writelang [color=white]FILENAME[reset]\n"
+	        "  -wl [color=white]FILENAME      [reset]Writes the current language strings to [color=white]FILENAME [reset]in the\n"
+	        "                    current working directory.\n"
+	        "\n"
+	        "  -r [color=cyan][PROPERTY1=VALUE1 [PROPERTY2=VALUE2 ...]][reset]\n"
+	        "                    Restarts DOSBox with the optionally supplied config\n"
+	        "                    properties.\n"
+	        "\n"
+	        "  -l                Shows the currently loaded config files and command line\n"
+	        "                    arguments provided at startup.\n"
+	        "\n"
+	        "  -help sections\n"
+	        "  -h    sections\n"
+	        "  -?    sections    Lists the names of all config sections.\n"
+	        "\n"
+	        "  -help [color=white]SECTION[reset]\n"
+	        "  -h    [color=white]SECTION[reset]\n"
+	        "  -?    [color=white]SECTION     [reset]Lists the names of all properties in a config section.\n"
+	        "\n"
+	        "  -help [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "  -h    [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "  -?    [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "                    Shows the description and the current value of a config\n"
+	        "                    property.\n"
+	        "\n"
+	        "  -axclear          Clears the [autoexec] section.\n"
+	        "  -axadd [color=white]LINE[reset]       Appends a line to the end of the [autoexec] section.\n"
+	        "  -axtype           Shows the contents of the [autoexec] section.\n"
+	        "  -securemode       Switches to secure mode.\n"
+	        "  -avistart         Starts AVI recording.\n"
+	        "  -avistop          Stops AVI recording.\n"
+	        "  -startmapper      Starts the keymapper.\n"
+	        "\n"
+	        "  -get [color=white]SECTION      [reset]Shows all properties and their values in a config section.\n"
+	        "  -get [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "                    Shows the value of a single config property.\n"
+	        "\n"
+	        "  -set [color=cyan][SECTION][reset] [color=white]PROPERTY[reset][=][color=white]VALUE[reset]\n"
+	        "                    Sets the value of a config property.");
+
 	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP",
-	        "Purpose of property \"%s\" (contained in section \"%s\"):\n%s\n\nPossible Values: %s\nDefault value: %s\nCurrent value: %s\n");
+	        "[color=white]Purpose of property [color=green]'%s'[color=white] "
+			"(contained in section [color=cyan][%s][color=white])[reset]:\n\n%s\n\n"
+	        "[color=white]Possible values:[reset]  %s\n"
+	        "[color=white]Default value:[reset]    %s\n"
+	        "[color=white]Current value:[reset]    %s\n");
+
 	MSG_Add("PROGRAM_CONFIG_HLP_LINEHLP",
-	        "Purpose of section \"%s\":\n%s\nCurrent value:\n%s\n");
+	        "[color=white]Purpose of section [%s][reset]:\n"
+			"%s\n[color=white]Current value:[reset]\n%s\n");
+
 	MSG_Add("PROGRAM_CONFIG_HLP_NOCHANGE",
 	        "This property cannot be changed at runtime.\n");
+
 	MSG_Add("PROGRAM_CONFIG_HLP_POSINT", "positive integer");
+
 	MSG_Add("PROGRAM_CONFIG_HLP_SECTHLP",
-	        "Section %s contains the following properties:\n");
+	        "[color=white]Section [color=cyan][%s] [color=white]contains the following properties:[reset]\n");
+
 	MSG_Add("PROGRAM_CONFIG_HLP_SECTLIST",
-	        "DOSBox configuration contains the following sections:\n\n");
+	        "[color=white]DOSBox configuration contains the following sections:[reset]\n");
 
 	MSG_Add("PROGRAM_CONFIG_SECURE_ON", "Switched to secure mode.\n");
+
 	MSG_Add("PROGRAM_CONFIG_SECURE_DISALLOW",
 	        "This operation is not permitted in secure mode.\n");
-	MSG_Add("PROGRAM_CONFIG_SECTION_ERROR", "Section \"%s\" doesn't exist.\n");
+
+	MSG_Add("PROGRAM_CONFIG_SECTION_ERROR", "Section [%s] doesn't exist.\n");
+
 	MSG_Add("PROGRAM_CONFIG_VALUE_ERROR",
-	        "\"%s\" is not a valid value for property \"%s\".\n");
+	        "'%s' is not a valid value for property '%s'.\n");
+
 	MSG_Add("PROGRAM_CONFIG_GET_SYNTAX",
-	        "Correct syntax: config -get \"section property\".\n");
+	        "Usage: [color=green]config[reset] -get "
+	        "[color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n");
+
 	MSG_Add("PROGRAM_CONFIG_PRINT_STARTUP",
-	        "\nDOSBox was started with the following command line parameters:\n%s\n");
+	        "\n[color=white]DOSBox was started with the following command line arguments:[reset]\n  %s\n");
+
 	MSG_Add("PROGRAM_CONFIG_MISSINGPARAM", "Missing parameter.\n");
+
 	MSG_Add("PROGRAM_PATH_TOO_LONG",
-	        "The path \"%s\" exceeds the DOS maximum length of %d characters\n");
-	MSG_Add("PROGRAM_EXECUTABLE_MISSING", "Executable file not found: %s\n");
+	        "The path '%s' exceeds the DOS limit of %d characters.\n");
+
+	MSG_Add("PROGRAM_EXECUTABLE_MISSING", "Executable file not found: '%s'\n");
+
 	MSG_Add("CONJUNCTION_AND", "and");
 }

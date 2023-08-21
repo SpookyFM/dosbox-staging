@@ -102,12 +102,12 @@ typedef GLvoid* (APIENTRYP PFNGLMAPBUFFERARBPROC) (GLenum target, GLenum access)
 typedef GLboolean (APIENTRYP PFNGLUNMAPBUFFERARBPROC) (GLenum target);
 #endif
 
-PFNGLGENBUFFERSARBPROC glGenBuffersARB = NULL;
-PFNGLBINDBUFFERARBPROC glBindBufferARB = NULL;
-PFNGLDELETEBUFFERSARBPROC glDeleteBuffersARB = NULL;
-PFNGLBUFFERDATAARBPROC glBufferDataARB = NULL;
-PFNGLMAPBUFFERARBPROC glMapBufferARB = NULL;
-PFNGLUNMAPBUFFERARBPROC glUnmapBufferARB = NULL;
+PFNGLGENBUFFERSARBPROC glGenBuffersARB = nullptr;
+PFNGLBINDBUFFERARBPROC glBindBufferARB = nullptr;
+PFNGLDELETEBUFFERSARBPROC glDeleteBuffersARB = nullptr;
+PFNGLBUFFERDATAARBPROC glBufferDataARB = nullptr;
+PFNGLMAPBUFFERARBPROC glMapBufferARB = nullptr;
+PFNGLUNMAPBUFFERARBPROC glUnmapBufferARB = nullptr;
 
 /* Don't guard these with GL_VERSION_2_0 - Apple defines it but not these typedefs.
  * If they're already defined they should match these definitions, so no conflicts.
@@ -139,25 +139,25 @@ typedef void (APIENTRYP PFNGLVERTEXATTRIBPOINTERPROC) (GLuint index, GLint size,
  * namespace here to keep the official names but avoid collisions.
  */
 namespace gl2 {
-PFNGLATTACHSHADERPROC glAttachShader = NULL;
-PFNGLCOMPILESHADERPROC glCompileShader = NULL;
-PFNGLCREATEPROGRAMPROC glCreateProgram = NULL;
-PFNGLCREATESHADERPROC glCreateShader = NULL;
-PFNGLDELETEPROGRAMPROC glDeleteProgram = NULL;
-PFNGLDELETESHADERPROC glDeleteShader = NULL;
-PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = NULL;
-PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation = NULL;
-PFNGLGETPROGRAMIVPROC glGetProgramiv = NULL;
-PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = NULL;
-PFNGLGETSHADERIVPROC glGetShaderiv = NULL;
-PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog = NULL;
-PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = NULL;
-PFNGLLINKPROGRAMPROC glLinkProgram = NULL;
-PFNGLSHADERSOURCEPROC_NP glShaderSource = NULL;
-PFNGLUNIFORM2FPROC glUniform2f = NULL;
-PFNGLUNIFORM1IPROC glUniform1i = NULL;
-PFNGLUSEPROGRAMPROC glUseProgram = NULL;
-PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = NULL;
+PFNGLATTACHSHADERPROC glAttachShader = nullptr;
+PFNGLCOMPILESHADERPROC glCompileShader = nullptr;
+PFNGLCREATEPROGRAMPROC glCreateProgram = nullptr;
+PFNGLCREATESHADERPROC glCreateShader = nullptr;
+PFNGLDELETEPROGRAMPROC glDeleteProgram = nullptr;
+PFNGLDELETESHADERPROC glDeleteShader = nullptr;
+PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
+PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation = nullptr;
+PFNGLGETPROGRAMIVPROC glGetProgramiv = nullptr;
+PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = nullptr;
+PFNGLGETSHADERIVPROC glGetShaderiv = nullptr;
+PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog = nullptr;
+PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
+PFNGLLINKPROGRAMPROC glLinkProgram = nullptr;
+PFNGLSHADERSOURCEPROC_NP glShaderSource = nullptr;
+PFNGLUNIFORM2FPROC glUniform2f = nullptr;
+PFNGLUNIFORM1IPROC glUniform1i = nullptr;
+PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
+PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = nullptr;
 }
 
 /* "using" is meant to hide identical names declared in outer scope
@@ -201,15 +201,15 @@ SDL_Block sdl;
 
 // Masks to be passed when creating SDL_Surface.
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-constexpr uint32_t RMASK = 0xff000000;
-constexpr uint32_t GMASK = 0x00ff0000;
-constexpr uint32_t BMASK = 0x0000ff00;
-constexpr uint32_t AMASK = 0x000000ff;
+[[maybe_unused]] constexpr uint32_t RMASK = 0xff000000;
+[[maybe_unused]] constexpr uint32_t GMASK = 0x00ff0000;
+[[maybe_unused]] constexpr uint32_t BMASK = 0x0000ff00;
+[[maybe_unused]] constexpr uint32_t AMASK = 0x000000ff;
 #else
-constexpr uint32_t RMASK = 0x000000ff;
-constexpr uint32_t GMASK = 0x0000ff00;
-constexpr uint32_t BMASK = 0x00ff0000;
-constexpr uint32_t AMASK = 0xff000000;
+[[maybe_unused]] constexpr uint32_t RMASK = 0x000000ff;
+[[maybe_unused]] constexpr uint32_t GMASK = 0x0000ff00;
+[[maybe_unused]] constexpr uint32_t BMASK = 0x00ff0000;
+[[maybe_unused]] constexpr uint32_t AMASK = 0xff000000;
 #endif
 
 // Size and ratio constants
@@ -228,9 +228,7 @@ constexpr bool FIXED_SIZE = false;
 static bool first_window = true;
 
 static SDL_Point restrict_to_viewport_resolution(int width, int height);
-static PPScale calc_pp_scale(int width, int heigth);
-static SDL_Rect calc_viewport(int width, int height);
-static SDL_Rect calc_viewport_fit(const int width, const int height);
+static SDL_Rect calc_viewport(const int width, const int height);
 
 static void CleanupSDLResources();
 static void HandleVideoResize(int width, int height);
@@ -244,13 +242,13 @@ static void update_frame_gl_fb(const uint16_t *changedLines);
 static bool present_frame_gl();
 #endif
 
-static const char *vsync_state_as_string(const VSYNC_STATE state)
+static const char* vsync_state_as_string(const VsyncState state)
 {
 	switch (state) {
-	case VSYNC_STATE::UNSET: return "unset";
-	case VSYNC_STATE::ADAPTIVE: return "adaptive";
-	case VSYNC_STATE::OFF: return "off";
-	case VSYNC_STATE::ON: return "on";
+	case VsyncState::Unset: return "unset";
+	case VsyncState::Adaptive: return "adaptive";
+	case VsyncState::Off: return "off";
+	case VsyncState::On: return "on";
 	default: return "unknown";
 	}
 }
@@ -405,19 +403,19 @@ static double get_host_refresh_rate()
 		if (display_in_use < 0) {
 			LOG_ERR("SDL: Could not get the current window index: %s",
 			        SDL_GetError());
-			return REFRESH_RATE_HOST_DEFAULT;
+			return RefreshRateHostDefault;
 		}
 		if (SDL_GetCurrentDisplayMode(display_in_use, &mode) != 0) {
 			LOG_ERR("SDL: Could not get the current display mode: %s",
 			        SDL_GetError());
-			return REFRESH_RATE_HOST_DEFAULT;
+			return RefreshRateHostDefault;
 		}
-		if (sdl_rate < REFRESH_RATE_MIN) {
+		if (sdl_rate < RefreshRateMin) {
 			LOG_WARNING("SDL: Got a strange refresh rate of %d Hz",
 			            sdl_rate);
-			return REFRESH_RATE_HOST_DEFAULT;
+			return RefreshRateHostDefault;
 		}
-		assert(sdl_rate >= REFRESH_RATE_MIN);
+		assert(sdl_rate >= RefreshRateMin);
 		return sdl_rate;
 	};
 
@@ -440,9 +438,9 @@ static double get_host_refresh_rate()
 	const char *rate_description = ""; // description of the refresh rate
 
 	switch (sdl.desktop.host_rate_mode) {
-	case HOST_RATE_MODE::AUTO:
+	case HostRateMode::Auto:
 		if (const auto sdl_rate = get_sdl_rate();
-		    sdl.desktop.fullscreen && sdl_rate >= REFRESH_RATE_HOST_VRR_MIN) {
+		    sdl.desktop.fullscreen && sdl_rate >= InterpolatingVrrMinRateHz) {
 			rate = get_vrr_rate(sdl_rate);
 			rate_description = "VRR-adjusted (auto)";
 		} else {
@@ -450,21 +448,21 @@ static double get_host_refresh_rate()
 			rate_description = "standard SDI (auto)";
 		}
 		break;
-	case HOST_RATE_MODE::SDI:
+	case HostRateMode::Sdi:
 		rate = get_sdi_rate(get_sdl_rate());
 		rate_description = "standard SDI";
 		break;
-	case HOST_RATE_MODE::VRR:
+	case HostRateMode::Vrr:
 		rate = get_vrr_rate(get_sdl_rate());
 		rate_description = "VRR-adjusted";
 		break;
-	case HOST_RATE_MODE::CUSTOM:
-		assert(sdl.desktop.preferred_host_rate >= REFRESH_RATE_MIN);
+	case HostRateMode::Custom:
+		assert(sdl.desktop.preferred_host_rate >= RefreshRateMin);
 		rate = sdl.desktop.preferred_host_rate;
 		rate_description = "custom";
 		break;
 	}
-	assert(rate >= REFRESH_RATE_MIN);
+	assert(rate >= RefreshRateMin);
 
 	// Log if changed
 	static auto last_int_rate = 0;
@@ -475,6 +473,63 @@ static double get_host_refresh_rate()
 		        rate_description, rate);
 	}
 	return rate;
+}
+
+// Populates the vsync preferences from the user's conf setting. This is called
+// on-demand after startup because we need SDL running to assess the host's
+// frame rate in the "auto" vsync case.
+//
+static void populate_requested_vsync_settings()
+{
+	const auto section = dynamic_cast<Section_prop*>(control->GetSection("sdl"));
+	const std::string_view user_pref = (section ? section->Get_string("vsync")
+	                                             : "auto");
+	if (has_true(user_pref)) {
+		sdl.vsync.when_windowed.requested   = VsyncState::On;
+		sdl.vsync.when_fullscreen.requested = VsyncState::On;
+	} else if (has_false(user_pref)) {
+		sdl.vsync.when_windowed.requested   = VsyncState::Off;
+		sdl.vsync.when_fullscreen.requested = VsyncState::Off;
+	} else if (user_pref == "yield") {
+		sdl.vsync.when_windowed.requested   = VsyncState::Yield;
+		sdl.vsync.when_fullscreen.requested = VsyncState::Yield;
+	} else {
+		assert(user_pref == "auto");
+		// In windowed-mode, assume the window manager has exclusive
+		// access to the GPU so leave vsync off
+		sdl.vsync.when_windowed.requested = VsyncState::Off;
+
+		// For fullscreen mode, VRR displays that perform
+		// frame interpolation need vsync enabled to lock onto the
+		// content. So we select "vsync on" whenever a display is
+		// /potentially/ this type. This has little downside because at
+		// >140+ Hz, all DOS refresh rates are going to be presented.
+		//
+		const bool prefers_vsync_when_fullscreen =
+		        (get_host_refresh_rate() >= InterpolatingVrrMinRateHz);
+
+		// For fullscreen mode with non-interpolating VRR displays, we
+		// try to disable vsync because this:
+		//
+		// 1) has no downside when the DOS rate is below the host rate.
+		//    For example, in DOOM a DOS rate of 35 fps on a 60 Hz host
+		//    will never tear because it won't exceed the host rate.
+		//
+		// 2) is "less worse" when the *unique* DOS frame rate actually
+		//    exceeds the host rate. Why? When disabled, frames might
+		//    tear, but there is no slowdown or full frames dropped.
+		//    When enabled, entire frames will either be dropped or
+		//    the host will jam up with a rendering stall, drain the
+		//    audio buffer, and possible stutter or pop.
+		//
+		// 'auto' lets us make a judgement call for average user, so
+		// we accept the risk of tearing with the guarantee of no
+		// rendering stalls or pops (versus the opposite).
+		//
+		sdl.vsync.when_fullscreen.requested = prefers_vsync_when_fullscreen
+		                                            ? VsyncState::On
+		                                            : VsyncState::Off;
+	}
 }
 
 /* This function is SDL_EventFilter which is being called when event is
@@ -681,8 +736,9 @@ static uint32_t opengl_driver_crash_workaround(SCREEN_TYPES type)
 	if (type != SCREEN_TEXTURE)
 		return 0;
 
-	if (starts_with("opengl", sdl.render_driver))
+	if (starts_with(sdl.render_driver, "opengl")) {
 		return SDL_WINDOW_OPENGL;
+	}
 
 	if (sdl.render_driver != "auto")
 		return 0;
@@ -699,48 +755,33 @@ static uint32_t opengl_driver_crash_workaround(SCREEN_TYPES type)
 		if (info.flags & SDL_RENDERER_TARGETTEXTURE)
 			break;
 	}
-	default_driver_is_opengl = starts_with("opengl", info.name);
+	default_driver_is_opengl = starts_with(info.name, "opengl");
 	return (default_driver_is_opengl ? SDL_WINDOW_OPENGL : 0);
 }
 
 static SDL_Point refine_window_size(const SDL_Point size,
-                                    const SCALING_MODE scaling_mode,
+                                    const InterpolationMode interpolation_mode,
                                     const bool should_stretch_pixels);
 
 static SDL_Rect get_canvas_size(const SCREEN_TYPES screen_type);
 
-static SDL_Rect calc_viewport_pp(int win_width, int win_height);
-
 // Logs the source and target resolution including describing scaling method
-// and pixel-aspect ratios. Note that this function deliberately doesn't use
+// and pixel aspect ratio. Note that this function deliberately doesn't use
 // any global structs to disentangle it from the existing sdl-main design.
 static void log_display_properties(int source_w, int source_h,
-                                   const std::optional<SDL_Rect> &target_size_override,
-                                   const SCALING_MODE scaling_mode,
-                                   const SCREEN_TYPES screen_type,
-                                   const PPScale &pp_scale)
+                                   const std::optional<SDL_Rect>& target_size_override,
+                                   const SCREEN_TYPES screen_type)
 {
-	// The pixel perfect object holds its effective source dimensions
-	if (scaling_mode == SCALING_MODE::PERFECT) {
-		source_w = pp_scale.effective_source_w;
-		source_h = pp_scale.effective_source_h;
-	}
 	// Get the target dimentions, with consideration for possible override
-	// values and pixel-perfect handling
+	// values
 	auto get_target_dims = [&]() -> std::pair<int, int> {
 		if (target_size_override) {
-			auto calc_vp  = (scaling_mode == SCALING_MODE::PERFECT)
-			                      ? calc_viewport_pp
-			                      : calc_viewport_fit;
-			const auto vp = calc_vp(target_size_override->w,
-			                        target_size_override->h);
+			const auto vp = calc_viewport(target_size_override->w,
+			                              target_size_override->h);
 			return {vp.w, vp.h};
 		}
-		if (scaling_mode == SCALING_MODE::PERFECT) {
-			return {pp_scale.output_w, pp_scale.output_h};
-		}
 		const auto canvas   = get_canvas_size(screen_type);
-		const auto viewport = calc_viewport_fit(canvas.w, canvas.h);
+		const auto viewport = calc_viewport(canvas.w, canvas.h);
 		return {viewport.w, viewport.h};
 	};
 
@@ -752,19 +793,19 @@ static void log_display_properties(int source_w, int source_h,
 
 	const auto scale_x = static_cast<double>(target_w) / source_w;
 	const auto scale_y = static_cast<double>(target_h) / source_h;
-	auto out_par       = scale_y / scale_x;
+
+	auto one_per_pixel_aspect = scale_y / scale_x;
 
 	const auto [mode_type, mode_id] = VGA_GetCurrentMode();
 	const auto [mode_desc, colours_desc] =
 	        VGA_DescribeMode(mode_type, mode_id, source_w, source_h);
 
-	const char *frame_mode = nullptr;
+	const char* frame_mode = nullptr;
 	switch (sdl.frame.mode) {
-	case FRAME_MODE::CFR: frame_mode = "CFR"; break;
-	case FRAME_MODE::VFR: frame_mode = "VFR"; break;
-	case FRAME_MODE::SYNCED_CFR: frame_mode = "synced CFR"; break;
-	case FRAME_MODE::THROTTLED_VFR: frame_mode = "throttled VFR"; break;
-	case FRAME_MODE::UNSET: frame_mode = "Unset frame_mode"; break;
+	case FrameMode::Cfr: frame_mode = "CFR"; break;
+	case FrameMode::Vfr: frame_mode = "VFR"; break;
+	case FrameMode::ThrottledVfr: frame_mode = "throttled VFR"; break;
+	case FrameMode::Unset: frame_mode = "Unset frame_mode"; break;
 	}
 
 	auto refresh_rate = VGA_GetPreferredRate();
@@ -778,7 +819,7 @@ static void log_display_properties(int source_w, int source_h,
 	const auto in_cga_mode_4h_or_5h = (mode_id == 0x4 || mode_id == 0x5);
 	if (in_cga_mode_4h_or_5h && IS_VGA_ARCH && source_h > 200) {
 		source_w *= 2;
-		out_par *= 2;
+		one_per_pixel_aspect *= 2;
 	}
 
 	// Double check all the char* string variables
@@ -797,18 +838,13 @@ static void log_display_properties(int source_w, int source_h,
 	        frame_mode,
 	        target_w,
 	        target_h,
-	        out_par);
+	        one_per_pixel_aspect);
 }
 
 // A public wrapper to log the current display (both DOS and host) properties
 void GFX_LogDisplayProperties()
 {
-	log_display_properties(sdl.draw.width,
-	                       sdl.draw.height,
-	                       {},
-	                       sdl.scaling_mode,
-	                       sdl.desktop.type,
-	                       sdl.pp_scale);
+	log_display_properties(sdl.draw.width, sdl.draw.height, {}, sdl.desktop.type);
 }
 
 static SDL_Point get_initial_window_position_or_default(int default_val)
@@ -840,30 +876,39 @@ static void safe_set_window_size(const int w, const int h)
 	std::swap(sdl.draw.callback, saved_callback);
 }
 
-static const VsyncPreference &get_vsync_preference()
+static VsyncSettings& get_vsync_settings()
 {
+	if (sdl.vsync.when_fullscreen.requested == VsyncState::Unset ||
+	    sdl.vsync.when_windowed.requested == VsyncState::Unset) {
+		populate_requested_vsync_settings();
+	}
 	return sdl.desktop.fullscreen ? sdl.vsync.when_fullscreen
 	                              : sdl.vsync.when_windowed;
 }
 
+// Benchmarks are run in each vsync'd mode as part of the vsync detection
+// process. This routine returns the vsync mode's current benchmark rate
+// if available.
+static std::optional<int> get_benchmarked_vsync_rate()
+{
+	const auto bench_rate = get_vsync_settings().benchmarked_rate;
+	return (bench_rate != 0 ? std::optional<int>(bench_rate) : std::nullopt);
+}
+
 static void set_vfr_dupe_countdown_from_rate(const double dos_rate_hz)
 {
-	constexpr auto min_dos_rate_hz = 24.0;
-	constexpr auto max_dos_rate_hz = 1000.0;
+	constexpr auto max_dupe_rate_hz = 10.0;
 
-	constexpr auto min_countdown = 4.0;
-	constexpr auto max_countdown = 18.0;
+	assert(dos_rate_hz >= max_dupe_rate_hz);
+	assert(dos_rate_hz <= RefreshRateMax);
+	const auto dos_to_dupe_frames = iround(dos_rate_hz / max_dupe_rate_hz);
 
-	const auto countdown = remap(min_dos_rate_hz,
-	                             max_dos_rate_hz,
-	                             min_countdown,
-	                             max_countdown,
-	                             dos_rate_hz);
+	sdl.frame.vfr_dupe_countdown = check_cast<int8_t>(dos_to_dupe_frames);
 
-	// LOG_MSG("SDL: Setting VFR duplicate countdown to %.0f "
-	//         "from a DOS rate of %.1f Hz ", countdown, dos_rate_hz);
-
-	sdl.frame.vfr_dupe_countdown = check_cast<int8_t>(iround(countdown));
+#if 0
+	LOG_MSG("SDL: Setting VFR duplicate countdown to %d "
+	        "from a DOS rate of %.1f Hz ", dos_to_dupe_frames, dos_rate_hz);
+#endif
 }
 
 static void save_rate_to_frame_period(const double rate_hz)
@@ -887,11 +932,15 @@ static int benchmark_presentation_rate()
 	       sdl.frame.update != update_frame_noop);
 
 	// Number of frames to benchmark
-	const auto warmup_frames = 10;
-	const auto bench_frames = 4;
+	const auto ten_percent_of_fps = get_host_refresh_rate() / 10;
+
+	const auto warmup_frames = ten_percent_of_fps;
+	const auto bench_frames  = ten_percent_of_fps;
+
 	// Disable the pacer because we need every frame presented and measured
-	// so we can hit the vsync wall (if it exists)
+	// so we can hit the vsync wall (if it exists).
 	render_pacer->SetTimeout(0);
+
 	// Warmup round
 	for (auto i = 0; i < warmup_frames; ++i) {
 		sdl.frame.update(nullptr);
@@ -903,54 +952,43 @@ static int benchmark_presentation_rate()
 		sdl.frame.update(nullptr);
 		sdl.frame.present();
 	}
-	const auto elapsed_us = std::max(1, GetTicksUsSince(start_us));
-	return (bench_frames * 1'000'000) / elapsed_us;
+	const auto elapsed_us = std::max(static_cast<int64_t>(1L), GetTicksUsSince(start_us));
+	return iround(static_cast<int>((bench_frames * 1'000'000) / elapsed_us));
 }
 
-static VSYNC_STATE get_reported_vsync()
+static int nearest_common_rate(const double rate)
 {
-	auto state = VSYNC_STATE::UNSET;
-#if C_OPENGL
-	if (sdl.desktop.type == SCREEN_OPENGL) {
-		assert(sdl.opengl.context);
-		const auto retval = SDL_GL_GetSwapInterval();
-		switch (retval) {
-		case 1: state = VSYNC_STATE::ON; break;
-		case 0: state = VSYNC_STATE::OFF; break;
-		case -1: state = VSYNC_STATE::ADAPTIVE; break;
-		default:
-			LOG_WARNING("SDL:OPENGL: Reported an unknown vsync state: %d",
-			            retval);
-			break;
+	constexpr int common_rates[] = {
+	        24, 30, 50, 60, 70, 71, 72, 75, 80, 85, 90, 100, 120, 144, 165, 240};
+
+	int nearest_rate   = 0;
+	int min_difference = INT_MAX;
+
+	// Find the nearest refresh rate
+	for (int common_rate : common_rates) {
+		int difference = std::abs(iround(rate) - common_rate);
+		if (difference <= min_difference) {
+			min_difference = difference;
+			nearest_rate   = common_rate;
+			continue;
 		}
+		break;
 	}
-#endif
-	if (sdl.desktop.type == SCREEN_TEXTURE || sdl.desktop.type == SCREEN_SURFACE) {
-		const std::string_view retstr = SDL_GetHint(SDL_HINT_RENDER_VSYNC);
-		if (retstr == "1")
-			state = VSYNC_STATE::ON;
-		else if (retstr == "0")
-			state = VSYNC_STATE::OFF;
-		else if (retstr == "-1")
-			state = VSYNC_STATE::ADAPTIVE;
-		else
-			LOG_WARNING("SDL: Reported an unknown vsync state: %s",
-			            retstr.data());
-	}
-	assert(state != VSYNC_STATE::UNSET);
-	return state;
+	assert(nearest_rate != 0);
+	return nearest_rate;
 }
 
-static VSYNC_STATE get_resultant_vsync(int &bench_rate)
+static VsyncState measure_vsync_state(int& bench_rate)
 {
 	bench_rate = benchmark_presentation_rate();
 	const auto host_rate = get_host_refresh_rate();
 
 	// Notify the user if the machine is prensetation-starved.
-	if (bench_rate < host_rate * 0.5) {
-		LOG_WARNING("SDL: The benchmarked rendering rate of %d FPS, which"
-		            " is well below the host's refresh rate of %2.5g Hz.",
-		            bench_rate, host_rate);
+	if (bench_rate < host_rate * 0.8) {
+		LOG_WARNING("SDL: We can only render %d FPS, which is well below"
+		            " the host's reported refresh rate of %2.5g Hz.",
+		            bench_rate,
+		            host_rate);
 		LOG_WARNING(
 		        "SDL: You will experience rendering lag and stuttering."
 		        " Consider updating your video drivers and try disabling"
@@ -958,15 +996,18 @@ static VSYNC_STATE get_resultant_vsync(int &bench_rate)
 	}
 
 	if (bench_rate < host_rate * 1.5)
-		return VSYNC_STATE::ON;
+		return VsyncState::On;
 	else if (bench_rate < host_rate * 2.5)
-		return VSYNC_STATE::ADAPTIVE;
+		return VsyncState::Adaptive;
 	else
-		return VSYNC_STATE::OFF;
+		return VsyncState::Off;
 }
 
-static void set_vsync(const VSYNC_STATE state)
+static void set_vsync(const VsyncState state)
 {
+	if (state == VsyncState::Yield) {
+		return;
+	}
 #if C_OPENGL
 	if (sdl.desktop.type == SCREEN_OPENGL) {
 		assert(sdl.opengl.context);
@@ -991,66 +1032,35 @@ static void set_vsync(const VSYNC_STATE state)
 		return;
 	}
 #endif
-	if (sdl.desktop.type == SCREEN_TEXTURE || sdl.desktop.type == SCREEN_SURFACE) {
-		// https://wiki.libsdl.org/SDL_HINT_RENDER_VSYNC - can only be
-		// set to "1", "0", adapative is currently not supported, so we
-		// also treat it as "1"
-		const auto hint_str = (state == VSYNC_STATE::ON ||
-		                       state == VSYNC_STATE::ADAPTIVE)
-		                              ? "1"
-		                              : "0";
-		if (SDL_SetHint(SDL_HINT_RENDER_VSYNC, hint_str) == SDL_TRUE)
-			return;
-		LOG_WARNING("SDL: Failed setting SDL's vsync state to to %s (%s): %s",
-		            vsync_state_as_string(state), hint_str, SDL_GetError());
+	assert (sdl.desktop.type == SCREEN_TEXTURE || sdl.desktop.type == SCREEN_SURFACE);
+	// https://wiki.libsdl.org/SDL_HINT_RENDER_VSYNC - can only be
+	// set to "1", "0", adapative is currently not supported, so we
+	// also treat it as "1"
+	const auto hint_str = (state == VsyncState::On ||
+							state == VsyncState::Adaptive)
+									? "1"
+									: "0";
+	if (SDL_SetHint(SDL_HINT_RENDER_VSYNC, hint_str) == SDL_TRUE)
 		return;
-	}
-	// Unhandled screen type
-	LOG_WARNING("SDL: Failed setting the vsync state to %s: unsupported screen type",
-	            vsync_state_as_string(state));
+	LOG_WARNING("SDL: Failed setting SDL's vsync state to to %s (%s): %s",
+				vsync_state_as_string(state), hint_str, SDL_GetError());
 }
 
 static void update_vsync_state()
 {
 	// Hosts can have different vsync constraints between window modes
-	auto &vsync_pref = sdl.desktop.fullscreen ? sdl.vsync.when_fullscreen
-	                                          : sdl.vsync.when_windowed;
+	auto& vsync_pref = get_vsync_settings();
+
 	// Short-hand aliases
 	auto &requested = vsync_pref.requested;
-	auto &reported = vsync_pref.reported;
-	auto &resultant = vsync_pref.resultant;
+	auto& measured  = vsync_pref.measured;
 
-	assert(requested != VSYNC_STATE::UNSET);
+	assert(requested != VsyncState::Unset);
 
-	// We haven't assessed the reported and resultant states yet
-	if (resultant == VSYNC_STATE::UNSET) {
+	// Do we still need to measure the vsync state?
+	if (measured == VsyncState::Unset) {
 		set_vsync(requested);
-		resultant = get_resultant_vsync(vsync_pref.benchmarked_rate);
-		reported = get_reported_vsync();
-		if (requested != resultant) {
-			DEBUG_LOG_MSG("SDL: Set the %s-mode vsync to %s, after which the driver told us vsync"
-			              " was %s, but measurements proved it to be %s (benchmarked %d FPS)",
-			              sdl.desktop.fullscreen ? "fullscreen" : "window",
-			              vsync_state_as_string(requested),
-			              vsync_state_as_string(reported),
-			              vsync_state_as_string(resultant),
-			              vsync_pref.benchmarked_rate);
-		}
-	}
-	// Do we need to set the state?
-	if (sdl.vsync.current != resultant) {
-		set_vsync(requested);
-		const auto new_reported = get_reported_vsync();
-		if (new_reported != reported) {
-			DEBUG_LOG_MSG("SDL: Set the %s-mode vsync to %s like before, but now the driver tells"
-			              " us vsync was %s when previously it said vsync was %s",
-			              sdl.desktop.fullscreen ? "fullscreen" : "window",
-			              vsync_state_as_string(requested),
-			              vsync_state_as_string(new_reported),
-			              vsync_state_as_string(reported));
-			resultant = get_resultant_vsync(vsync_pref.benchmarked_rate);
-		}
-		sdl.vsync.current = resultant;
+		measured = measure_vsync_state(vsync_pref.benchmarked_rate);
 	}
 }
 
@@ -1062,26 +1072,39 @@ static void remove_window()
 	}
 }
 
-// The throttled presenter skip frames that have an inter-frame spaces more
-// narrow than the allowed frame period.
-static void maybe_present_throttled(const bool frame_is_new)
+// After the last new frame, present a duplicate frame every N calls of this
+// function. This is an insurance policy to ensure the last frame is shown even
+// if the host previously dropped it. This is a temporary hack; it should be
+// removed in the future when everyone's PC display technology can support the >
+// 70 Hz refresh rates available in 1990s PC CRT monitors.
+static void present_new_or_maybe_dupe(const bool frame_is_new)
 {
-	static bool last_frame_presented = false;
-	if (!frame_is_new && last_frame_presented) {
-		return;
-	}
+	static auto dupe_countdown = sdl.frame.vfr_dupe_countdown;
+	assert(dupe_countdown > 0);
 
-	const auto now = GetTicksUs();
+	if (frame_is_new || --dupe_countdown <= 0) {
+		sdl.frame.present();
+		dupe_countdown = sdl.frame.vfr_dupe_countdown;
+	}
+}
+
+// The throttled presenter skips frames that have inter-frame spaces narrower
+// than the allowed frame period, but also back-fills with duplicate frames as
+// an insurance policy to ensure the last frame is shown even if the host
+// previously dropped it.
+static void maybe_present_throttled_or_dupe(const bool frame_is_new)
+{
 	static int64_t last_present_time = 0;
+
+	const auto now     = GetTicksUs();
 	const auto elapsed = now - last_present_time;
+
 	if (elapsed >= sdl.frame.period_us) {
 		// If we waited beyond this frame's refresh period, then credit
 		// this extra wait back by deducting it from the recorded time.
 		const auto wait_overage = elapsed % sdl.frame.period_us;
 		last_present_time = now - (9 * wait_overage / 10);
-		last_frame_presented = sdl.frame.present();
-	} else {
-		last_frame_presented = false;
+		present_new_or_maybe_dupe(frame_is_new);
 	}
 }
 
@@ -1106,137 +1129,101 @@ static void maybe_present_synced(const bool present_if_last_skipped)
 	last_sync_time = should_present ? GetTicksUs() : now;
 }
 
-static void present_new_or_maybe_dupe(const bool frame_is_new)
+static void setup_presentation_mode(FrameMode &previous_mode)
 {
-	// After the last new frame, present a duplicate frame every N calls of
-	// this function.
-	static auto dupe_countdown = sdl.frame.vfr_dupe_countdown;
-
-	if (frame_is_new) {
-		sdl.frame.present();
-		dupe_countdown = sdl.frame.vfr_dupe_countdown;
-	} else if (--dupe_countdown <= 0) {
-		// This is an insurance policy to ensure the last frame is shown
-		// even if the host previously dropped it. This is a temporary
-		// hack; it should be removed in the future when everyone's PC
-		// display technology can support the > 70 Hz refresh rates
-		// available in 1990s PC CRT monitors.
-		constexpr auto always_try = true;
-		maybe_present_synced(always_try);
-		dupe_countdown = sdl.frame.vfr_dupe_countdown;
-	}
-}
-
-static void schedule_synced([[maybe_unused]] const uint32_t event_id = 0)
-{
-	if (sdl.frame.mode != FRAME_MODE::SYNCED_CFR)
-		return;
-
-	constexpr bool present_if_last_skipped = false;
-	maybe_present_synced(present_if_last_skipped);
-	PIC_RemoveEvents(schedule_synced);
-	PIC_AddEvent(schedule_synced, sdl.frame.period_ms);
-}
-
-static void setup_presentation_mode(FRAME_MODE &previous_mode)
-{
-	// Always get the reported refresh rate and hint the VGA side with it
-	// This ensures the VGA side always has the host's rate to prior to
-	// its next mode change.
+	// Always get the reported refresh rate and hint the VGA side with it.
+	// This ensures the VGA side always has the host's rate to prior to its
+	// next mode change.
 	const auto host_rate = get_host_refresh_rate();
-	if (host_rate >= REFRESH_RATE_MIN)
-		VGA_SetHostRate(host_rate);
+	VGA_SetHostRate(host_rate);
 	const auto dos_rate = VGA_GetPreferredRate();
 
-	// Frame rates are defined up to the 3rd decimal place, so compare on
-	// the fourth.
-	auto atleast_as_fast = [](const double a, const double b) {
-		constexpr auto threshold = 0.0001;
-		return a > b - threshold;
-	};
+	// Update the VFR duplicate countdown based on the DOS rate to produce a
+	// fixed lower-bound dupe refresh rate.
+	set_vfr_dupe_countdown_from_rate(dos_rate);
 
-	auto configure_cfr_mode = [&]() -> FRAME_MODE {
-		if (atleast_as_fast(dos_rate, REFRESH_RATE_HOST_VRR_LFC) ||
-		    !atleast_as_fast(host_rate, REFRESH_RATE_HOST_VRR_MIN)) {
-			const auto lesser_rate = std::min(host_rate, dos_rate);
-			save_rate_to_frame_period(lesser_rate);
-			return atleast_as_fast(host_rate, dos_rate)
-			               ? FRAME_MODE::CFR
-			               : FRAME_MODE::SYNCED_CFR;
-		}
-		assert(!atleast_as_fast(dos_rate, REFRESH_RATE_HOST_VRR_LFC));
-		const auto doubled_dos_rate = dos_rate * 2;
-		const auto lesser_rate = std::min(doubled_dos_rate, host_rate);
-		save_rate_to_frame_period(lesser_rate);
-		return atleast_as_fast(host_rate, doubled_dos_rate)
-		               ? FRAME_MODE::CFR
-		               : FRAME_MODE::SYNCED_CFR;
-	};
-
-	auto configure_vfr_mode = [&]() {
-		set_vfr_dupe_countdown_from_rate(dos_rate);
-		const auto bench_rate = get_vsync_preference().benchmarked_rate;
-		const auto lesser_rate = std::min(host_rate, dos_rate);
-		save_rate_to_frame_period(lesser_rate);
-		const auto is_fast_enough = sdl.vsync.current != VSYNC_STATE::ON &&
-		                            atleast_as_fast(bench_rate, dos_rate);
-		const auto wont_hit_vsync_wall = sdl.vsync.current != VSYNC_STATE::OFF &&
-		                                 atleast_as_fast(host_rate, dos_rate);
-		return (is_fast_enough || wont_hit_vsync_wall)
-		               ? FRAME_MODE::VFR
-		               : FRAME_MODE::THROTTLED_VFR;
-	};
-
-	const bool wants_vsync = sdl.vsync.current == VSYNC_STATE::ON ||
-	                         get_vsync_preference().requested == VSYNC_STATE::ON;
+	// Consider any vsync state that isn't explicitly off as having some
+	// level of vsync enforcement as "on"
+	const auto vsync_is_on = (get_vsync_settings().requested != VsyncState::Off);
 
 	// to be set below
-	auto mode = FRAME_MODE::UNSET;
+	auto mode = FrameMode::Unset;
 
-	// Manual full CFR
-	if (sdl.frame.desired_mode == FRAME_MODE::CFR) {
-		if (configure_cfr_mode() != FRAME_MODE::CFR && wants_vsync) {
-			LOG_WARNING("SDL: CFR performance warning: the DOS rate of %2.5g"
-			            " Hz exceeds the host's %2.5g Hz vsynced rate",
-			            dos_rate, host_rate);
-		}
+	// Manual CFR or VFR modes
+	if (sdl.frame.desired_mode == FrameMode::Cfr ||
+	    sdl.frame.desired_mode == FrameMode::Vfr) {
 		mode = sdl.frame.desired_mode;
+
+		// Frames will be presented at the DOS rate.
+		save_rate_to_frame_period(dos_rate);
+
+		// Because we don't have proof that the host system actually
+		// supports the requested rates, we use the frame pacer to
+		// inform the user when the host is hitting the vsync wall.
+		render_pacer->SetTimeout(vsync_is_on ? sdl.vsync.skip_us : 0);
 	}
-	// Manual full VFR
-	else if (sdl.frame.desired_mode == FRAME_MODE::VFR) {
-		if (configure_vfr_mode() != FRAME_MODE::VFR) {
-			LOG_WARNING("SDL: VFR performance warning: the DOS rate of %2.5g"
-			            " Hz exceeds the host's %2.5g Hz handling rate",
-			            dos_rate, host_rate);
-		}
-		mode = sdl.frame.desired_mode;
-	}
-	// Auto CFR
-	else if (wants_vsync) {
-		mode = configure_cfr_mode();
-	}
-	// Auto VFR
+	// Automatic CFR or VFR modes
 	else {
-		mode = configure_vfr_mode();
+		const auto has_bench_rate = get_benchmarked_vsync_rate();
+
+		auto get_supported_rate = [=]() -> double {
+			if (!has_bench_rate) {
+				return host_rate;
+			}
+			const double bench_rate = *has_bench_rate;
+
+			return vsync_is_on ? std::min(bench_rate, host_rate)
+			                   : std::max(bench_rate, host_rate);
+		};
+		const auto supported_rate = get_supported_rate();
+
+		const auto display_might_be_interpolating = (host_rate >=
+		                                             InterpolatingVrrMinRateHz);
+
+		// If we're fullscreen, vsynced, and using a VRR display that
+		// performs frame interpolation, then we prefer to use a
+		// constant rate.
+		const auto conditions_prefer_constant_rate =
+		        (sdl.desktop.fullscreen && vsync_is_on &&
+		         display_might_be_interpolating);
+
+#if 0	
+		LOG_MSG("SDL: Auto presentation mode conditions:");
+		LOG_MSG("SDL:   - DOS rate is %2.5g Hz", dos_rate);
+		if (has_bench_rate) {
+		        LOG_MSG("SDL:   - Host renders at %d FPS", *has_bench_rate);
+		}
+		LOG_MSG("SDL:   - Display refresh rate is %.3f Hz", host_rate);
+		LOG_MSG("SDL:   - %s",
+		        supported_rate >= dos_rate
+		                ? "Host can handle the full DOS rate"
+		                : "Host cannot handle the DOS rate");
+		LOG_MSG("SDL:   - %s",
+		        conditions_prefer_constant_rate
+		                ? "CFR selected because we're fullscreen, "
+		                  "vsync'd, and display is 140+Hz"
+		                : "VFR selected because we're not "
+		                  "fullscreen, nor vsync'd, nor < 140Hz");
+#endif
+
+		if (supported_rate >= dos_rate) {
+			mode = conditions_prefer_constant_rate ? FrameMode::Cfr
+			                                       : FrameMode::Vfr;
+			save_rate_to_frame_period(dos_rate);
+		} else {
+			mode = FrameMode::ThrottledVfr;
+			save_rate_to_frame_period(nearest_common_rate(supported_rate));
+		}
+		// In auto-mode, the presentation rate doesn't exceed supported
+		// rate so we disable the pacer.
+		render_pacer->SetTimeout(0);
 	}
 
 	// If the mode is unchanged, do nothing
-	assert(mode != FRAME_MODE::UNSET);
+	assert(mode != FrameMode::Unset);
 	if (previous_mode == mode)
 		return;
 	previous_mode = mode;
-
-	// Configure the pacer in VFR modes to detect when the host takes too
-	// long to render frames. CFR modes use the PIC scheduler to place
-	// frames and use their own measurements, so we disable the pacer for
-	// them.
-	const auto is_vfr_mode = mode == FRAME_MODE::VFR ||
-	                         mode == FRAME_MODE::THROTTLED_VFR;
-	render_pacer->SetTimeout(is_vfr_mode ? sdl.vsync.skip_us : 0);
-
-	// Start synced presentation, if applicable
-	if (mode == FRAME_MODE::SYNCED_CFR)
-		schedule_synced();
 }
 
 static void NewMouseScreenParams()
@@ -1349,7 +1336,8 @@ static void check_and_handle_dpi_change(SDL_Window* sdl_window,
 }
 
 static SDL_Window* SetWindowMode(SCREEN_TYPES screen_type, int width,
-                                 int height, bool fullscreen, bool resizable)
+                                 int height, bool fullscreen, bool resizable,
+                                 bool allow_highdpi = true)
 {
 	CleanupSDLResources();
 
@@ -1368,7 +1356,9 @@ static SDL_Window* SetWindowMode(SCREEN_TYPES screen_type, int width,
 		remove_window();
 
 		uint32_t flags = opengl_driver_crash_workaround(screen_type);
-		flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+		if (allow_highdpi) {
+			flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+		}
 #if C_OPENGL
 		if (screen_type == SCREEN_OPENGL)
 			flags |= SDL_WINDOW_OPENGL;
@@ -1485,10 +1475,11 @@ finish:
 
 // Used for the mapper UI and more: Creates a fullscreen window with desktop res
 // on Android, and a non-fullscreen window with the input dimensions otherwise.
-SDL_Window * GFX_SetSDLSurfaceWindow(uint16_t width, uint16_t height)
+SDL_Window* GFX_SetSDLSurfaceWindow(uint16_t width, uint16_t height,
+                                    bool allow_highdpi = true)
 {
 	constexpr bool fullscreen = false;
-	return SetWindowMode(SCREEN_SURFACE, width, height, fullscreen, FIXED_SIZE);
+	return SetWindowMode(SCREEN_SURFACE, width, height, fullscreen, FIXED_SIZE, allow_highdpi);
 }
 
 // Returns the rectangle in the current window to be used for scaling a
@@ -1529,48 +1520,6 @@ static SDL_Rect get_canvas_size(const SCREEN_TYPES screen_type)
 	return canvas;
 }
 
-static SDL_Window *setup_window_pp(SCREEN_TYPES screen_type, bool resizable)
-{
-	assert(sdl.window);
-
-	int window_width  = 0;
-	int window_height = 0;
-	SDL_GetWindowSize(sdl.window, &window_width, &window_height);
-	assert(window_width > 0 && window_height > 0);
-
-	if (!sdl.desktop.fullscreen) {
-		window_width  = sdl.desktop.requested_window_bounds.width;
-		window_height = sdl.desktop.requested_window_bounds.height;
-	}
-
-	const auto render_resolution = restrict_to_viewport_resolution(
-	        iround(window_width * sdl.desktop.dpi_scale),
-	        iround(window_height * sdl.desktop.dpi_scale));
-
-	sdl.pp_scale = calc_pp_scale(render_resolution.x, render_resolution.y);
-
-	const int img_width = sdl.pp_scale.output_w;
-	const int img_height = sdl.pp_scale.output_h;
-
-	int win_width;
-	int win_height;
-	if (sdl.use_exact_window_resolution && sdl.use_viewport_limits) {
-		win_width  = window_width;
-		win_height = window_height;
-	} else {
-		win_width  = (sdl.desktop.fullscreen
-		                      ? window_width
-		                      : iround(img_width / sdl.desktop.dpi_scale));
-		win_height = (sdl.desktop.fullscreen
-		                      ? window_height
-		                      : iround(img_height / sdl.desktop.dpi_scale));
-	}
-
-	sdl.window = SetWindowMode(screen_type, win_width, win_height,
-	                           sdl.desktop.fullscreen, resizable);
-	return sdl.window;
-}
-
 static SDL_Point restrict_to_viewport_resolution(const int w, const int h)
 {
 	return sdl.use_viewport_limits
@@ -1583,13 +1532,8 @@ static SDL_Point restrict_to_viewport_resolution(const int w, const int h)
 	             : SDL_Point{w, h};
 }
 
-static SDL_Rect calc_viewport_fit(int win_width, int win_height);
-
 static SDL_Window *SetupWindowScaled(SCREEN_TYPES screen_type, bool resizable)
 {
-	if (sdl.scaling_mode == SCALING_MODE::PERFECT)
-		return setup_window_pp(screen_type, resizable);
-
 	int window_width;
 	int window_height;
 	if (sdl.desktop.fullscreen) {
@@ -1662,7 +1606,7 @@ static GLuint BuildShader(GLenum type, const std::string_view source_sv)
 	if (shader == 0) return 0;
 
 	// Load the shader source
-	glShaderSource(shader, 2, src_strings, NULL);
+	glShaderSource(shader, 2, src_strings, nullptr);
 
 	// Compile the shader
 	glCompileShader(shader);
@@ -1676,7 +1620,7 @@ static GLuint BuildShader(GLenum type, const std::string_view source_sv)
 
 		if (info_len > 1) {
 			std::vector<GLchar> info_log(info_len);
-			glGetShaderInfoLog(shader, info_len, NULL, info_log.data());
+			glGetShaderInfoLog(shader, info_len, nullptr, info_log.data());
 			LOG_ERR("Error compiling shader: %s", info_log.data());
 		}
 
@@ -1775,7 +1719,7 @@ static void check_kmsdrm_setting()
 // screens) and also reduces load on slow systems like the Raspberry Pi.
 //
 static void update_vga_sub_350_line_handling([[maybe_unused]] const SCREEN_TYPES screen_type,
-                                             const SCALING_MODE scaling_mode)
+                                             const InterpolationMode interpolation_mode)
 {
 	auto line_handling = VgaSub350LineHandling::SingleScan;
 #if C_OPENGL
@@ -1783,34 +1727,10 @@ static void update_vga_sub_350_line_handling([[maybe_unused]] const SCREEN_TYPES
 		line_handling = VgaSub350LineHandling::DoubleScan;
 	}
 #endif
-	if (scaling_mode == SCALING_MODE::NONE) {
+	if (interpolation_mode == InterpolationMode::Bilinear) {
 		line_handling = VgaSub350LineHandling::DoubleScan;
 	}
 	VGA_SetVgaSub350LineHandling(line_handling);
-}
-
-// Some video modes are effectively doubled in resolution but only have half the
-// unique pixel resolution.
-static bool is_draw_size_doubled()
-{
-	// Has either dimension been doubled?
-	const bool is_doubled = (sdl.draw.width_was_doubled ||
-	                         sdl.draw.height_was_doubled);
-
-	// Are the dimensions divisible by 2?
-	const bool is_divisible = (sdl.draw.width % 2 == 0 &&
-	                           sdl.draw.height % 2 == 0);
-
-	// Are the dimensions beyond low-res?
-	const bool is_large = (sdl.draw.width > 500 && sdl.draw.height > 350);
-
-	return is_doubled && is_divisible && is_large;
-}
-
-static PPScale calc_pp_scale(const int avw, const int avh)
-{
-	return PPScale(sdl.draw.width, sdl.draw.height, sdl.draw.pixel_aspect,
-	               is_draw_size_doubled(), avw, avh);
 }
 
 bool operator!=(const SDL_Point lhs, const SDL_Point rhs)
@@ -1837,13 +1757,8 @@ static void initialize_sdl_window_size(SDL_Window* sdl_window,
 	}
 }
 
-Bitu GFX_SetSize(int width,
-                 int height,
-                 const Bitu flags,
-                 double scalex,
-                 double scaley,
-                 GFX_CallBack_t callback,
-                 double pixel_aspect)
+Bitu GFX_SetSize(int width, int height, const Bitu flags, double scalex,
+                 double scaley, GFX_CallBack_t callback)
 {
 	Bitu retFlags = 0;
 	if (sdl.updating)
@@ -1861,7 +1776,6 @@ Bitu GFX_SetSize(int width,
 	                        sdl.draw.height_was_doubled != double_height ||
 	                        sdl.draw.scalex != scalex ||
 	                        sdl.draw.scaley != scaley ||
-	                        sdl.draw.pixel_aspect != pixel_aspect ||
 	                        sdl.draw.previous_mode != CurMode->type);
 
 	sdl.draw.width = width;
@@ -1870,11 +1784,11 @@ Bitu GFX_SetSize(int width,
 	sdl.draw.height_was_doubled = double_height;
 	sdl.draw.scalex = scalex;
 	sdl.draw.scaley = scaley;
-	sdl.draw.pixel_aspect = pixel_aspect;
 	sdl.draw.callback = callback;
 	sdl.draw.previous_mode = CurMode->type;
 
-	const auto wants_vsync = get_vsync_preference().requested != VSYNC_STATE::OFF;
+	const auto vsync_pref = get_vsync_settings().requested;
+	assert(vsync_pref != VsyncState::Unset);
 
 	switch (sdl.desktop.want_type) {
 dosurface:
@@ -1950,7 +1864,7 @@ dosurface:
 		}
 		/* Fix a glitch with aspect=true occuring when
 		changing between modes with different dimensions */
-		SDL_FillRect(sdl.surface, NULL, SDL_MapRGB(sdl.surface->format, 0, 0, 0));
+		SDL_FillRect(sdl.surface, nullptr, SDL_MapRGB(sdl.surface->format, 0, 0, 0));
 		SDL_UpdateWindowSurface(sdl.window);
 
 		sdl.frame.update = update_frame_surface;
@@ -1960,7 +1874,7 @@ dosurface:
 		break; // SCREEN_SURFACE
 
 	case SCREEN_TEXTURE: {
-		SDL_SetHint(SDL_HINT_RENDER_VSYNC, wants_vsync ? "1" : "0");
+		set_vsync(vsync_pref);
 
 		if (!SetupWindowScaled(SCREEN_TEXTURE, false)) {
 			LOG_ERR("DISPLAY: Can't initialise 'texture' window");
@@ -1998,7 +1912,7 @@ dosurface:
 		SDL_SetRenderDrawColor(sdl.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		uint32_t pixel_format;
 		assert(sdl.texture.texture);
-		SDL_QueryTexture(sdl.texture.texture, &pixel_format, NULL, NULL, NULL);
+		SDL_QueryTexture(sdl.texture.texture, &pixel_format, nullptr, nullptr, nullptr);
 
 		assert(sdl.texture.pixelFormat == nullptr); // ensure we don't leak
 		sdl.texture.pixelFormat = SDL_AllocFormat(pixel_format);
@@ -2062,7 +1976,7 @@ dosurface:
 		} else {
 			free(sdl.opengl.framebuf);
 		}
-		sdl.opengl.framebuf=0;
+		sdl.opengl.framebuf=nullptr;
 		if (!(flags & GFX_CAN_32))
 			goto dosurface;
 
@@ -2115,7 +2029,7 @@ dosurface:
 			goto dosurface;
 		}
 
-		SDL_GL_SetSwapInterval(wants_vsync);
+		set_vsync(vsync_pref);
 
 		if (sdl.opengl.use_shader) {
 			GLuint prog=0;
@@ -2169,7 +2083,7 @@ dosurface:
 
 						if (info_len > 1) {
 							std::vector<GLchar> info_log(info_len);
-							glGetProgramInfoLog(sdl.opengl.program_object, info_len, NULL, info_log.data());
+							glGetProgramInfoLog(sdl.opengl.program_object, info_len, nullptr, info_log.data());
 							LOG_ERR("SDL:OPENGL: Error link program:\n %s", info_log.data());
 						}
 						glDeleteProgram(sdl.opengl.program_object);
@@ -2209,7 +2123,7 @@ dosurface:
 		if (sdl.opengl.pixel_buffer_object) {
 			glGenBuffersARB(1, &sdl.opengl.buffer);
 			glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT, sdl.opengl.buffer);
-			glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_EXT, framebuffer_bytes, NULL, GL_STREAM_DRAW_ARB);
+			glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_EXT, framebuffer_bytes, nullptr, GL_STREAM_DRAW_ARB);
 			glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT, 0);
 		} else {
 			sdl.opengl.framebuf = malloc(framebuffer_bytes); // 32 bit colour
@@ -2246,10 +2160,9 @@ dosurface:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_parameter);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_parameter);
 
-		const bool use_nearest_neighbour =
-		        (sdl.scaling_mode == SCALING_MODE::NEAREST ||
-		         sdl.scaling_mode == SCALING_MODE::PERFECT);
-		const GLint filter = (use_nearest_neighbour ? GL_NEAREST : GL_LINEAR);
+		const GLint filter = (sdl.interpolation_mode == InterpolationMode::NearestNeighbour
+		                              ? GL_NEAREST
+		                              : GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 
@@ -2262,19 +2175,32 @@ dosurface:
 
 		int is_framebuffer_srgb_capable = 0;
 		if (SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,
-		                        &is_framebuffer_srgb_capable))
+		                        &is_framebuffer_srgb_capable)) {
 			LOG_WARNING("OPENGL: Failed getting the framebuffer's sRGB status: %s",
 			            SDL_GetError());
+		}
 
-		sdl.opengl.framebuffer_is_srgb_encoded = RENDER_UseSRGBFramebuffer() && is_framebuffer_srgb_capable > 0;
+		sdl.opengl.framebuffer_is_srgb_encoded =
+		        RENDER_UseSrgbFramebuffer() &&
+		        (is_framebuffer_srgb_capable > 0);
 
-		if (RENDER_UseSRGBFramebuffer() && !sdl.opengl.framebuffer_is_srgb_encoded)
+		if (RENDER_UseSrgbFramebuffer() &&
+		    !sdl.opengl.framebuffer_is_srgb_encoded) {
 			LOG_WARNING("OPENGL: sRGB framebuffer not supported");
+		}
 
-		// Using GL_SRGB8_ALPHA8 because GL_SRGB8 doesn't work properly with Mesa drivers on certain integrated Intel GPUs
-		const auto texformat = RENDER_UseSRGBTexture() && sdl.opengl.framebuffer_is_srgb_encoded
+		// Using GL_SRGB8_ALPHA8 because GL_SRGB8 doesn't work properly
+		// with Mesa drivers on certain integrated Intel GPUs
+		const auto texformat = RENDER_UseSrgbTexture() && sdl.opengl.framebuffer_is_srgb_encoded
 		                             ? GL_SRGB8_ALPHA8
 		                             : GL_RGB8;
+
+#if 0
+		if (texformat == GL_SRGB8_ALPHA8) {
+			LOG_MSG("OPENGL: Using sRGB texture");
+		}
+#endif
+
 		glTexImage2D(GL_TEXTURE_2D,
 		             0,
 		             texformat,
@@ -2288,6 +2214,9 @@ dosurface:
 
 		if (sdl.opengl.framebuffer_is_srgb_encoded) {
 			glEnable(GL_FRAMEBUFFER_SRGB);
+#if 0
+			LOG_MSG("OPENGL: Using sRGB framebuffer");
+#endif
 		}
 
 		glClearColor (0.0f, 0.0f, 0.0f, 1.0f);
@@ -2354,15 +2283,13 @@ dosurface:
 	// Ensure mouse emulation knows the current parameters
 	NewMouseScreenParams();
 	update_vsync_state();
-	update_vga_sub_350_line_handling(sdl.desktop.type, sdl.scaling_mode);
+	update_vga_sub_350_line_handling(sdl.desktop.type, sdl.interpolation_mode);
 
 	if (sdl.draw.has_changed)
 		log_display_properties(sdl.draw.width,
 		                       sdl.draw.height,
 		                       {},
-		                       sdl.scaling_mode,
-		                       sdl.desktop.type,
-		                       sdl.pp_scale);
+		                       sdl.desktop.type);
 
 	if (retFlags)
 		GFX_Start();
@@ -2438,12 +2365,21 @@ void GFX_SetMouseHint(const MouseHint hint_id)
 
 void GFX_CenterMouse()
 {
-	int current_width  = 0;
-	int current_height = 0;
-
 	assert(sdl.window);
-	SDL_GetWindowSize(sdl.window, &current_width, &current_height);
-	SDL_WarpMouseInWindow(sdl.window, current_width / 2, current_height / 2);
+
+	int width  = 0;
+	int height = 0;
+
+#if defined(WIN32)
+	const auto window_canvas_size = get_canvas_size(sdl.desktop.type);
+
+	width  = window_canvas_size.w;
+	height = window_canvas_size.h;
+#else
+	SDL_GetWindowSize(sdl.window, &width, &height);
+#endif
+
+	SDL_WarpMouseInWindow(sdl.window, width / 2, height / 2);
 }
 
 void GFX_SetMouseRawInput(const bool requested_raw_input)
@@ -2486,7 +2422,7 @@ static void FocusInput()
 	// Ensure we have input focus when in fullscreen
 	if (!sdl.desktop.fullscreen)
 		return;
-	
+
 	// Do we already have focus?
 	if (SDL_GetWindowFlags(sdl.window) & SDL_WINDOW_INPUT_FOCUS)
 		return;
@@ -2548,9 +2484,7 @@ void GFX_SwitchFullScreen()
 	log_display_properties(sdl.draw.width,
 	                       sdl.draw.height,
 	                       canvas_size,
-	                       sdl.scaling_mode,
-	                       sdl.desktop.type,
-	                       sdl.pp_scale);
+	                       sdl.desktop.type);
 
 	sdl.desktop.switching_fullscreen = false;
 }
@@ -2621,20 +2555,27 @@ void GFX_EndUpdate(const uint16_t *changedLines)
 {
 	sdl.frame.update(changedLines);
 
-	const auto frame_is_new = sdl.update_display_contents && sdl.updating;
+	if (CAPTURE_IsCapturingPostRenderImage()) {
+		// Always present the frame if we want to capture the next rendered
+		// frame, regardless of the presentation mode. This is necessary to
+		// keep the contents of rendered and raw/upscaled screenshots in sync
+		// (so they capture the exact same frame) in multi-output image
+		// capture modes.
+		sdl.frame.present();
+	} else {
+		const auto frame_is_new = sdl.update_display_contents && sdl.updating;
 
-	switch (sdl.frame.mode) {
-	case FRAME_MODE::CFR:
-		maybe_present_synced(frame_is_new);
-		break;
-	case FRAME_MODE::VFR: present_new_or_maybe_dupe(frame_is_new); break;
-	case FRAME_MODE::THROTTLED_VFR:
-		maybe_present_throttled(frame_is_new);
-		break;
-	// Synced CFR is started when the presetation mode is setup
-	case FRAME_MODE::SYNCED_CFR:
-	case FRAME_MODE::UNSET:
-		break;
+		switch (sdl.frame.mode) {
+		case FrameMode::Cfr:
+			maybe_present_synced(frame_is_new);
+			break;
+		case FrameMode::Vfr: present_new_or_maybe_dupe(frame_is_new); break;
+		case FrameMode::ThrottledVfr:
+			maybe_present_throttled_or_dupe(frame_is_new);
+			break;
+		case FrameMode::Unset:
+			break;
+		}
 	}
 	sdl.updating = false;
 	FrameMark;
@@ -2652,12 +2593,113 @@ static void update_frame_texture([[maybe_unused]] const uint16_t *changedLines)
 	}
 }
 
+static std::optional<RenderedImage> get_rendered_output_from_backbuffer()
+{
+	RenderedImage image = {};
+
+	auto allocate_image = [&]() {
+		image.width              = sdl.clip.w;
+		image.height             = sdl.clip.h;
+		image.double_width       = false;
+		image.double_height      = false;
+		image.flip_vertical      = false;
+		image.pixel_aspect_ratio = {1};
+		image.bits_per_pixel     = 24;
+		image.pitch        = image.width * (image.bits_per_pixel / 8);
+		image.palette_data = nullptr;
+
+		const auto image_size_bytes = check_cast<uint32_t>(image.height *
+		                                                   image.pitch);
+		image.image_data = new uint8_t[image_size_bytes];
+	};
+
+#if C_OPENGL
+	// Get the OpenGL-renderer surface
+	// -------------------------------
+	if (sdl.desktop.type == SCREEN_OPENGL) {
+		glReadBuffer(GL_BACK);
+
+		// Alignment is 4 by default which works fine when using the
+		// GL_BGRA pixel format with glReadPixels(). We need to set it 1
+		// to be able to use the GL_BGR format in order to conserve
+		// memory. This should not cause any slowdowns whatsoever.
+		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+		allocate_image();
+
+		glReadPixels(sdl.clip.x,
+		             sdl.clip.y,
+		             image.width,
+		             image.height,
+		             GL_BGR,
+		             GL_UNSIGNED_BYTE,
+		             image.image_data);
+
+		image.flip_vertical = true;
+		return image;
+	}
+#endif
+
+	// Get the SDL texture-renderer surface
+	// ------------------------------------
+	if (sdl.desktop.type == SCREEN_TEXTURE) {
+		const auto renderer = SDL_GetRenderer(sdl.window);
+		if (!renderer) {
+			LOG_WARNING("SDL: Failed retrieving texture renderer surface: %s",
+			            SDL_GetError());
+			return {};
+		}
+
+		allocate_image();
+
+		// SDL2 pixel formats are a bit weird coming from OpenGL...
+		// You would think SDL_PIXELFORMAT_BGR888 is an alias of
+		// SDL_PIXELFORMAT_BRG24, but the two are actually very
+		// different:
+		//
+		// - SDL_PIXELFORMAT_BRG24 is an "array format"; it specifies
+		//   the endianness-agnostic memory layout just like OpenGL
+		//   pixel formats.
+		//
+		// - SDL_PIXELFORMAT_BGR888 is a "packed format" which uses
+		//   native types, therefore its memory layout depends on the
+		//   endianness.
+		//
+		// More info: https://afrantzis.com/pixel-format-guide/sdl2.html
+		//
+		if (SDL_RenderReadPixels(renderer,
+		                         &sdl.clip,
+		                         SDL_PIXELFORMAT_BGR24,
+		                         image.image_data,
+		                         image.pitch) != 0) {
+			LOG_WARNING("SDL: Failed reading pixels from the texture renderer: %s",
+			            SDL_GetError());
+			delete[] image.image_data;
+			return {};
+		}
+		return image;
+	}
+	return {};
+}
+
 static bool present_frame_texture()
 {
 	const auto is_presenting = render_pacer->CanRun();
 	if (is_presenting) {
 		SDL_RenderClear(sdl.renderer);
 		SDL_RenderCopy(sdl.renderer, sdl.texture.texture, nullptr, nullptr);
+
+		if (CAPTURE_IsCapturingPostRenderImage()) {
+			// glReadPixels() implicitly blocks until all pipelined rendering
+			// commands have finished, so we're guaranteed to read the
+			// contents of the up-to-date backbuffer here right before the
+			// buffer swap.
+			const auto image = get_rendered_output_from_backbuffer();
+			if (image) {
+				CAPTURE_AddPostRenderImage(*image);
+			}
+		}
+
 		SDL_RenderPresent(sdl.renderer);
 	}
 	render_pacer->Checkpoint();
@@ -2673,7 +2715,7 @@ static void update_frame_gl_pbo([[maybe_unused]] const uint16_t *changedLines)
 		glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT);
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sdl.draw.width,
 		                sdl.draw.height, GL_BGRA_EXT,
-		                GL_UNSIGNED_INT_8_8_8_8_REV, 0);
+		                GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
 		glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT, 0);
 	} else {
 		sdl.opengl.actual_frame_count++;
@@ -2717,6 +2759,18 @@ static bool present_frame_gl()
 		} else {
 			glCallList(sdl.opengl.displaylist);
 		}
+
+		if (CAPTURE_IsCapturingPostRenderImage()) {
+			// glReadPixels() implicitly blocks until all pipelined rendering
+			// commands have finished, so we're guaranateed to read the
+			// contents of the up-to-date backbuffer here right before the
+			// buffer swap.
+			const auto image = get_rendered_output_from_backbuffer();
+			if (image) {
+				CAPTURE_AddPostRenderImage(*image);
+			}
+		}
+
 		SDL_GL_SwapWindow(sdl.window);
 	}
 	render_pacer->Checkpoint();
@@ -2940,11 +2994,11 @@ static SDL_Point remove_stretched_aspect(const SDL_Point size)
 }
 
 static SDL_Point refine_window_size(const SDL_Point size,
-                                    const SCALING_MODE scaling_mode,
+                                    const InterpolationMode interpolation_mode,
                                     const bool should_stretch_pixels)
 {
-	switch (scaling_mode) {
-	case (SCALING_MODE::NONE): {
+	switch (interpolation_mode) {
+	case (InterpolationMode::Bilinear): {
 		const auto game_ratios = should_stretch_pixels
 		                                 ? RATIOS_FOR_STRETCHED_PIXELS
 		                                 : RATIOS_FOR_SQUARE_PIXELS;
@@ -2963,7 +3017,7 @@ static SDL_Point refine_window_size(const SDL_Point size,
 			return {size.x, y};
 		}
 	}
-	case (SCALING_MODE::NEAREST): {
+	case (InterpolationMode::NearestNeighbour): {
 		constexpr SDL_Point resolutions[] = {
 		        {7680, 5760}, // 8K  at 4:3 aspect
 		        {7360, 5520}, //
@@ -2995,21 +3049,6 @@ static SDL_Point refine_window_size(const SDL_Point size,
 				return (should_stretch_pixels
 				                ? candidate
 				                : remove_stretched_aspect(candidate));
-		break;
-	}
-	case (SCALING_MODE::PERFECT): {
-		constexpr double aspect_weight = 1.14;
-		constexpr SDL_Point pre_draw_size = {320, 200};
-		const double pixel_aspect_ratio = should_stretch_pixels ? 1.2 : 1;
-
-		int scale_x = 0;
-		int scale_y = 0;
-		const int err = pp_getscale(pre_draw_size.x, pre_draw_size.y,
-		                            pixel_aspect_ratio, size.x, size.y,
-		                            aspect_weight, &scale_x, &scale_y);
-		if (err == 0)
-			return {pre_draw_size.x * scale_x, pre_draw_size.y * scale_y};
-		// else use the fallback below
 		break;
 	}
 	}; // end-switch
@@ -3088,13 +3127,13 @@ static SDL_Point window_bounds_from_label(const std::string& pref,
                                           const SDL_Rect desktop)
 {
 	int percent = DEFAULT_WINDOW_PERCENT;
-	if (starts_with("s", pref))
+	if (starts_with(pref, "s")) {
 		percent = SMALL_WINDOW_PERCENT;
-	else if (starts_with("m", pref) || pref == "default" || pref.empty())
+	} else if (starts_with(pref, "m") || pref == "default" || pref.empty()) {
 		percent = MEDIUM_WINDOW_PERCENT;
-	else if (starts_with("l", pref))
+	} else if (starts_with(pref, "l")) {
 		percent = LARGE_WINDOW_PERCENT;
-	else if (pref == "desktop")
+	} else if (pref == "desktop")
 		percent = 100;
 	else
 		LOG_WARNING("DISPLAY: Requested windowresolution '%s' is invalid, using 'default' instead",
@@ -3188,7 +3227,7 @@ static void setup_initial_window_position_from_conf(const std::string &window_po
 		return;
 	}
 
-	const auto desktop = get_desktop_resolution();	
+	const auto desktop = get_desktop_resolution();
 	const bool is_out_of_bounds = x < 0 || x > desktop.w || y < 0 ||
 	                              y > desktop.h;
 	if (is_out_of_bounds) {
@@ -3224,7 +3263,7 @@ static void save_window_size(const int w, const int h)
 // Takes in:
 //  - The user's windowresolution: default, WxH, small, medium, large,
 //    desktop, or an invalid setting.
-//  - The previously configured scaling mode: NONE, NEAREST, or PERFECT.
+//  - The previously configured scaling mode: None or Nearest.
 //  - If aspect correction (stretched pixels) is requested.
 
 // Except for SURFACE rendering, this function returns a refined size and
@@ -3236,16 +3275,14 @@ static void save_window_size(const int w, const int h)
 
 // Refined sizes:
 //  - If the user requested an exact resolution or 'desktop' size, then the
-//    requested resolution is only trimed for aspect (4:3 or 8:5), unless
-//    pixel-perfect is requested, in which case the resolution is adjusted down
-//    toward to nearest exact integer multiple.
+//    requested resolution is only trimmed for aspect (4:3 or 8:5).
 
-//  - If the user requested a relative size: small, medium, or large, then either
-//    the closest fixed resolution is picked from a list or a pixel-perfect
-//    resolution is calculated. In both cases, aspect correction is factored in.
+//  - If the user requested a relative size: small, medium, or large, then
+//    the closest fixed resolution is picked from a list, with aspect correction
+//    factored in.
 
 static void setup_window_sizes_from_conf(const char *windowresolution_val,
-                                         const SCALING_MODE scaling_mode,
+                                         const InterpolationMode interpolation_mode,
                                          const bool should_stretch_pixels)
 {
 	// TODO: Deprecate SURFACE output and remove this.
@@ -3260,29 +3297,31 @@ static void setup_window_sizes_from_conf(const char *windowresolution_val,
 	// Can the window be resized?
 	sdl.desktop.want_resizable_window = detect_resizable_window();
 
-	const auto desktop = get_desktop_resolution();
-
 	// The refined scaling mode tell the refiner how it should adjust
 	// the coarse-resolution.
-	SCALING_MODE refined_scaling_mode = scaling_mode;
-	auto drop_nearest = [scaling_mode]() {
-		return (scaling_mode == SCALING_MODE::NEAREST) ? SCALING_MODE::NONE
-		                                               : scaling_mode;
+	InterpolationMode refined_interpolation_mode = interpolation_mode;
+
+	auto drop_nearest = [interpolation_mode]() {
+		return (interpolation_mode == InterpolationMode::NearestNeighbour)
+		             ? InterpolationMode::Bilinear
+		             : interpolation_mode;
 	};
 
 	// Get the coarse resolution from the users setting, and adjust
 	// refined scaling mode if an exact resolution is desired.
 	const std::string pref = windowresolution_val;
-	SDL_Point coarse_size = FALLBACK_WINDOW_DIMENSIONS;
+	SDL_Point coarse_size  = FALLBACK_WINDOW_DIMENSIONS;
 
 	sdl.use_exact_window_resolution = pref.find('x') != std::string::npos;
 	if (sdl.use_exact_window_resolution) {
 		coarse_size = parse_window_resolution_from_conf(pref);
-		refined_scaling_mode = drop_nearest();
+		refined_interpolation_mode = drop_nearest();
 	} else {
+		const auto desktop = get_desktop_resolution();
+
 		coarse_size = window_bounds_from_label(pref, desktop);
 		if (pref == "desktop") {
-			refined_scaling_mode = drop_nearest();
+			refined_interpolation_mode = drop_nearest();
 		}
 	}
 	// Save the coarse bounds in the SDL struct for future sizing events
@@ -3293,28 +3332,31 @@ static void setup_window_sizes_from_conf(const char *windowresolution_val,
 	if (sdl.use_exact_window_resolution) {
 		refined_size = clamp_to_minimum_window_dimensions(coarse_size);
 	} else {
-		refined_size = refine_window_size(coarse_size, refined_scaling_mode,
+		refined_size = refine_window_size(coarse_size,
+		                                  refined_interpolation_mode,
 		                                  should_stretch_pixels);
 	}
 	assert(refined_size.x <= UINT16_MAX && refined_size.y <= UINT16_MAX);
 	save_window_size(refined_size.x, refined_size.y);
 
-	auto describe_scaling_mode = [scaling_mode]() -> const char * {
-		switch (scaling_mode) {
-		case SCALING_MODE::NONE: return "Bilinear";
-		case SCALING_MODE::NEAREST: return "Nearest-neighbour";
-		case SCALING_MODE::PERFECT: return "Pixel-perfect";
+	auto describe_interpolation_mode = [interpolation_mode]() -> const char* {
+		switch (interpolation_mode) {
+		case InterpolationMode::Bilinear: return "bilinear";
+		case InterpolationMode::NearestNeighbour:
+			return "nearest-neighbour";
 		}
-		return "Unknown mode!";
+		return "unknown";
 	};
 
 	// Let the user know the resulting window properties
-	LOG_MSG("DISPLAY: Initialized %dx%d window-mode using %s scaling on %dp display-%d",
-	        refined_size.x, refined_size.y, describe_scaling_mode(), desktop.h,
+	LOG_MSG("DISPLAY: Initialised %dx%d windowed mode using %s scaling on display-%d",
+	        refined_size.x,
+	        refined_size.y,
+	        describe_interpolation_mode(),
 	        sdl.display_number);
 }
 
-static SDL_Rect calc_viewport_fit(const int win_w, const int win_h)
+static SDL_Rect calc_viewport(const int win_w, const int win_h)
 {
 	assert(sdl.draw.width > 0);
 	assert(sdl.draw.height > 0);
@@ -3323,20 +3365,73 @@ static SDL_Rect calc_viewport_fit(const int win_w, const int win_h)
 	assert(std::isfinite(sdl.draw.scalex));
 	assert(std::isfinite(sdl.draw.scaley));
 
-	// limit the window to the user's desired viewport, if configured
-	const auto [lwin_w, lwin_h] = restrict_to_viewport_resolution(win_w, win_h);
+	// Limit the window to the user's desired viewport, if configured
+	const auto restricted_dims = restrict_to_viewport_resolution(win_w, win_h);
+	const auto bounds_w = restricted_dims.x;
+	const auto bounds_h = restricted_dims.y;
 
-	// calculate the aspect ratios of the draw buffer and the limited window
-	const auto draw_aspect = (sdl.draw.width * sdl.draw.scalex) /
-	                         (sdl.draw.height * sdl.draw.scaley);
-	const auto lwin_aspect = static_cast<double>(lwin_w) / lwin_h;
+	// Calculate the aspect ratio of the emulated display mode.
+	const auto output_aspect = (sdl.draw.width * sdl.draw.scalex) /
+	                           (sdl.draw.height * sdl.draw.scaley);
 
-	// calculate the viewport contingent on the aspect ratio of the limited
-	// window versus draw buffer
-	const auto lwin_is_wider = lwin_aspect > draw_aspect;
-	const auto view_w = lwin_is_wider ? iround(lwin_h * draw_aspect) : lwin_w;
-	const auto view_h = lwin_is_wider ? lwin_h : iround(lwin_w / draw_aspect);
+	auto calculate_bounded_dims = [&]() -> std::pair<int, int> {
+		// Calculate the viewport contingent on the aspect ratio of the
+		// viewport bounds versus display mode.
+		const auto bounds_aspect = static_cast<double>(bounds_w) / bounds_h;
+		if (bounds_aspect > output_aspect) {
+			const auto w = iround(bounds_h * output_aspect);
+			const auto h = bounds_h;
+			return {w, h};
+		} else {
+			const auto w = bounds_w;
+			const auto h = iround(bounds_w / output_aspect);
+			return {w, h};
+		}
+	};
 
+	int view_w = 0;
+	int view_h = 0;
+	switch (sdl.integer_scaling_mode) {
+	case IntegerScalingMode::Off: {
+		std::tie(view_w, view_h) = calculate_bounded_dims();
+		break;
+	}
+	case IntegerScalingMode::Horizontal: {
+		// Calculate scaling multiplier that will allow to fit the whole
+		// image into the window or viewport bounds.
+		const auto pixel_aspect = round(sdl.draw.height * sdl.draw.scaley) /
+		                          sdl.draw.height;
+		auto integer_scale_factor = std::min(
+		        bounds_w / sdl.draw.width,
+		        static_cast<int>(bounds_h / (sdl.draw.height * pixel_aspect)));
+
+		if (integer_scale_factor < 1) {
+			// Revert to fit to viewport
+			std::tie(view_w, view_h) = calculate_bounded_dims();
+		} else {
+			// Calculate the final viewport.
+			view_w = sdl.draw.width * integer_scale_factor;
+			view_h = iround(sdl.draw.height * integer_scale_factor * pixel_aspect);
+		}
+		break;
+	}
+	case IntegerScalingMode::Vertical: {
+		auto integer_scale_factor =
+		        std::min(bounds_h / sdl.draw.height,
+		                 static_cast<int>(bounds_w / (sdl.draw.height *
+		                                              output_aspect)));
+		if (integer_scale_factor < 1) {
+			// Revert to fit to viewport
+			std::tie(view_w, view_h) = calculate_bounded_dims();
+		} else {
+			view_w = iround(sdl.draw.height * integer_scale_factor * output_aspect);
+			view_h = sdl.draw.height * integer_scale_factor;
+		}
+		break;
+	}
+	}
+
+	// Calculate centered viewport position.
 	const int view_x = (win_w - view_w) / 2;
 	const int view_y = (win_h - view_h) / 2;
 
@@ -3349,28 +3444,27 @@ static SDL_Rect calc_viewport_fit(const int win_w, const int win_h)
 	return {view_x, view_y, view_w, view_h};
 }
 
-static SDL_Rect calc_viewport_pp(int win_width, int win_height)
+void GFX_SetIntegerScalingMode(const std::string& new_mode)
 {
-	const auto render_resolution = restrict_to_viewport_resolution(win_width, win_height);
-	sdl.pp_scale = calc_pp_scale(render_resolution.x, render_resolution.y);
-
-	const int w = sdl.pp_scale.output_w;
-	const int h = sdl.pp_scale.output_h;
-	const int x = (win_width - w) / 2;
-	const int y = (win_height - h) / 2;
-
-	return {x, y, w, h};
+	if (new_mode == "off") {
+		sdl.integer_scaling_mode = IntegerScalingMode::Off;
+	} else if (new_mode == "horizontal") {
+		sdl.integer_scaling_mode = IntegerScalingMode::Horizontal;
+	} else if (new_mode == "vertical") {
+		sdl.integer_scaling_mode = IntegerScalingMode::Vertical;
+	} else {
+		LOG_WARNING("RENDER: Unknown integer scaling mode '%s', defaulting to 'off'",
+		            new_mode.c_str());
+		sdl.integer_scaling_mode = IntegerScalingMode::Off;
+	}
 }
 
-[[maybe_unused]] static SDL_Rect calc_viewport(int width, int height)
+IntegerScalingMode GFX_GetIntegerScalingMode()
 {
-	if (sdl.scaling_mode == SCALING_MODE::PERFECT)
-		return calc_viewport_pp(width, height);
-	else
-		return calc_viewport_fit(width, height);
+	return sdl.integer_scaling_mode;
 }
 
-static void set_output(Section *sec, bool should_stretch_pixels)
+static void set_output(Section* sec, bool should_stretch_pixels)
 {
 	// Apply the user's mouse settings
 	const auto section = static_cast<const Section_prop *>(sec);
@@ -3381,34 +3475,30 @@ static void set_output(Section *sec, bool should_stretch_pixels)
 
 	if (output == "surface") {
 		sdl.desktop.want_type = SCREEN_SURFACE;
+
 	} else if (output == "texture") {
-		sdl.desktop.want_type = SCREEN_TEXTURE;
-		sdl.scaling_mode = SCALING_MODE::NONE;
+		sdl.desktop.want_type  = SCREEN_TEXTURE;
+		sdl.interpolation_mode = InterpolationMode::Bilinear;
 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+
 	} else if (output == "texturenb") {
-		sdl.desktop.want_type = SCREEN_TEXTURE;
-		sdl.scaling_mode = SCALING_MODE::NEAREST;
+		sdl.desktop.want_type  = SCREEN_TEXTURE;
+		sdl.interpolation_mode = InterpolationMode::NearestNeighbour;
 		// Currently the default, but... oh well
 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-	} else if (output == "texturepp") {
-		sdl.desktop.want_type = SCREEN_TEXTURE;
-		sdl.scaling_mode = SCALING_MODE::PERFECT;
-		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+
 #if C_OPENGL
-	} else if (starts_with("opengl", output)) {
+	} else if (starts_with(output, "opengl")) {
 		RENDER_InitShaderSource(sec);
 		if (output == "opengl") {
-			sdl.desktop.want_type = SCREEN_OPENGL;
-			sdl.scaling_mode      = SCALING_MODE::NONE;
-			sdl.opengl.bilinear   = true;
+			sdl.desktop.want_type  = SCREEN_OPENGL;
+			sdl.interpolation_mode = InterpolationMode::Bilinear;
+			sdl.opengl.bilinear    = true;
+
 		} else if (output == "openglnb") {
 			sdl.desktop.want_type = SCREEN_OPENGL;
-			sdl.scaling_mode      = SCALING_MODE::NEAREST;
-			sdl.opengl.bilinear   = false;
-		} else if (output == "openglpp") {
-			sdl.desktop.want_type = SCREEN_OPENGL;
-			sdl.scaling_mode      = SCALING_MODE::PERFECT;
-			sdl.opengl.bilinear   = false;
+			sdl.interpolation_mode = InterpolationMode::NearestNeighbour;
+			sdl.opengl.bilinear = false;
 		}
 #endif
 	} else {
@@ -3442,7 +3532,7 @@ static void set_output(Section *sec, bool should_stretch_pixels)
 	setup_viewport_resolution_from_conf(section->Get_string("viewport_resolution"));
 
 	setup_window_sizes_from_conf(section->Get_string("windowresolution"),
-	                             sdl.scaling_mode, should_stretch_pixels);
+	                             sdl.interpolation_mode, should_stretch_pixels);
 
 #if C_OPENGL
 	if (sdl.desktop.want_type == SCREEN_OPENGL) { /* OPENGL is requested */
@@ -3451,7 +3541,7 @@ static void set_output(Section *sec, bool should_stretch_pixels)
 			sdl.desktop.want_type = SCREEN_SURFACE;
 		} else {
 			sdl.opengl.context = SDL_GL_CreateContext(sdl.window);
-			if (sdl.opengl.context == 0) {
+			if (sdl.opengl.context == nullptr) {
 				LOG_WARNING("Could not create OpenGL context, switching back to surface");
 				sdl.desktop.want_type = SCREEN_SURFACE;
 			}
@@ -3508,7 +3598,7 @@ static void set_output(Section *sec, bool should_stretch_pixels)
 			         glVertexAttribPointer);
 
 			sdl.opengl.buffer = 0;
-			sdl.opengl.framebuf = 0;
+			sdl.opengl.framebuf = nullptr;
 			sdl.opengl.texture = 0;
 			sdl.opengl.displaylist = 0;
 			glGetIntegerv(GL_MAX_TEXTURE_SIZE, &sdl.opengl.max_texsize);
@@ -3580,109 +3670,6 @@ static void set_output(Section *sec, bool should_stretch_pixels)
 	SDL_SetWindowOpacity(sdl.window, alpha);
 }
 
-std::optional<SDL_Surface *> SDLMAIN_GetRenderedSurface()
-{
-	// Variables common to all screen-modes
-	const auto renderer = SDL_GetRenderer(sdl.window);
-	const auto canvas   = get_canvas_size(sdl.desktop.type);
-
-#if C_OPENGL
-	// Get the OpenGL-renderer surface
-	// -------------------------------
-	if (sdl.desktop.type == SCREEN_OPENGL) {
-		// Setup our OpenGL image properties
-		constexpr int gl_channels       = 4;               // RGBA
-		constexpr int gl_bits_per_pixel = gl_channels * 8; // 8-bpp
-
-		// Allocate a 24-bit surface to be populated
-		const auto surface = SDL_CreateRGBSurface(SDL_SWSURFACE,
-		                                          canvas.w,
-		                                          canvas.h,
-		                                          gl_bits_per_pixel,
-		                                          RMASK,
-		                                          GMASK,
-		                                          BMASK,
-		                                          AMASK);
-		if (!surface) {
-			LOG_WARNING("SDL: Failed creating a surface for OpenGL because %s",
-			            SDL_GetError());
-			return {};
-		}
-
-		// The row ordering between OpenGL and SDL is inverted, so we
-		// start at the last OpenGL row, decrementing as we go, while
-		// writing into the incrementing surface row buffer.
-		constexpr auto gl_col_offset = 0;
-		auto gl_row_offset           = canvas.h;
-		const auto cols_per_read     = canvas.w;
-		constexpr auto rows_per_read = 1;
-
-		auto sdl_row_buffer = static_cast<uint8_t*>(surface->pixels);
-
-		while (gl_row_offset--) {
-			glReadPixels(gl_col_offset,
-			             gl_row_offset,
-			             cols_per_read,
-			             rows_per_read,
-			             GL_RGBA,
-			             GL_UNSIGNED_BYTE,
-			             sdl_row_buffer);
-
-			sdl_row_buffer += surface->pitch;
-		}
-
-		return surface;
-	}
-#endif
-
-	// Get the SDL texture-renderer surface
-	// ------------------------------------
-	if (sdl.desktop.type == SCREEN_TEXTURE) {
-		// Get the renderer's pixel format
-		SDL_RendererInfo rinfo;
-		if (SDL_GetRendererInfo(renderer, &rinfo) != 0) {
-			LOG_MSG("SDL: Failed to get a rendering info because %s",
-			        SDL_GetError());
-			return {};
-		}
-		const auto pixel_format = rinfo.texture_formats[0];
-
-		// Create a 32-bit surface with colour format matching the renderer
-		const auto surface = SDL_CreateRGBSurfaceWithFormat(
-		        SDL_SWSURFACE, canvas.w, canvas.h, 32, pixel_format);
-		if (!surface || !renderer) {
-			LOG_WARNING("SDL: Failed creating a surface because %s",
-			            SDL_GetError());
-			return {};
-		}
-		// Copy the pixels from the renderer into our new surface
-		if (SDL_RenderReadPixels(renderer,
-		                         nullptr,
-		                         surface->format->format,
-		                         surface->pixels,
-		                         surface->pitch) != 0) {
-			LOG_WARNING("SDL: Failed rendering to the surface because %s",
-			            SDL_GetError());
-			SDL_FreeSurface(surface);
-			return {};
-		}
-		return surface;
-	}
-
-	// We're already in surface-mode, how convenient ;)
-	// -----------------------------------------------
-	else if (sdl.desktop.type == SCREEN_SURFACE) {
-		assert(sdl.surface);
-		// Simply return a copy
-		return SDL_ConvertSurfaceFormat(sdl.surface,
-		                                sdl.surface->format->format,
-		                                0);
-	}
-
-	LOG_WARNING("SDL: unhandled screen-type (bug)");
-	return {};
-}
-
 // extern void UI_Run(bool);
 void Restart(bool pressed);
 
@@ -3742,7 +3729,7 @@ static void GUI_StartUp(Section *sec)
 	sdl.resizing_window = false;
 	sdl.wait_on_error = section->Get_bool("waitonerror");
 
-	sdl.desktop.fullscreen=section->Get_bool("fullscreen");
+	sdl.desktop.fullscreen = control->cmdline->FindExist("-fullscreen", true) || section->Get_bool("fullscreen");
 
 	auto priority_conf = section->GetMultiVal("priority")->GetSection();
 	SetPriorityLevels(priority_conf->Get_string("active"),
@@ -3780,28 +3767,24 @@ static void GUI_StartUp(Section *sec)
 	}
 
 	const std::string host_rate_pref = section->Get_string("host_rate");
-	if (host_rate_pref == "auto")
-		sdl.desktop.host_rate_mode = HOST_RATE_MODE::AUTO;
-	else if (host_rate_pref == "sdi")
-		sdl.desktop.host_rate_mode = HOST_RATE_MODE::SDI;
-	else if (host_rate_pref == "vrr")
-		sdl.desktop.host_rate_mode = HOST_RATE_MODE::VRR;
-	else {
+	if (host_rate_pref == "auto") {
+		sdl.desktop.host_rate_mode = HostRateMode::Auto;
+	} else if (host_rate_pref == "sdi") {
+		sdl.desktop.host_rate_mode = HostRateMode::Sdi;
+	} else if (host_rate_pref == "vrr") {
+		sdl.desktop.host_rate_mode = HostRateMode::Vrr;
+	} else {
 		const auto rate = to_finite<double>(host_rate_pref);
-		if (std::isfinite(rate) && rate >= REFRESH_RATE_MIN) {
-			sdl.desktop.host_rate_mode = HOST_RATE_MODE::CUSTOM;
+		if (std::isfinite(rate) && rate >= RefreshRateMin) {
+			sdl.desktop.host_rate_mode      = HostRateMode::Custom;
 			sdl.desktop.preferred_host_rate = rate;
 		} else {
 			LOG_WARNING("SDL: Invalid 'host_rate' value: '%s', using 'auto'",
 			            host_rate_pref.c_str());
-			sdl.desktop.host_rate_mode = HOST_RATE_MODE::AUTO;
+			sdl.desktop.host_rate_mode = HostRateMode::Auto;
 		}
 	}
 
-	sdl.vsync.when_windowed.requested = VSYNC_STATE::OFF;
-	sdl.vsync.when_fullscreen.requested = section->Get_bool("vsync")
-	                                              ? VSYNC_STATE::ON
-	                                              : VSYNC_STATE::OFF;
 	sdl.vsync.skip_us = section->Get_int("vsync_skip");
 
 	render_pacer = std::make_unique<Pacer>("Render",
@@ -3815,17 +3798,17 @@ static void GUI_StartUp(Section *sec)
 		LOG_WARNING("SDL: Display number out of bounds, using display 0");
 		sdl.display_number = 0;
 	}
-	
+
 	const std::string presentation_mode_pref = section->Get_string(
 	        "presentation_mode");
 	if (presentation_mode_pref == "auto")
-		sdl.frame.desired_mode = FRAME_MODE::UNSET;
+		sdl.frame.desired_mode = FrameMode::Unset;
 	else if (presentation_mode_pref == "cfr")
-		sdl.frame.desired_mode = FRAME_MODE::CFR;
+		sdl.frame.desired_mode = FrameMode::Cfr;
 	else if (presentation_mode_pref == "vfr")
-		sdl.frame.desired_mode = FRAME_MODE::VFR;
+		sdl.frame.desired_mode = FrameMode::Vfr;
 	else {
-		sdl.frame.desired_mode = FRAME_MODE::UNSET;
+		sdl.frame.desired_mode = FrameMode::Unset;
 		LOG_WARNING("SDL: Invalid 'presentation_mode' value: '%s'",
 		            presentation_mode_pref.c_str());
 	}
@@ -4046,14 +4029,12 @@ bool GFX_Events()
 
 	SDL_Event event;
 #if defined (REDUCE_JOYSTICK_POLLING)
-	if (MAPPER_IsUsingJoysticks()) {
-		static auto last_check_joystick = GetTicks();
-		auto current_check_joystick = GetTicks();
-		if (GetTicksDiff(current_check_joystick, last_check_joystick) > 20) {
-			last_check_joystick = current_check_joystick;
-			SDL_JoystickUpdate();
-			MAPPER_UpdateJoysticks();
-		}
+	static auto last_check_joystick = GetTicks();
+	auto current_check_joystick = GetTicks();
+	if (GetTicksDiff(current_check_joystick, last_check_joystick) > 20) {
+		last_check_joystick = current_check_joystick;
+		if (MAPPER_IsUsingJoysticks()) SDL_JoystickUpdate();
+		MAPPER_UpdateJoysticks();
 	}
 #endif
 	while (SDL_PollEvent(&event)) {
@@ -4068,7 +4049,7 @@ bool GFX_Events()
 			switch (event.display.event) {
 #if (SDL_MAJOR_VERSION > 2 || SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 14)
 			// Events added in SDL 2.0.14
-			case SDL_DISPLAYEVENT_CONNECTED: 
+			case SDL_DISPLAYEVENT_CONNECTED:
 			case SDL_DISPLAYEVENT_DISCONNECTED:
 				NewMouseScreenParams();
 				break;
@@ -4496,49 +4477,61 @@ void config_add_sdl() {
 	        "             display (default).\n"
 	        "  sdi:       Use serial device interface (SDI) rates, without further\n"
 	        "             adjustment.\n"
-	        "  vrr:       Deduct 3 Hz from the reported rate (best-practice for VRR\n"
+	        "  vrr:       Deduct 3 Hz from the reported rate (best practice for VRR\n"
 	        "             displays).\n"
-	        "  <custom>:  Specify a custom rate as a whole or decimal value greater than\n"
-	        "             23.000.");
+	        "  <custom>:  Specify a custom rate as an integer or decimal Hz value\n"
+	        "             (23.000 is the allowed minimum).");
 
-	Pbool = sdl_sec->Add_bool("vsync", on_start, true);
-	Pbool->Set_help("Synchronize with display refresh rate if supported to eliminate flickering\n"
-	                "and tearing (enabled by default).");
+	const char* vsync_prefs[] = {"auto", "on", "off", "yield", nullptr};
+	pstring = sdl_sec->Add_string("vsync", always, "auto");
 
-	pint = sdl_sec->Add_int("vsync_skip", on_start, 7000);
+	pstring->Set_help(
+	        "Set the host video driver's vertical synchronization (vsync) mode:\n"
+	        "  auto:      Limit vsync to beneficial cases, such as when using an\n"
+	        "             interpolating VRR display in fullscreen (default).\n"
+	        "  on:        Enable vsync. This can prevent tearing in some games but will\n"
+	        "             impact performance or drop frames when the DOS rate exceeds the\n"
+	        "             host rate (e.g. 70 Hz DOS rate vs 60 Hz host rate).\n"
+	        "  off:       Attempt to disable vsync to allow quicker frame presentation at\n"
+	        "             the risk of tearing in some games.\n"
+	        "  yield:     Let the host's video driver control video synchronization.");
+	pstring->Set_values(vsync_prefs);
+
+	pint = sdl_sec->Add_int("vsync_skip", on_start, 0);
 	pint->Set_help("Number of microseconds to allow rendering to block before skipping the\n"
-	               "next frame (7000 by default). 0 disables this and will always render.");
+	               "next frame. For example, a value of 7000 is roughly half the frame time\n"
+	               "at 70 Hz. 0 disables this and will always render (default).");
 	pint->SetMinMax(0, 14000);
 
-	const char *presentation_modes[] = {"auto", "cfr", "vfr", 0};
+	const char *presentation_modes[] = {"auto", "cfr", "vfr", nullptr};
 	pstring = sdl_sec->Add_string("presentation_mode", always, "auto");
 	pstring->Set_help(
 	        "Select the frame presentation mode:\n"
-	        "  auto:  Intelligently time and drop frames to prevent emulation\n"
-	        "         stalls, based on host and DOS frame rates (default).\n"
+	        "  auto:  Intelligently time and drop frames to prevent emulation stalls,\n"
+	        "         based on host and DOS frame rates (default).\n"
 	        "  cfr:   Always present DOS frames at a constant frame rate.\n"
 	        "  vfr:   Always present changed DOS frames at a variable frame rate.");
 	pstring->Set_values(presentation_modes);
 
-	const char *outputs[] =
+	const char* outputs[] =
 	{ "surface",
 	  "texture",
 	  "texturenb",
-	  "texturepp",
 #if C_OPENGL
 	  "opengl",
 	  "openglnb",
-	  "openglpp",
 #endif
-	  0 };
+	  nullptr };
 
 #if C_OPENGL
 	Pstring = sdl_sec->Add_string("output", always, "opengl");
 	Pstring->Set_help("Video system to use for output ('opengl' by default).");
+	Pstring->SetDeprecatedWithAlternateValue("openglpp", "opengl");
 #else
 	Pstring = sdl_sec->Add_string("output", always, "texture");
 	Pstring->Set_help("Video system to use for output ('texture' by default).");
 #endif
+	Pstring->SetDeprecatedWithAlternateValue("texturepp", "texture");
 	Pstring->Set_values(outputs);
 
 	pstring = sdl_sec->Add_string("texture_renderer", always, "auto");
@@ -4571,7 +4564,7 @@ void config_add_sdl() {
 	        "normal",
 	        "higher",
 	        "highest",
-	        0,
+	        nullptr,
 	};
 	psection = Pmulti->GetSection();
 	psection->Add_string("active", always, priority_level_choices[0])
@@ -4597,7 +4590,7 @@ void config_add_sdl() {
 	        "Use 'allow' or 'block' to override the SDL_VIDEO_ALLOW_SCREENSAVER environment\n"
 	        "variable which usually blocks the OS screensaver while the emulator is\n"
 	        "running ('auto' by default).");
-	const char *ssopts[] = {"auto", "allow", "block", 0};
+	const char *ssopts[] = {"auto", "allow", "block", nullptr};
 	pstring->Set_values(ssopts);
 }
 
@@ -4656,14 +4649,16 @@ void restart_program(std::vector<std::string> & parameters) {
 	// parameter 0 is the executable path
 	// contents of the vector follow
 	// last one is NULL
-	for(Bitu i = 0; i < parameters.size(); i++) newargs[i] = (char*)parameters[i].c_str();
-	newargs[parameters.size()] = NULL;
+	for (size_t i = 0; i < parameters.size(); i++) {
+		newargs[i] = parameters[i].data();
+	}
+	newargs[parameters.size()] = nullptr;
 	MIXER_CloseAudioDevice();
 	Delay(50);
 	QuitSDL();
 #if C_DEBUG
 	// shutdown curses
-	DEBUG_ShutDown(NULL);
+	DEBUG_ShutDown(nullptr);
 #endif
 
 	if(execvp(newargs[0], newargs) == -1) {
@@ -4685,11 +4680,12 @@ void Restart(bool pressed) { // mapper handler
 	restart_program(control->startup_params);
 }
 
+// TODO do we even need this at all?
 static void launchcaptures(const std::string& edit)
 {
 	std::string path,file;
-	Section* t = control->GetSection("dosbox");
-	if(t) file = t->GetPropValue("captures");
+	Section* t = control->GetSection("capture");
+	if(t) file = t->GetPropValue("capture_dir");
 	if(!t || file == NO_SUCH_PROPERTY) {
 		printf("Config system messed up.\n");
 		exit(1);
@@ -4703,7 +4699,7 @@ static void launchcaptures(const std::string& edit)
 		exit(1);
 	}
 
-	execlp(edit.c_str(),edit.c_str(),path.c_str(),(char*) 0);
+	execlp(edit.c_str(),edit.c_str(),path.c_str(),(char*) nullptr);
 	//if you get here the launching failed!
 	fprintf(stderr, "can't find filemanager %s\n", edit.c_str());
 	exit(1);
@@ -4811,14 +4807,14 @@ int sdl_main(int argc, char *argv[])
 	loguru::g_preamble_thread  = false; // The logging thread
 	loguru::g_preamble_file    = false; // The file from which the log originates from
 	loguru::g_preamble_verbose = false; // The verbosity field
-	loguru::g_preamble_pipe    = true; // The pipe symbol right before the message	
+	loguru::g_preamble_pipe    = true; // The pipe symbol right before the message
 
 	loguru::init(argc, argv);
 
 	LOG_MSG("%s version %s", CANONICAL_PROJECT_NAME, DOSBOX_GetDetailedVersion());
 	LOG_MSG("---");
 
-	LOG_MSG("LOG: Loguru version %d.%d.%d initialized", LOGURU_VERSION_MAJOR,
+	LOG_MSG("LOG: Loguru version %d.%d.%d initialised", LOGURU_VERSION_MAJOR,
 	        LOGURU_VERSION_MINOR, LOGURU_VERSION_PATCH);
 
 	int rcode = 0; // assume good until proven otherwise
@@ -4835,7 +4831,7 @@ int sdl_main(int argc, char *argv[])
 			}
 		}
 
-		OverrideWMClass(); // Before SDL2 video subsystem is initialized
+		OverrideWMClass(); // Before SDL2 video subsystem is initialised
 
 		CROSS_DetermineConfigPaths();
 
@@ -4911,11 +4907,13 @@ int sdl_main(int argc, char *argv[])
 		LOG_WARNING("Failed to init CD-ROM support");
 
 	sdl.initialized = true;
-	// Once initialized, ensure we clean up SDL for all exit conditions
+	// Once initialised, ensure we clean up SDL for all exit conditions
 	atexit(QuitSDL);
 
-	LOG_MSG("SDL: version %d.%d.%d initialized (%s video and %s audio)",
-		SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL,
+	SDL_version sdl_version;
+	SDL_GetVersion(&sdl_version);
+	LOG_MSG("SDL: version %d.%d.%d initialised (%s video and %s audio)",
+		sdl_version.major, sdl_version.minor, sdl_version.patch,
 		SDL_GetCurrentVideoDriver(), SDL_GetCurrentAudioDriver());
 
 	const auto config_path = get_platform_config_dir();
@@ -4923,9 +4921,11 @@ int sdl_main(int argc, char *argv[])
 
 	MSG_Add("PROGRAM_CONFIG_PROPERTY_ERROR", "No such section or property: %s\n");
 	MSG_Add("PROGRAM_CONFIG_NO_PROPERTY",
-		"There is no property \"%s\" in section \"%s\".\n");
+		"There is no property '%s' in section [%s]\n");
 	MSG_Add("PROGRAM_CONFIG_SET_SYNTAX",
-		"Correct syntax: config -set \"[section] property=value\".\n");
+		"Usage: [color=green]config [/reset]-set [color=cyan][SECTION][/reset] "
+		"[color=white]PROPERTY[/reset][=][color=white]VALUE[/reset]\n");
+
 	std::string line;
 	while (control->cmdline->FindString("-set", line, true)) {
 		trim(line);
@@ -4985,13 +4985,6 @@ int sdl_main(int argc, char *argv[])
 		/* Some extra SDL Functions */
 		Section_prop * sdl_sec=static_cast<Section_prop *>(control->GetSection("sdl"));
 
-		if (control->cmdline->FindExist("-fullscreen") ||
-		    sdl_sec->Get_bool("fullscreen")) {
-			if(!sdl.desktop.fullscreen) { //only switch if not already in fullscreen
-				GFX_SwitchFullScreen();
-			}
-		}
-
 		// All subsystems' hotkeys need to be registered at this point
 		// to ensure their hotkeys appear in the graphical mapper.
 		MAPPER_BindKeys(sdl_sec);
@@ -5004,12 +4997,12 @@ int sdl_main(int argc, char *argv[])
 	} catch (char *error) {
 		rcode = 1;
 		GFX_ShowMsg("Exit to error: %s",error);
-		fflush(NULL);
+		fflush(nullptr);
 		if(sdl.wait_on_error) {
 			//TODO Maybe look for some way to show message in linux?
 #if (C_DEBUG)
 			GFX_ShowMsg("Press enter to continue");
-			fflush(NULL);
+			fflush(nullptr);
 			fgetc(stdin);
 #elif defined(WIN32)
 			Sleep(5000);

@@ -20,479 +20,430 @@
 #include "shell.h"
 
 #include <algorithm>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include <iterator>
-#include <regex>
+#include <memory>
 
-#include "regs.h"
-#include "callback.h"
-#include "string_utils.h"
 #include "../ints/int10.h"
+#include "callback.h"
+#include "file_reader.h"
+#include "keyboard.h"
+#include "regs.h"
+#include "string_utils.h"
 
-DOS_Shell::~DOS_Shell() {
-	bf.reset();
-}
+[[nodiscard]] static std::vector<std::string> get_completions(std::string_view command);
+static void run_binary_executable(std::string_view fullname, std::string_view args);
 
-void DOS_Shell::ShowPrompt(void) {
-	uint8_t drive=DOS_GetDefaultDrive()+'A';
+namespace {
+class CommandPrompt {
+public:
+	CommandPrompt();
+	void Update(std::string_view command, std::string::size_type cursor);
+	void Newline();
+
+	[[nodiscard]] static uint32_t MaxCommandSize();
+
+private:
+	struct CursorPosition {
+		uint8_t page   = 0;
+		uint8_t row    = 0;
+		uint8_t column = 0;
+	};
+	CursorPosition position_zero = {};
+
+	std::string::size_type previous_size = 0;
+
+	static void outc(uint8_t c);
+	void SetCurrentPositionToZero();
+	void SetCursor(std::string::size_type index);
+};
+} // namespace
+
+void DOS_Shell::ShowPrompt()
+{
+	const uint8_t drive = DOS_GetDefaultDrive() + 'A';
 	char dir[DOS_PATHLENGTH];
-	reset_str(dir); // DOS_GetCurrentDir doesn't always return
-	                // something. (if drive is messed up)
+	reset_str(dir);
+
+	// DOS_GetCurrentDir doesn't always return something.
+	// (if drive is messed up)
 	DOS_GetCurrentDir(0, dir);
 	InjectMissingNewline();
 	WriteOut("%c:\\%s>", drive, dir);
-	ResetLastWrittenChar('\n'); // prevents excessive newline if cmd prints nothing
+
+	// prevents excessive newline if cmd prints nothing
+	ResetLastWrittenChar('\n');
 }
 
-static void outc(uint8_t c) {
-	uint16_t n=1;
-	DOS_WriteFile(STDOUT,&c,&n);
-}
-
-static void move_cursor_back_one() {
-	const uint8_t page = real_readb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
-	if (CURSOR_POS_COL(page) > 0) {
-		outc(8);
-	} else if (const auto row = CURSOR_POS_ROW(page); row > 0) {
-		BIOS_NCOLS;
-		INT10_SetCursorPos(row - 1, ncols - 1, page);
+void DOS_Shell::InputCommand(char* line)
+{
+	std::string command = ReadCommand();
+	trim(command);
+	if (!command.empty()) {
+		history.emplace_back(command);
 	}
+
+	const auto* const dos_section = dynamic_cast<Section_prop*>(
+	        control->GetSection("dos"));
+	assert(dos_section != nullptr);
+	const std::string_view expand_shell_variable_pref = dos_section->Get_string(
+	        "expand_shell_variable");
+
+	const auto expand_shell_pref_has_bool = parse_bool_setting(
+	        expand_shell_variable_pref);
+
+	if ((expand_shell_variable_pref == "auto" && dos.version.major >= 7) ||
+	    (expand_shell_pref_has_bool && *expand_shell_pref_has_bool == true)) {
+		command = SubstituteEnvironmentVariables(command);
+	}
+
+	std::strncpy(line, command.c_str(), CMD_MAXLINE);
+	line[CMD_MAXLINE - 1] = '\0';
 }
 
-void DOS_Shell::InputCommand(char * line) {
-	Bitu size=CMD_MAXLINE-2; //lastcharacter+0
-	uint8_t c;uint16_t n=1;
-	size_t str_len = 0;
-	size_t str_index = 0;
-	uint16_t len=0;
-	bool current_hist=false; // current command stored in history?
+std::string DOS_Shell::ReadCommand()
+{
+	std::vector<std::string> history_clone = history;
+	history_clone.emplace_back("");
+	auto history_index = history_clone.size() - 1;
 
-	reset_str(line);
+	std::vector<std::string> completion = {};
 
-	std::list<std::string>::iterator it_history = l_history.begin(), it_completion = l_completion.begin();
+	auto completion_index = completion.size();
 
-	while (size && !shutdown_requested) {
-		dos.echo=false;
-		while(!DOS_ReadFile(input_handle,&c,&n)) {
-			uint16_t dummy;
+	std::string command   = {};
+	auto cursor_position  = command.size();
+	auto completion_start = command.size();
+
+	uint8_t data        = 0;
+	uint16_t byte_count = 1;
+
+	CommandPrompt prompt;
+
+	while (!shutdown_requested) {
+		assert(history_index < history_clone.size());
+		assert(completion.empty() || completion_index < completion.size());
+		assert(command.empty() || cursor_position <= command.size());
+		assert(completion.empty() || completion_start <= command.size());
+
+		bool viewing_tab_completions = false;
+
+		while (!DOS_ReadFile(input_handle, &data, &byte_count)) {
+			uint16_t dummy = 1;
 			DOS_CloseFile(input_handle);
-			DOS_OpenFile("con",2,&dummy);
-			LOG(LOG_MISC,LOG_ERROR)("Reopening the input handle. This is a bug!");
+			DOS_OpenFile("con", 2, &dummy);
+			LOG(LOG_MISC, LOG_ERROR)
+			("Reopening the input handle. This is a bug!");
 		}
-		if (!n) {
-			size=0;			//Kill the while loop
-			continue;
+
+		if (byte_count == 0) {
+			break;
 		}
-		switch (c) {
-		case 0x00: /* Extended Keys */
-			{
-				DOS_ReadFile(input_handle,&c,&n);
-				switch (c) {
 
-				case 0x3d: /* F3 */
-					if (!l_history.size()) break;
-					it_history = l_history.begin();
-					if (it_history != l_history.end() && it_history->length() > str_len) {
-						const char *reader = &(it_history->c_str())[str_len];
-						while ((c = *reader++)) {
-							line[str_index ++] = c;
-							DOS_WriteFile(STDOUT,&c,&n);
-						}
-						str_len = str_index = it_history->length();
-						size = CMD_MAXLINE - str_index - 2;
-						terminate_str_at(line, str_len);
-					}
+		constexpr decltype(data) ExtendedKey = 0x00;
+		constexpr decltype(data) Escape      = 0x1B;
+		switch (data) {
+		case ExtendedKey: {
+			DOS_ReadFile(input_handle, &data, &byte_count);
+			switch (static_cast<ScanCode>(data)) {
+			case ScanCode::F3: {
+				if (history.empty()) {
 					break;
-
-				case 0x4B: /* Left */
-					if (str_index) {
-						move_cursor_back_one();
-						str_index --;
-					}
-					break;
-
-				case 0x4D: /* Right */
-					if (str_index < str_len) {
-						outc(line[str_index++]);
-					}
-					break;
-
-				case 0x47: /* Home */
-					while (str_index) {
-						move_cursor_back_one();
-						str_index--;
-					}
-					break;
-
-				case 0x4F: /* End */
-					while (str_index < str_len) {
-						outc(line[str_index++]);
-					}
-					break;
-
-				case 0x48: /* Up */
-					if (l_history.empty() || it_history == l_history.end()) break;
-
-					// store current command in history if we are at beginning
-					if (it_history == l_history.begin() && !current_hist) {
-						current_hist=true;
-						l_history.push_front(line);
-					}
-
-					for (;str_index>0; str_index--) {
-						// removes all characters
-						move_cursor_back_one();
-						outc(' ');
-						move_cursor_back_one();
-					}
-					strcpy(line, it_history->c_str());
-					len = (uint16_t)it_history->length();
-					str_len = str_index = len;
-					size = CMD_MAXLINE - str_index - 2;
-					DOS_WriteFile(STDOUT, (uint8_t *)line, &len);
-					++it_history;
-					break;
-
-				case 0x50: /* Down */
-					if (l_history.empty() || it_history == l_history.begin()) break;
-
-					// not very nice but works ..
-					--it_history;
-					if (it_history == l_history.begin()) {
-						// no previous commands in history
-						++it_history;
-
-						// remove current command from history
-						if (current_hist) {
-							current_hist = false;
-							l_history.pop_front();
-						}
-						break;
-					} else {
-						--it_history;
-					}
-
-					for (; str_index > 0; str_index--) {
-						// removes all characters
-						move_cursor_back_one();
-						outc(' ');
-						move_cursor_back_one();
-					}
-					strcpy(line, it_history->c_str());
-					len = (uint16_t)it_history->length();
-					str_len = str_index = len;
-					size = CMD_MAXLINE - str_index - 2;
-					DOS_WriteFile(STDOUT, (uint8_t *)line, &len);
-					++it_history;
-
-					break;
-				case 0x53: /* Delete */
-					{
-						if(str_index>=str_len) break;
-						auto text_len = static_cast<uint16_t>(str_len - str_index - 1);
-						uint8_t* text=reinterpret_cast<uint8_t*>(&line[str_index+1]);
-						DOS_WriteFile(STDOUT, text, &text_len); // write buffer to screen
-						outc(' ');
-						move_cursor_back_one();
-						for (auto i = str_index; i < str_len-1; i++) {
-							line[i]=line[i+1];
-							move_cursor_back_one();
-						}
-						terminate_str_at(line, --str_len);
-						size++;
-					}
-					break;
-				case 15: /* Shift+Tab */
-					if (l_completion.size()) {
-						if (it_completion == l_completion.begin()) {
-							it_completion = l_completion.end ();
-						}
-						--it_completion;
-		
-						if (it_completion->length()) {
-							for (;str_index > completion_index; str_index--) {
-								// removes all characters
-								move_cursor_back_one();
-								outc(' ');
-								move_cursor_back_one();
-							}
-
-							strcpy(&line[completion_index], it_completion->c_str());
-							len = (uint16_t)it_completion->length();
-							str_len = str_index = completion_index + len;
-							size = CMD_MAXLINE - str_index - 2;
-							DOS_WriteFile(STDOUT, (uint8_t *)it_completion->c_str(), &len);
-						}
-					}
-				default: break;
 				}
-			};
+
+				std::string_view last_command = history.back();
+				if (last_command.size() <= command.size()) {
+					break;
+				}
+
+				last_command = last_command.substr(command.size());
+				command += last_command;
+				cursor_position = command.size();
+				break;
+			}
+
+			case ScanCode::Left:
+				if (cursor_position > 0) {
+					--cursor_position;
+				}
+				break;
+
+			case ScanCode::Right:
+				if (cursor_position < command.size()) {
+					++cursor_position;
+				}
+				break;
+
+			case ScanCode::Up:
+				if (history_index > 0) {
+					history_clone[history_index] = command;
+					--history_index;
+					command = history_clone[history_index];
+					cursor_position = command.size();
+				}
+				break;
+
+			case ScanCode::Down:
+				if (history_index + 1 < history_clone.size()) {
+					history_clone[history_index] = command;
+					++history_index;
+					command = history_clone[history_index];
+					cursor_position = command.size();
+				}
+				break;
+
+			case ScanCode::Home: cursor_position = 0; break;
+
+			case ScanCode::End:
+				cursor_position = command.size();
+				break;
+
+			case ScanCode::Delete:
+				command.erase(cursor_position, 1);
+				break;
+
+			case ScanCode::ShiftTab:
+				if (completion.empty()) {
+					break;
+				}
+				if (completion_index == 0) {
+					completion_index = completion.size();
+				}
+				--completion_index;
+				command.erase(completion_start);
+				command += completion[completion_index];
+				cursor_position         = command.size();
+				viewing_tab_completions = true;
+				break;
+
+			default: break;
+			}
 			break;
-		case 0x08: /* Backspace */
-			if (str_index) {
-				move_cursor_back_one();
-				size_t str_remain = str_len - str_index;
-				size++;
-				if (str_remain) {
-					memmove(&line[str_index-1],&line[str_index],str_remain);
-					terminate_str_at(line, --str_len);
-					str_index --;
-					/* Go back to redraw */
-					for (size_t i = str_index; i < str_len; i++)
-						outc(line[i]);
+		}
+
+		case '\t': {
+			if (!completion.empty()) {
+				++completion_index;
+				if (completion_index == completion.size()) {
+					completion_index = 0;
+				}
+			} else {
+				completion = get_completions(command);
+				if (completion.empty()) {
+					break;
+				}
+				completion_index = 0;
+
+				const auto delimiter = command.find_last_of(" \\/");
+				if (delimiter == std::string::npos) {
+					completion_start = 0;
 				} else {
-					terminate_str_at(line, --str_index);
-					str_len--;
-				}
-				outc(' ');
-				move_cursor_back_one();
-				// moves the cursor left
-				while (str_remain--)
-					move_cursor_back_one();
-			}
-			if (l_completion.size()) l_completion.clear();
-			break;
-		case 0x0a: /* New Line not handled */
-			/* Don't care */
-			break;
-		case 0x0d: /* Return */
-			outc('\r');
-			outc('\n');
-			size=0;			//Kill the while loop
-			break;
-		case'\t':
-			{
-				if (l_completion.size()) {
-					++it_completion;
-					if (it_completion == l_completion.end())
-						it_completion = l_completion.begin();
-				} else {
-					// build new completion list
-					// Lines starting with CD will only get
-					// directories in the list
-					bool dir_only = (strncasecmp(line,"CD ",3)==0);
-
-					// get completion mask
-					char *p_completion_start = strrchr(line, ' ');
-
-					if (p_completion_start) {
-						p_completion_start ++;
-						completion_index = (uint16_t)(str_len - strlen(p_completion_start));
-					} else {
-						p_completion_start = line;
-						completion_index = 0;
-					}
-
-					char *path;
-					if ((path = strrchr(line+completion_index,'\\'))) completion_index = (uint16_t)(path-line+1);
-					if ((path = strrchr(line+completion_index,'/'))) completion_index = (uint16_t)(path-line+1);
-
-					// build the completion list
-					char mask[DOS_PATHLENGTH] = {0};
-					if (p_completion_start) {
-						if (strlen(p_completion_start) + 3 >= DOS_PATHLENGTH) {
-							//Beep;
-							break;
-						}
-						safe_strcpy(mask, p_completion_start);
-						char* dot_pos=strrchr(mask,'.');
-						char* bs_pos=strrchr(mask,'\\');
-						char* fs_pos=strrchr(mask,'/');
-						char* cl_pos=strrchr(mask,':');
-						// not perfect when line already contains wildcards, but works
-						if ((dot_pos-bs_pos>0) && (dot_pos-fs_pos>0) && (dot_pos-cl_pos>0))
-							strncat(mask, "*",DOS_PATHLENGTH - 1);
-						else strncat(mask, "*.*",DOS_PATHLENGTH - 1);
-					} else {
-					        safe_strcpy(mask, "*.*");
-				        }
-
-					RealPt save_dta=dos.dta();
-					dos.dta(dos.tables.tempdta);
-
-					bool res = DOS_FindFirst(mask, 0xffff & ~DOS_ATTR_VOLUME);
-					if (!res) {
-						dos.dta(save_dta);
-						break;	// TODO: beep
-					}
-
-					DOS_DTA dta(dos.dta());
-					char name[DOS_NAMELENGTH_ASCII];uint32_t sz;uint16_t date;uint16_t time;uint8_t att;
-
-					std::list<std::string> executable;
-					while (res) {
-						dta.GetResult(name,sz,date,time,att);
-						// add result to completion list
-
-						if (strcmp(name, ".") && strcmp(name, "..")) {
-							if (dir_only) { //Handle the dir only case different (line starts with cd)
-								if(att & DOS_ATTR_DIRECTORY) l_completion.push_back(name);
-							} else {
-							        if (is_executable_filename(name))
-								        // Prepend executables to a separate list
-								        // and place that list ahead of normal files.
-									executable.push_front(name);
-								else
-									l_completion.push_back(name);
-							}
-						}
-						res=DOS_FindNext();
-					}
-					/* Add executable list to front of completion list. */
-					std::copy(executable.begin(),executable.end(),std::front_inserter(l_completion));
-					it_completion = l_completion.begin();
-					dos.dta(save_dta);
-				}
-
-				if (l_completion.size() && it_completion->length()) {
-					for (;str_index > completion_index; str_index--) {
-						// removes all characters
-						move_cursor_back_one();
-						outc(' ');
-						move_cursor_back_one();
-					}
-
-					strcpy(&line[completion_index], it_completion->c_str());
-					len = (uint16_t)it_completion->length();
-					str_len = str_index = completion_index + len;
-					size = CMD_MAXLINE - str_index - 2;
-					DOS_WriteFile(STDOUT, (uint8_t *)it_completion->c_str(), &len);
+					completion_start = delimiter + 1;
 				}
 			}
+
+			command.erase(completion_start);
+			command += completion[completion_index];
+			cursor_position         = command.size();
+			viewing_tab_completions = true;
 			break;
-		case 0x1b: /* Esc */
-			while (str_index < str_len) {
-				outc(line[str_index++]);
+		}
+
+		case '\b':
+			if (cursor_position > 0) {
+				command.erase(cursor_position - 1, 1);
+				--cursor_position;
 			}
-			//write a backslash and return to the next line
-			outc('\\');
-			outc('\r');
-			outc('\n');
-			reset_str(line);
-			if (l_completion.size()) l_completion.clear(); //reset the completion list.
-			this->InputCommand(line);	//Get the NEW line.
-			size = 0;       // stop the next loop
-			str_len = 0;    // prevent multiple adds of the same line
 			break;
+
+		case '\n': break;
+		case '\r': prompt.Newline(); return command;
+
+		case Escape:
+			command += "\\";
+			prompt.Update(command, cursor_position);
+			prompt.Newline();
+			command.clear();
+			cursor_position = 0;
+			break;
+
 		default:
-			if (l_completion.size()) l_completion.clear();
-			if(str_index < str_len && true) { //mem_readb(BIOS_KEYBOARD_FLAGS1)&0x80) dev_con.h ?
-				outc(' ');//move cursor one to the right.
-				auto text_len = static_cast<uint16_t>(str_len - str_index);
-				uint8_t* text=reinterpret_cast<uint8_t*>(&line[str_index]);
-				DOS_WriteFile(STDOUT, text, &text_len); // write buffer to screen
-				move_cursor_back_one(); //undo the cursor the right.
-				for (auto i = str_len; i > str_index; i--) {
-					line[i]=line[i-1]; //move internal buffer
-					move_cursor_back_one(); //move cursor back (from write buffer to screen)
-				}
-				// new end (as the internal buffer moved one
-				// place to the right
-				terminate_str_at(line, ++str_len);
-				size--;
-			};
-
-			line[str_index]=c;
-			str_index ++;
-			if (str_index > str_len){ 
-				terminate_str_at(line, str_index);
-				str_len++;
-				size--;
+			if (CommandPrompt::MaxCommandSize() < command.size()) {
+				break;
 			}
-			DOS_WriteFile(STDOUT,&c,&n);
+			command.insert(cursor_position, 1, static_cast<char>(data));
+			++cursor_position;
 			break;
 		}
+
+		prompt.Update(command, cursor_position);
+
+		if (!viewing_tab_completions) {
+			completion.clear();
+		}
 	}
 
-	if (!str_len) return;
-	str_len++;
-
-	// remove current command from history if it's there
-	if (current_hist) {
-		// current_hist=false;
-		l_history.pop_front();
-	}
-
-	// add command line to history
-	l_history.push_front(line); it_history = l_history.begin();
-	if (l_completion.size()) l_completion.clear();
-
-	/* DOS %variable% substitution */
-	const auto dos_section = static_cast<Section_prop *>(control->GetSection("dos"));
-	assert(dos_section);
-	std::string_view expand_shell_variable_pref =
-					dos_section->Get_string("expand_shell_variable");
-	if (expand_shell_variable_pref == "true") {
-		ProcessCmdLineEnvVarStitution(line);
-	} else if (expand_shell_variable_pref == "auto" && dos.version.major >= 7) {
-		ProcessCmdLineEnvVarStitution(line);
-	}
+	return "";
 }
 
-/* Note: Buffer pointed to by "line" must be at least CMD_MAXLINE+1 bytes long! */
-void DOS_Shell::ProcessCmdLineEnvVarStitution(char* line) {
-	constexpr char surrogate_percent = 8;
-	const static std::regex re("\\%([^%0-9][^%]*)?%");
-	std::string text = line;
-	std::smatch match;
-	/* Iterate over potential %var1%, %var2%, etc matches found in the text string */
-	while (std::regex_search(text, match, re)) {
-		// Get the first matching %'s position and length
-		const auto percent_pos = static_cast<size_t>(match.position(0));
-		const auto percent_len = static_cast<size_t>(match.length(0));
+static std::vector<std::string> get_completions(const std::string_view command)
+{
+	const std::vector<std::string> args = split(command);
 
-		std::string variable_name = match[1].str();
-		if (variable_name.empty()) {
-			/* Replace %% with the character "surrogate_percent", then (eventually) % */
-			text.replace(percent_pos, percent_len,
-			             std::string(1, surrogate_percent));
-			continue;
-		}
-		/* Trim preceding spaces from the variable name */
-		variable_name.erase(0, variable_name.find_first_not_of(' '));
-		std::string variable_value;
-		if (variable_name.size() && GetEnvStr(variable_name.c_str(), variable_value)) {
-			const size_t equal_pos = variable_value.find_first_of('=');
-			/* Replace the original %var% with its corresponding value from the environment */
-			const std::string replacement = equal_pos != std::string::npos
-			                ? variable_value.substr(equal_pos + 1) : "";
-			text.replace(percent_pos, percent_len, replacement);
-		}
-		else {
-			text.replace(percent_pos, percent_len, "");
-		}
+	const bool dir_only = (!args.empty() && iequals(args[0], "CD") &&
+	                       (args.size() > 1 || command.back() == ' '));
+
+	std::string search = {};
+	if (!args.empty() && command.back() != ' ') {
+		search += args.back();
 	}
-	std::replace(text.begin(), text.end(), surrogate_percent, '%');
-	assert(text.size() <= CMD_MAXLINE);
-	safe_strncpy(line, text.c_str(), CMD_MAXLINE);
+
+	search += "*";
+
+	if (search.find_first_of('.') == std::string::npos) {
+		search += ".*";
+	}
+
+	const auto save_dta = dos.dta();
+	dos.dta(dos.tables.tempdta);
+	const auto dta = DOS_DTA(dos.dta());
+
+	bool res = DOS_FindFirst(search.c_str(), ~DOS_ATTR_VOLUME);
+
+	std::vector<std::string> files           = {};
+	std::vector<std::string> non_executables = {};
+	while (res) {
+		DOS_DTA::Result result = {};
+		dta.GetResult(result);
+
+		if (!result.IsDummyDirectory() &&
+		    (!dir_only || result.IsDirectory())) {
+			if (is_executable_filename(result.name)) {
+				files.emplace_back(std::move(result.name));
+			} else {
+				non_executables.emplace_back(std::move(result.name));
+			}
+		}
+
+		res = DOS_FindNext();
+	}
+
+	dos.dta(save_dta);
+
+	files.insert(files.end(),
+	             std::make_move_iterator(non_executables.begin()),
+	             std::make_move_iterator(non_executables.end()));
+	return files;
 }
 
-std::string full_arguments = "";
-bool DOS_Shell::Execute(char * name,char * args) {
-/* return true  => don't check for hardware changes in do_command 
- * return false =>       check for hardware changes in do_command */
-	char fullname[DOS_PATHLENGTH+4]; //stores results from Which
-	char line[CMD_MAXLINE];
-	const bool have_args = args && args[0] != '\0';
-	if (have_args) {
-		if (*args != ' ') { // put a space in front
-			line[0] = ' ';
-			terminate_str_at(line, 1);
-			strncat(line, args, CMD_MAXLINE - 2);
-			terminate_str_at(line, CMD_MAXLINE - 1);
+std::string DOS_Shell::SubstituteEnvironmentVariables(std::string_view command)
+{
+	std::string expanded = {};
+
+	auto percent_index = command.find_first_of('%');
+	while (percent_index != std::string::npos) {
+		expanded += command.substr(0, percent_index);
+		command              = command.substr(percent_index);
+		auto closing_percent = command.substr(1).find_first_of('%');
+
+		if (closing_percent == std::string::npos) {
+			break;
+		}
+		closing_percent += 1;
+
+		const std::string env_key(command.substr(1, closing_percent - 1));
+		if (std::string env_val = {}; GetEnvStr(env_key.c_str(), env_val)) {
+			expanded += env_val.substr(env_key.length() + sizeof('='));
+
+			command = command.substr(closing_percent + 1);
 		} else {
-			safe_strcpy(line, args);
+			expanded += command.substr(0, closing_percent);
+			command = command.substr(closing_percent);
 		}
-	} else {
-		reset_str(line);
+
+		percent_index = command.find_first_of('%');
 	}
 
-	/* check for a drive change */
-	if (((strcmp(name + 1, ":") == 0) || (strcmp(name + 1, ":\\") == 0)) && isalpha(*name))
-	{
+	expanded += command;
+	return expanded;
+}
+
+CommandPrompt::CommandPrompt()
+{
+	SetCurrentPositionToZero();
+}
+
+uint32_t CommandPrompt::MaxCommandSize()
+{
+	// This size is somewhat arbitrary. It is the number of characters
+	// needed to fill a whole screen minus two rows. This extra space is
+	// to allow the prompt to also fit when deep in the filesystem.
+	// A larger maximum command size would require complex
+	// scrolling behaviour to work as intended. This is likely
+	// uneeded as a user will not likely write commands that large.
+
+	return INT10_GetTextColumns() * (INT10_GetTextRows() - 2);
+}
+
+void CommandPrompt::Update(const std::string_view command,
+                           const std::string::size_type cursor)
+{
+	uint16_t byte_count = 1;
+	SetCursor(0);
+	for (uint8_t c : command) {
+		DOS_WriteFile(STDOUT, &c, &byte_count);
+	}
+
+	if (previous_size > command.size()) {
+		auto space_count = previous_size - command.size();
+		for (decltype(space_count) i = 0; i < space_count; ++i) {
+			outc(' ');
+		}
+	}
+
+	SetCursor(cursor);
+	previous_size = command.size();
+}
+
+void CommandPrompt::Newline()
+{
+	outc('\r');
+	outc('\n');
+	SetCurrentPositionToZero();
+}
+
+void CommandPrompt::outc(uint8_t c)
+{
+	uint16_t n = 1;
+	DOS_WriteFile(STDOUT, &c, &n);
+}
+
+void CommandPrompt::SetCurrentPositionToZero()
+{
+	position_zero.page   = real_readb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
+	position_zero.row    = CURSOR_POS_ROW(position_zero.page);
+	position_zero.column = CURSOR_POS_COL(position_zero.page);
+}
+
+void CommandPrompt::SetCursor(const std::string::size_type index)
+{
+	auto ncols  = INT10_GetTextColumns();
+	auto nrows  = INT10_GetTextRows();
+	auto column = position_zero.column + index;
+	auto row    = position_zero.row + column / ncols;
+	column %= ncols;
+	if (row >= nrows) {
+		position_zero.row -= static_cast<uint8_t>(row - nrows + 1);
+		row = nrows - 1;
+	}
+	INT10_SetCursorPos(static_cast<uint8_t>(row),
+	                   static_cast<uint8_t>(column),
+	                   position_zero.page);
+}
+
+bool DOS_Shell::Execute(std::string_view name, std::string_view args)
+{
+	if (name.size() > 1 && (std::isalpha(name[0]) != 0) &&
+	    (name.substr(1) == ":" || name.substr(1) == ":\\")) {
 		const auto drive_idx = drive_index(name[0]);
 		if (!DOS_SetDrive(drive_idx)) {
 			WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_NOT_FOUND"),
@@ -501,234 +452,284 @@ bool DOS_Shell::Execute(char * name,char * args) {
 		return true;
 	}
 
-	/* Check for a full name */
-	const char *p_fullname = Which(name);
-	if (!p_fullname)
+	const auto fullname                                = Which(name);
+	constexpr decltype(fullname.size()) extension_size = 4;
+
+	if (fullname.empty() || fullname.size() <= extension_size) {
 		return false;
-	safe_strcpy(fullname, p_fullname);
-
-	// Always disallow files without extension from being executed.
-	// Only internal commands can be run this way and they never get in
-	// this handler.
-	const char *extension = strrchr(fullname, '.');
-	if (!extension) {
-		// Check if the result will fit in the parameters.
-		if (safe_strlen(fullname) > (DOS_PATHLENGTH - 1)) {
-			WriteOut(MSG_Get("PROGRAM_PATH_TOO_LONG"), fullname,
-			         DOS_PATHLENGTH);
-			return false;
-		}
-
-		// Try to add .COM, .EXE and .BAT extensions to the filename
-		char temp_name[DOS_PATHLENGTH + 4];
-		for (const char *ext : {".COM", ".EXE", ".BAT"}) {
-			safe_sprintf(temp_name, "%s%s", fullname, ext);
-			const char *temp_fullname = Which(temp_name);
-			if (temp_fullname) {
-				extension = ext;
-				safe_strcpy(fullname, temp_fullname);
-				break;
-			}
-		}
-
-		if (!extension)
-			return false;
 	}
 
-	if (strcasecmp(extension, ".bat") == 0) 
-	{	/* Run the .bat file */
-		/* delete old batch file if call is not active*/
-		bool temp_echo=echo; /*keep the current echostate (as delete bf might change it )*/
-		if (bf && !call)
-			bf.reset();
-		bf = std::make_shared<BatchFile>(this, fullname, name, line);
-		echo = temp_echo; // restore it.
-	} 
-	else 
-	{	/* only .bat .exe .com extensions maybe be executed by the shell */
-		if(strcasecmp(extension, ".com") !=0) 
-		{
-			if(strcasecmp(extension, ".exe") !=0) return false;
+	auto extension = fullname.substr(fullname.size() - extension_size);
+
+	if (iequals(extension, ".BAT")) {
+		if (!batchfiles.empty() && !call) {
+			batchfiles.pop();
 		}
-		/* Run the .exe or .com file from the shell */
-		/* Allocate some stack space for tables in physical memory */
-		reg_sp-=0x200;
-		//Add Parameter block
-		DOS_ParamBlock block(SegPhys(ss)+reg_sp);
-		block.Clear();
-		//Add a filename
-		RealPt file_name=RealMakeSeg(ss,reg_sp+0x20);
-		MEM_BlockWrite(RealToPhysical(file_name), fullname,
-		               (Bitu)(safe_strlen(fullname) + 1));
 
-		/* HACK: Store full commandline for mount and imgmount */
-		full_arguments.assign(line);
-
-		/* Fill the command line */
-		CommandTail cmdtail = {};
-
-		// copy at-most 126 chracters plus the terminating zero
-		safe_strcpy(cmdtail.buffer, line);
-
-		cmdtail.count = check_cast<uint8_t>(safe_strlen(cmdtail.buffer));
-		terminate_str_at(line, cmdtail.count);
-
-		assert(cmdtail.count < sizeof(cmdtail.buffer));
-		cmdtail.buffer[cmdtail.count] = 0xd;
-
-		/* Copy command line in stack block too */
-		MEM_BlockWrite(SegPhys(ss)+reg_sp+0x100,&cmdtail,128);
-
-		
-		/* Split input line up into parameters, using a few special rules, most notable the one for /AAA => A\0AA
-		 * Qbix: It is extremly messy, but this was the only way I could get things like /:aa and :/aa to work correctly */
-		
-		//Prepare string first
-		char parseline[258] = { 0 };
-		for(char *pl = line,*q = parseline; *pl ;pl++,q++) {
-			if (*pl == '=' || *pl == ';' || *pl ==',' || *pl == '\t' || *pl == ' ') 
-				reset_str(q);
-			else
-				*q = *pl; //Replace command seperators with 0.
-		} //No end of string \0 needed as parseline is larger than line
-
-		for(char* p = parseline; (p-parseline) < 250 ;p++) { //Stay relaxed within boundaries as we have plenty of room
-			if (*p == '/') { //Transform /Hello into H\0ello
-				reset_str(p);
-				p++;
-				while ( *p == 0 && (p-parseline) < 250) p++; //Skip empty fields
-				if ((p-parseline) < 250) { //Found something. Lets get the first letter and break it up
-					p++;
-					memmove(static_cast<void*>(p + 1),static_cast<void*>(p),(250-(p-parseline)));
-					if ((p - parseline) < 250)
-						reset_str(p);
-				}
-			}
+		auto reader = FileReader::GetFileReader(fullname);
+		if (reader) {
+			batchfiles.emplace(*this, std::move(*reader), name, args, echo);
+		} else {
+			WriteOut("Could not open %s", fullname.c_str());
 		}
-		// Just to be safe
-		terminate_str_at(parseline, 255);
-		terminate_str_at(parseline, 256);
-		terminate_str_at(parseline, 257);
 
-		/* Parse FCB (first two parameters) and put them into the current DOS_PSP */
-		uint8_t add;
-		uint16_t skip = 0;
-		//find first argument, we end up at parseline[256] if there is only one argument (similar for the second), which exists and is 0.
-		while(skip < 256 && parseline[skip] == 0) skip++;
-		FCB_Parsename(dos.psp(),0x5C,0x01,parseline + skip,&add);
-		skip += add;
-		
-		//Move to next argument if it exists
-		while(parseline[skip] != 0) skip++;  //This is safe as there is always a 0 in parseline at the end.
-		while(skip < 256 && parseline[skip] == 0) skip++; //Which is higher than 256
-		FCB_Parsename(dos.psp(),0x6C,0x01,parseline + skip,&add); 
-
-		block.exec.fcb1=RealMake(dos.psp(),0x5C);
-		block.exec.fcb2=RealMake(dos.psp(),0x6C);
-		/* Set the command line in the block and save it */
-		block.exec.cmdtail=RealMakeSeg(ss,reg_sp+0x100);
-		block.SaveData();
-#if 0
-		/* Save CS:IP to some point where i can return them from */
-		uint32_t oldeip=reg_eip;
-		uint16_t oldcs=SegValue(cs);
-		RealPt newcsip=CALLBACK_RealPointer(call_shellstop);
-		SegSet16(cs,RealSeg(newcsip));
-		reg_ip=RealOffset(newcsip);
-#endif
-		/* Start up a dos execute interrupt */
-		reg_ax=0x4b00;
-		//Filename pointer
-		SegSet16(ds,SegValue(ss));
-		reg_dx=RealOffset(file_name);
-		//Paramblock
-		SegSet16(es,SegValue(ss));
-		reg_bx=reg_sp;
-		SETFLAGBIT(IF,false);
-		CALLBACK_RunRealInt(0x21);
-		/* Restore CS:IP and the stack */
-		reg_sp+=0x200;
-#if 0
-		reg_eip=oldeip;
-		SegSet16(cs,oldcs);
-#endif
+		return true;
 	}
-	return true; //Executable started
+
+	if (iequals(extension, ".COM") || iequals(extension, ".EXE")) {
+		run_binary_executable(fullname, args);
+		return true;
+	}
+
+	return false;
 }
 
-static char which_ret[DOS_PATHLENGTH+4];
-
-const char *DOS_Shell::Which(const char *name) const
+std::string DOS_Shell::Which(const std::string_view name) const
 {
-	const size_t name_len = strlen(name);
-	if (name_len >= DOS_PATHLENGTH)
-		return 0;
+	static constexpr auto extensions = {"", ".COM", ".EXE", ".BAT"};
 
-	/* Parse through the Path to find the correct entry */
-	/* Check if name is already ok but just misses an extension */
+	std::vector<std::string> prefixes = {""};
+	std::string path_environment;
+	const auto have_path_env = GetEnvStr("PATH", path_environment);
+	const auto path_equals   = path_environment.find_first_of('=');
 
-	if (DOS_FileExists(name))
-		return name;
+	if (have_path_env && path_equals != std::string::npos) {
+		path_environment = path_environment.substr(path_equals + 1);
+		auto path_directories = split(path_environment, ';');
 
-	/* try to find .com .exe .bat */
-	for (const char *ext_fmt : {"%s.COM", "%s.EXE", "%s.BAT"}) {
-		safe_sprintf(which_ret, ext_fmt, name);
-		if (DOS_FileExists(which_ret))
-			return which_ret;
-	}
+		remove_empties(path_directories);
 
-	/* No Path in filename look through path environment string */
-	char path[DOS_PATHLENGTH];std::string temp;
-	if (!GetEnvStr("PATH",temp)) return 0;
-	const char * pathenv=temp.c_str();
-
-	assert(pathenv);
-	pathenv = strchr(pathenv,'=');
-	if (!pathenv) return 0;
-	pathenv++;
-	Bitu i_path = 0;
-	while (*pathenv) {
-		/* remove ; and ;; at the beginning. (and from the second entry etc) */
-		while(*pathenv == ';')
-			pathenv++;
-
-		/* get next entry */
-		i_path = 0; /* reset writer */
-		while(*pathenv && (*pathenv !=';') && (i_path < DOS_PATHLENGTH) )
-			path[i_path++] = *pathenv++;
-
-		if(i_path == DOS_PATHLENGTH) {
-			/* If max size. move till next ; and terminate path */
-			while(*pathenv && (*pathenv != ';')) 
-				pathenv++;
-			terminate_str_at(path, DOS_PATHLENGTH - 1);
-		} else {
-			terminate_str_at(path, i_path);
+		for (auto& directory : path_directories) {
+			if (directory.back() != '\\') {
+				directory += '\\';
+			}
 		}
 
-		/* check entry */
-		if (size_t len = safe_strlen(path)) {
-			if(len >= (DOS_PATHLENGTH - 2)) continue;
+		prefixes.insert(prefixes.end(),
+		                std::make_move_iterator(path_directories.begin()),
+		                std::make_move_iterator(path_directories.end()));
+	}
 
-			if(path[len - 1] != '\\') {
-				safe_strcat(path, "\\");
-				len++;
-			}
-
-			//If name too long =>next
-			if((name_len + len + 1) >= DOS_PATHLENGTH) continue;
-
-			safe_strcat(path, name);
-			safe_strcpy(which_ret, path);
-			if (DOS_FileExists(which_ret))
-				return which_ret;
-
-			for (const char *ext_fmt : {"%s.COM", "%s.EXE", "%s.BAT"}) {
-				safe_sprintf(which_ret, ext_fmt, path);
-				if (DOS_FileExists(which_ret))
-					return which_ret;
+	for (const auto& prefix : prefixes) {
+		for (const auto& extension : extensions) {
+			std::string file = prefix + std::string(name) + extension;
+			if (DOS_FileExists(file.c_str())) {
+				return file;
 			}
 		}
 	}
-	return 0;
+
+	return "";
+}
+
+std::string full_arguments = "";
+// TODO De-mystify magic numbers and verify logical correctness
+static void run_binary_executable(const std::string_view fullname,
+                                  std::string_view args)
+{
+	/* Run the .exe or .com file from the shell */
+	/* Allocate some stack space for tables in physical memory */
+	reg_sp -= 0x200;
+	// Add Parameter block
+	DOS_ParamBlock block(SegPhys(ss) + reg_sp);
+	block.Clear();
+
+	// Add a filename
+	const RealPt file_name = RealMakeSeg(ss, reg_sp + 0x20);
+	MEM_BlockWrite(RealToPhysical(file_name),
+	               std::string(fullname).c_str(),
+	               fullname.size() + 1);
+
+	/* HACK: Store full commandline for mount and imgmount */
+	full_arguments.assign(args);
+
+	/* Fill the command line */
+	CommandTail cmdtail = {};
+	cmdtail.count       = static_cast<uint8_t>(
+                std::min(args.size(), CommandTail::MaxCmdtailBufferSize));
+	std::copy_n(args.begin(), cmdtail.count, cmdtail.buffer);
+	cmdtail.buffer[cmdtail.count] = '\r';
+
+	/* Copy command line in stack block too */
+	MEM_BlockWrite(SegPhys(ss) + reg_sp + 0x100, &cmdtail, 128);
+
+	/* Split input line up into parameters, using a few special rules, most
+	 * notable the one for /AAA => A\0AA Qbix: It is extremly messy, but
+	 * this was the only way I could get things like /:aa and :/aa to work
+	 * correctly */
+	std::array<std::string, 2> fcb_args;
+
+	constexpr auto separators = "=;,\t /";
+	for (auto& fcb : fcb_args) {
+		const auto arg_index = std::min(args.find_first_not_of(separators),
+		                                args.find_first_of('/'));
+		if (arg_index == std::string::npos) {
+			break;
+		}
+
+		args = args.substr(arg_index);
+		if (args.size() > 1 && args[0] == '/') {
+			fcb  = args[1];
+			args = args.substr(2);
+		}
+
+		else {
+			const auto next_separator = args.find_first_of(separators);
+			fcb  = args.substr(0, next_separator);
+			args = args.substr(fcb.size());
+		}
+	}
+
+	/* Parse FCB (first two parameters) and put them into the current
+	 * DOS_PSP */
+	uint8_t add = 0;
+	FCB_Parsename(dos.psp(), 0x5C, 0x01, fcb_args[0].c_str(), &add);
+	FCB_Parsename(dos.psp(), 0x6C, 0x01, fcb_args[1].c_str(), &add);
+
+	block.exec.fcb1 = RealMake(dos.psp(), 0x5C);
+	block.exec.fcb2 = RealMake(dos.psp(), 0x6C);
+
+	/* Set the command line in the block and save it */
+	block.exec.cmdtail = RealMakeSeg(ss, reg_sp + 0x100);
+	block.SaveData();
+
+	/* Start up a dos execute interrupt */
+	reg_ax = 0x4b00;
+
+	// Filename pointer
+	SegSet16(ds, SegValue(ss));
+	reg_dx = RealOffset(file_name);
+
+	// Paramblock
+	SegSet16(es, SegValue(ss));
+	reg_bx = reg_sp;
+	SETFLAGBIT(IF, false);
+	CALLBACK_RunRealInt(0x21);
+
+	/* Restore CS:IP and the stack */
+	reg_sp += 0x200;
+}
+
+bool DOS_Shell::GetEnvStr(const char* entry, std::string& result) const
+{
+	/* Walk through the internal environment and see for a match */
+	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
+
+	char env_string[1024 + 1];
+	result.erase();
+	if (!entry[0]) {
+		return false;
+	}
+	do {
+		MEM_StrCopy(env_read, env_string, 1024);
+		if (!env_string[0]) {
+			return false;
+		}
+		env_read += (PhysPt)(safe_strlen(env_string) + 1);
+		char* equal = strchr(env_string, '=');
+		if (!equal) {
+			continue;
+		}
+		/* replace the = with \0 to get the length */
+		*equal = 0;
+		if (strlen(env_string) != strlen(entry)) {
+			continue;
+		}
+		if (strcasecmp(entry, env_string) != 0) {
+			continue;
+		}
+		/* restore the = to get the original result */
+		*equal = '=';
+		result = env_string;
+		return true;
+	} while (1);
+	return false;
+}
+
+bool DOS_Shell::GetEnvNum(Bitu num, std::string& result) const
+{
+	char env_string[1024 + 1];
+	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
+	do {
+		MEM_StrCopy(env_read, env_string, 1024);
+		if (!env_string[0]) {
+			break;
+		}
+		if (!num) {
+			result = env_string;
+			return true;
+		}
+		env_read += (PhysPt)(safe_strlen(env_string) + 1);
+		num--;
+	} while (1);
+	return false;
+}
+
+Bitu DOS_Shell::GetEnvCount() const
+{
+	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
+	Bitu num        = 0;
+	while (mem_readb(env_read) != 0) {
+		for (; mem_readb(env_read); env_read++) {
+		};
+		env_read++;
+		num++;
+	}
+	return num;
+}
+
+bool DOS_Shell::SetEnv(const char* entry, const char* new_string)
+{
+	PhysPt env_read = PhysicalMake(psp->GetEnvironment(), 0);
+
+	// Get size of environment.
+	DOS_MCB mcb(psp->GetEnvironment() - 1);
+	uint16_t envsize = mcb.GetSize() * 16;
+
+	PhysPt env_write          = env_read;
+	PhysPt env_write_start    = env_read;
+	char env_string[1024 + 1] = {0};
+	do {
+		MEM_StrCopy(env_read, env_string, 1024);
+		if (!env_string[0]) {
+			break;
+		}
+		env_read += (PhysPt)(safe_strlen(env_string) + 1);
+		if (!strchr(env_string, '=')) {
+			continue; /* Remove corrupt entry? */
+		}
+		if ((strncasecmp(entry, env_string, strlen(entry)) == 0) &&
+		    env_string[strlen(entry)] == '=') {
+			continue;
+		}
+		MEM_BlockWrite(env_write,
+		               env_string,
+		               (Bitu)(safe_strlen(env_string) + 1));
+		env_write += (PhysPt)(safe_strlen(env_string) + 1);
+	} while (1);
+	/* TODO Maybe save the program name sometime. not really needed though */
+	/* Save the new entry */
+
+	// ensure room
+	if (envsize <= (env_write - env_write_start) + strlen(entry) + 1 +
+	                       strlen(new_string) + 2) {
+		return false;
+	}
+
+	if (new_string[0]) {
+		std::string bigentry(entry);
+		for (std::string::iterator it = bigentry.begin();
+		     it != bigentry.end();
+		     ++it) {
+			*it = toupper(*it);
+		}
+		snprintf(env_string, 1024 + 1, "%s=%s", bigentry.c_str(), new_string);
+		MEM_BlockWrite(env_write,
+		               env_string,
+		               (Bitu)(safe_strlen(env_string) + 1));
+		env_write += (PhysPt)(safe_strlen(env_string) + 1);
+	}
+	/* Clear out the final piece of the environment */
+	mem_writeb(env_write, 0);
+	return true;
 }

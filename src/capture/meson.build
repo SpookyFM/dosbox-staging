@@ -1,9 +1,13 @@
 libcapture_sources = files(
     'capture.cpp',
     'capture_audio.cpp',
-    'capture_image.cpp',
     'capture_midi.cpp',
     'capture_video.cpp',
+    'image/image_capturer.cpp',
+    'image/image_decoder.cpp',
+    'image/image_saver.cpp',
+    'image/image_scaler.cpp',
+    'image/png_writer.cpp',
 )
 
 libcapture = static_library(
@@ -15,8 +19,8 @@ libcapture = static_library(
         libzmbv_dep,
         png_dep,
         sdl2_dep,
-        sdl2_image_dep,
     ],
+    cpp_args: warnings,
 )
 
 libcapture_dep = declare_dependency(link_with: libcapture)

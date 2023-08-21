@@ -21,8 +21,8 @@
 
 #include <cassert>
 #include <cerrno>
-#include <memory>
 #include <new>
+#include <type_traits>
 
 #include "mem_unaligned.h"
 #include "paging.h"
@@ -50,7 +50,20 @@ class CodePageHandler;
 // basic cache block representation
 class CacheBlock {
 public:
+	CacheBlock() = default;
+	~CacheBlock();
+
+	// Prevent copy and move construction and assignment
+	CacheBlock(const CacheBlock&) = delete;
+	CacheBlock(CacheBlock&&) = delete;
+	CacheBlock& operator=(const CacheBlock&) = delete;
+	CacheBlock& operator=(CacheBlock&&) = delete;
+
 	void Clear();
+
+	// Manage the write mask
+	void DeleteWriteMask();
+	void GrowWriteMask(const uint16_t new_mask_len);
 
 	// link this cache block to another block, index specifies the code
 	// path (always zero for unconditional links, 0/1 for conditional ones
@@ -62,38 +75,32 @@ public:
 		toblock->link[index].from = this; // remember who links me
 	}
 
-	struct {
+	struct Page {
 		uint16_t start = 0;
 		uint16_t end   = 0; // where in the page is the original code
 
 		CodePageHandler* handler = {}; // page containing this code
 	} page = {};
 
-	struct {
-		// TODO field start used to be a normal pointer, but upstream
-		// changed it to const pointer in r4424 (perhaps by mistake or
-		// as WIP change). Once transition to W^X will be done, decide
-		// if this should be const pointer or not and remove this comment.
-		//
-		// uint8_t *start; // where in the cache are we
+	struct Cache {
 		const uint8_t* start = {}; // where in the cache are we
 
 		Bitu size        = 0;
 		CacheBlock* next = {};
 		// writemap masking maskpointer/start/length to allow holes in
 		// the writemap
-		std::unique_ptr<uint8_t[]> wmapmask = {};
+		uint8_t* wmapmask = {};
 		uint16_t maskstart = 0;
 		uint16_t masklen   = 0;
 	} cache = {};
 
-	struct {
+	struct Hash {
 		Bitu index = 0;
 
 		CacheBlock* next = {};
 	} hash = {};
 
-	struct {
+	struct Link {
 		CacheBlock* to = {}; // this block can transfer control to the
 		                     // to-block
 		CacheBlock* next = {};
@@ -103,6 +110,12 @@ public:
 
 	CacheBlock* crossblock = {};
 };
+
+static_assert(std::is_standard_layout_v<CacheBlock::Page>, "standard-layout is required for offsetof");
+static_assert(std::is_standard_layout_v<CacheBlock::Cache>, "standard-layout is required for offsetof");
+static_assert(std::is_standard_layout_v<CacheBlock::Hash>, "standard-layout is required for offsetof");
+static_assert(std::is_standard_layout_v<CacheBlock::Link>, "standard-layout is required for offsetof");
+static_assert(std::is_standard_layout_v<CacheBlock>, "standard-layout is required for offsetof");
 
 static struct {
 	struct {
@@ -443,8 +456,7 @@ public:
 					}
 				}
 			}
-			block->cache.wmapmask = {};
-			block->cache.masklen  = 0;
+			block->DeleteWriteMask();
 		} else {
 			for (Bitu i = block->page.start; i <= block->page.end; i++) {
 				if (write_map[i]) {
@@ -476,7 +488,7 @@ public:
 		Bitu count=active_blocks;
 		CacheBlock **map=hash_map;
 		for (CacheBlock * block=*map;count;count--) {
-			while (block==NULL)
+			while (block==nullptr)
 				block=*++map;
 			CacheBlock * nextblock=block->hash.next;
 			block->page.handler=nullptr;			// no need, full clear
@@ -495,7 +507,7 @@ public:
 				return block; // found
 			block=block->hash.next;
 		}
-		return 0; // none found
+		return nullptr; // none found
 	}
 
 	HostPt GetHostReadPt(Bitu phys_page) override
@@ -549,6 +561,36 @@ static CacheBlock *cache_getblock()
 	return ret;
 }
 
+CacheBlock::~CacheBlock() {
+	DeleteWriteMask();
+}
+
+void CacheBlock::DeleteWriteMask() {
+	delete[] cache.wmapmask;
+	cache.wmapmask = {};
+
+	cache.masklen = 0;
+}
+
+void CacheBlock::GrowWriteMask(const uint16_t new_mask_len) {
+	// This function is only called to increase the mask
+	auto& curr_mask_len = cache.masklen;
+	assert(new_mask_len > curr_mask_len);
+
+	// Allocate the new mask
+	auto new_mask = new uint8_t[new_mask_len];
+
+	// Copy the current into the new
+	auto& curr_mask = cache.wmapmask;
+	std::copy(curr_mask, curr_mask + curr_mask_len, new_mask);
+
+	// Update the current
+	delete[] curr_mask;
+	curr_mask = new_mask;
+
+	curr_mask_len = new_mask_len;
+}
+
 void CacheBlock::Clear()
 {
 	Bitu ind;
@@ -592,10 +634,7 @@ void CacheBlock::Clear()
 		page.handler->DelCacheBlock(this);
 		page.handler=nullptr;
 	}
-	if (cache.wmapmask) {
-		cache.wmapmask = {};
-		cache.masklen  = 0;
-	}
+	DeleteWriteMask();
 }
 
 static CacheBlock *cache_openblock()

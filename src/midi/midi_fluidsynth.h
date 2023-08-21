@@ -36,11 +36,11 @@
 
 class MidiHandlerFluidsynth final : public MidiHandler {
 public:
-	MidiHandlerFluidsynth();
+	MidiHandlerFluidsynth() = default;
 	~MidiHandlerFluidsynth() override;
 	void PrintStats();
 
-	const char* GetName() const override
+	std::string_view GetName() const override
 	{
 		return "fluidsynth";
 	}
@@ -84,8 +84,6 @@ private:
 	// versus the current MIDI Sysex or Msg event.
 	double last_rendered_ms = 0.0;
 	double ms_per_audio_frame = 0.0;
-
-	std::atomic_bool keep_rendering = {};
 
 	bool had_underruns = false;
 	bool is_open       = false;

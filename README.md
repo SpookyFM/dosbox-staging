@@ -38,47 +38,49 @@ support today's systems.
 | **Unit tests**                 | Yes<sup>[6]</sup>
 | **Automated regression tests** | WIP
 
-[1]:https://github.com/dosbox-staging/dosbox-staging/actions?query=workflow%3A%22Code+analysis%22
-[2]:https://lgtm.com/projects/g/dosbox-staging/dosbox-staging/
-[3]:https://scan.coverity.com/projects/dosbox-staging
-[4]:https://github.com/dosbox-staging/dosbox-staging/actions?query=workflow%3A%22PVS-Studio+analysis%22
+[1]: https://github.com/dosbox-staging/dosbox-staging/actions?query=workflow%3A%22Code+analysis%22
+[2]: https://lgtm.com/projects/g/dosbox-staging/dosbox-staging/
+[3]: https://scan.coverity.com/projects/dosbox-staging
+[4]: https://github.com/dosbox-staging/dosbox-staging/actions?query=workflow%3A%22PVS-Studio+analysis%22
 [5]: https://github.com/emilk/loguru
-[6]:tests/README.md
-[Development builds]:https://dosbox-staging.github.io/downloads/development-builds/
+[6]: https://github.com/dosbox-staging/dosbox-staging/tree/main/tests
+[Development builds]: https://dosbox-staging.github.io/downloads/development-builds/
 
 ### For users
 
-| **Feature**                 | **Status**
-|-                            |-
-| **CD-DA file codecs**       | Yes: Opus, OGG/Vorbus, MP3, FLAC, and WAV
-| **Pixel-perfect mode**      | Yes: `output=openglpp` or `output=texturepp`
-| **Resizable window**        | Yes, for all hardware-accelerated modes
-| **Relative window size**    | `windowresolution=small`, `medium`, or `large`
-| **Window placement**        | `windowposition = 0,0`, and more<sup>[16]</sup>
-| **[OPL] emulator**          |  Nuked OPL, a highly accurate (YMF262, CT1747) emulator <sup>[8]</sup>
-| **[CGA]/mono support**      | `machine=cga_mono`<sup>[9]</sup>
-| **CGA composite modes**     | `machine=pcjr/tandy/cga` with hotkeys)
-| **[Wayland] support**       | Experimental: use `SDL_VIDEODRIVER=wayland`
-| **Modem phonebook file**    | `phonebookfile=<name>`
-| **Raw mouse input**         | Yes: `raw_mouse_input=true`
-| **`Autotype` command**      | Yes<sup>[10]</sup>
-| **Startup verbosity**       | Yes<sup>[11]</sup>
-| **[GUS] enhancements**      | Yes<sup>[12]</sup>
-| **[FluidSynth][FS] MIDI**   | Yes<sup>[13]</sup>: FluidSynth 2.x
-| **[MT-32] emulator**        | Yes: libmt32emu 2.4.2 (Requires ROM files)
-| **Expanded S3 support**     | 4 and 8 MiB of RAM<sup>[14]</sup>
-| **Portable & layered conf** | By default<sup>[15]</sup>
-| **Translations handling**   | Bundled, see section 14 in README
-| **[ENet] modem transport**  | Yes: serialport `sock:1` flag or `SERIAL.COM`<sup>[17]</sup>
-| **Ethernet via [slirp]**    | Yes: See `[ethernet]` section in conf file
-| **IDE support for CDROMs**  | Yes: See `-ide` flag in `IMGMOUNT.COM /help`
-| **Networking in Win3.11**   | Yes: Via local shell<sup>[18]</sup>
-| **Audio filters**           | Yes: See `*_filter` settings in conf file
-| **Audio reverb and chorus** | Yes: See `[mixer]` conf section and `MIXER.COM /help`
-| **Audio stereo crossfeed**  | Yes: See `[mixer]` conf section and `MIXER.COM /help`
-| **`More` command**          | Yes<sup>[19]</sup>
-| **Dual/multi-mouse input**  | Yes: See `[mouse]` section in conf file
-| **ReelMagic support**       | Yes: See `[reelmagic]` section in conf file
+| **Feature**                  | **Description**
+|-                             |-
+| **CD-DA file codecs**        | Opus, OGG/Vorbus, MP3, FLAC, and WAV
+| **Integer scaling**          | `integer_scaling = vertical` or `horizontal`; replaced "pixel-perfect" mode<sup>[7]</sup>
+| **Resizable window**         | For all hardware-accelerated modes
+| **Relative window size**     | `windowresolution = small`, `medium`, or `large` config setting
+| **Window placement**         | `windowposition` config setting<sup>[16]</sup>
+| **[OPL] emulator**           |  Nuked OPL, a highly accurate (YMF262, CT1747) emulator <sup>[8]</sup>
+| **[CGA]/mono support**       | `machine = cga_mono` and `monochrome_palette` config settings<sup>[9]</sup>
+| **CGA composite modes**      | For `machine = pcjr`, `tandy`, and `cga`; toggleable via hotkeys
+| **[Wayland] support**        | Experimental: use `SDL_VIDEODRIVER=wayland`
+| **Modem phonebook file**     | `phonebookfile` config setting
+| **Raw mouse input**          | `raw_mouse_input` config setting
+| **`AUTOTYPE` command**       | Yes<sup>[10]</sup>
+| **`MORE` command**           | Yes<sup>[21]</sup>
+| **Startup verbosity**        | Yes<sup>[11]</sup>
+| **[GUS] enhancements**       | Yes<sup>[12]</sup>
+| **[FluidSynth][FS] MIDI**    | Built-in<sup>[13]</sup>; via FluidSynth 2.x (SoundFonts not included)
+| **[MT-32] emulator**         | Built-in; via libmt32emu 2.4.2 (requires user-supplied ROM files)
+| **Expanded S3 support**      | 4 and 8 MB of RAM<sup>[14]</sup>
+| **Portable & layered conf**  | By default<sup>[15]</sup>
+| **Translations handling**    | Bundled, see section 14 in README
+| **[ENet] modem transport**   | serialport `sock:1` flag or `SERIAL.COM`<sup>[17]</sup>
+| **Ethernet via [slirp]**     | See `[ethernet]` config section
+| **IDE support for CD-ROMs**  | See `-ide` flag in `IMGMOUNT.COM /help`
+| **Networking in Win3.11**    | Via local shell<sup>[18]</sup>
+| **Audio filters**            | See `*_filter` config settings
+| **Audio reverb and chorus**  | See `reverb` config setting and `MIXER.COM /help`
+| **Audio stereo crossfeed**   | See `chorus` config setting and `MIXER.COM /help`
+| **AdLib Gold emulation**     | Via `oplmode = opl3gold`; emulates the surround add-on module too<sup>[19]</sup>
+| **Master audio compressor**  | `compressor` config setting<sup>[20]</sup>
+| **Dual/multi-mouse input**   | See `[mouse]` config section
+| **ReelMagic support**        | See `[reelmagic]` config section
 
 [OPL]: https://en.wikipedia.org/wiki/Yamaha_YMF262
 [CGA]: https://en.wikipedia.org/wiki/Color_Graphics_Adapter
@@ -87,6 +89,7 @@ support today's systems.
 [MT-32]: https://en.wikipedia.org/wiki/Roland_MT-32
 [FS]:    https://www.fluidsynth.org/
 [ENet]:  https://github.com/zpl-c/enet
+[7]:     https://github.com/dosbox-staging/dosbox-staging/issues/2448
 [8]:     https://www.vogons.org/viewtopic.php?f=9&t=37782
 [9]:     https://github.com/dosbox-staging/dosbox-staging/commit/ffe3c5ab7fb5e28bae78f07ea987904f391a7cf8
 [10]:    https://github.com/dosbox-staging/dosbox-staging/commit/239396fec83dbba6a1eb1a0f4461f4a427d2be38
@@ -98,7 +101,9 @@ support today's systems.
 [16]:    https://github.com/dosbox-staging/dosbox-staging/pull/1272
 [17]:    https://github.com/dosbox-staging/dosbox-staging/pull/1398
 [18]:    https://github.com/dosbox-staging/dosbox-staging/pull/1447
-[19]:    https://github.com/dosbox-staging/dosbox-staging/pull/2020
+[19]:    https://github.com/dosbox-staging/dosbox-staging/pull/1715
+[20]:    https://github.com/dosbox-staging/dosbox-staging/pull/1831
+[21]:    https://github.com/dosbox-staging/dosbox-staging/pull/2020
 
 ## Stable release builds
 
@@ -133,7 +138,6 @@ DOSBox Staging has the following library dependencies:
 | [libpng](http://www.libpng.org/pub/png/libpng.html) (libpng)     | n/a         | PNG-encoding of screen captures                | Optional  | yes        | yes   | very common       |
 | [Opus File](https://opus-codec.org/) (opusfile)                  | n/a         | CDDA playback for Opus-encoded track files     | Mandatory | yes        | yes   | common            |
 | [SDL 2.0](https://github.com/libsdl-org/SDL) (sdl2)              | 2.0.5       | OS-agnostic API for video, audio, and eventing | Mandatory | yes        | yes   | common            |
-| [SDL_image 2.0](https://github.com/libsdl-org/SDL_image) (sdl2-image)  | 2.0.x | Screenshot of rendered output to file          | Optional  | yes        | yes   | common            |
 | [SDL_net 2.0](https://github.com/libsdl-org/SDL_net) (sdl2-net)  | 2.0.0       | Network API for emulated serial and IPX        | Optional  | yes        | yes   | common            |
 | [slirp](https://gitlab.freedesktop.org/slirp) (libslirp)         | 4.6.1       | Unprivileged virtual TCP/IP stack for Ethernet | Optional  | yes        | yes   | less-common       |
 | [SpeexDSP](https://github.com/xiph/speexdsp) (speexdsp)          | n/a         | Audio resampling                               | Mandatory | yes        | yes   | common            |
@@ -147,7 +151,7 @@ Install build dependencies appropriate for your OS:
 ``` shell
 # Fedora
 sudo dnf install ccache gcc-c++ meson alsa-lib-devel libatomic libpng-devel \
-                 SDL2-devel SDL2_image-devel SDL2_net-devel opusfile-devel \
+                 SDL2-devel SDL2_net-devel opusfile-devel \
                  fluidsynth-devel iir1-devel mt32emu-devel libslirp-devel \
                  speexdsp-devel libXi-devel
 ```
@@ -175,14 +179,14 @@ sudo pacman -S ccache gcc meson alsa-lib libpng sdl2 sdl2_image sdl2_net \
 ``` shell
 # openSUSE
 sudo zypper install ccache gcc gcc-c++ meson alsa-devel libatomic1 libpng-devel \
-                    libSDL2-devel libSDL2_image-devel libSDL2_net-devel \
+                    libSDL2-devel libSDL2_net-devel \
                     opusfile-devel fluidsynth-devel libmt32emu-devel libslirp-devel \
                     speexdsp libXi-devel
 ```
 
 ``` shell
 # Void Linux
-sudo xbps-install -S SDL2-devel SDL2_image-devel SDL2_net-devel alsa-lib-devel \
+sudo xbps-install -S SDL2-devel SDL2_net-devel alsa-lib-devel \
                      fluidsynth-devel libiir1-devel libmt32emu-devel \
                      libpng-devel libslirp-devel opusfile-devel \
                      speexdsp-devel libatomic-devel libXi-devel
@@ -191,7 +195,7 @@ sudo xbps-install -S SDL2-devel SDL2_image-devel SDL2_net-devel alsa-lib-devel \
 ``` shell
 # NixOS 
 # With Home Manager on home.nix (Recommended Permanent Installation)
-home.packages = [ pkg-config gcc_multi cmake ccache SDL2 SDL2_image SDL2_net \ 
+home.packages = [ pkg-config gcc_multi cmake ccache SDL2 SDL2_net \ 
                   fluidsynth glib gtest libGL libGLU libjack2 libmt32emu libogg \ 
                   libpng libpulseaudio libslirp libsndfile meson ninja opusfile \
                   libselinux speexdsp stdenv alsa-lib xorg.libXi irr1 ]

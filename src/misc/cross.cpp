@@ -68,33 +68,30 @@ std::string cached_conf_path;
 
 static std::string DetermineConfigPath()
 {
-	const std::string conf_path = CROSS_ResolveHome("~/Library/Preferences/DOSBox");
-	mkdir(conf_path.c_str(), 0700);
-	return conf_path;
+	const auto conf_path = resolve_home("~/Library/Preferences/DOSBox");
+	create_dir(conf_path, 0700);
+	return conf_path.string();
 }
 
 #else
 
 static std::string DetermineConfigPath()
 {
-	const char *xdg_conf_home = getenv("XDG_CONFIG_HOME");
-	const std::string conf_home = xdg_conf_home ? xdg_conf_home : "~/.config";
-	const std::string conf_path = CROSS_ResolveHome(conf_home + "/dosbox");
+	const auto conf_path = get_xdg_config_home() / "dosbox";
+	std::error_code ec = {};
 
-	if (path_exists(conf_path + "/" + GetConfigName())) {
+	if (std_fs::exists(conf_path / GetConfigName())) {
 		return conf_path;
 	}
 
 	auto fallback_to_deprecated = []() {
-		const std::string old_conf_path = CROSS_ResolveHome("~/.dosbox");
+		const std::string old_conf_path = resolve_home("~/.dosbox").string();
 		if (path_exists(old_conf_path + "/" + GetConfigName())) {
 			LOG_WARNING("CONFIG: Falling back to deprecated path (~/.dosbox) due to errors");
 			LOG_WARNING("CONFIG: Please investigate the problems and try again");
 		}
 		return old_conf_path;
 	};
-
-	std::error_code ec = {};
 
 	if (!std_fs::exists(conf_path, ec)) {
 		if (std_fs::create_directories(conf_path, ec)) {
@@ -158,8 +155,8 @@ void CROSS_DetermineConfigPaths() {}
 static void W32_ConfDir(std::string& in,bool create) {
 	int c = create?1:0;
 	char result[MAX_PATH] = { 0 };
-	BOOL r = SHGetSpecialFolderPath(NULL,result,CSIDL_LOCAL_APPDATA,c);
-	if(!r || result[0] == 0) r = SHGetSpecialFolderPath(NULL,result,CSIDL_APPDATA,c);
+	BOOL r = SHGetSpecialFolderPath(nullptr,result,CSIDL_LOCAL_APPDATA,c);
+	if(!r || result[0] == 0) r = SHGetSpecialFolderPath(nullptr,result,CSIDL_APPDATA,c);
 	if(!r || result[0] == 0) {
 		const char* windir = getenv("windir");
 		if(!windir) windir = "c:\\windows";
@@ -211,11 +208,6 @@ void Cross::GetPlatformConfigName(std::string &in)
 	in = GetConfigName();
 }
 
-void Cross::ResolveHomedir(std::string &in)
-{
-	in = CROSS_ResolveHome(in);
-}
-
 void Cross::CreatePlatformConfigDir(std::string &in)
 {
 #ifdef WIN32
@@ -234,7 +226,7 @@ void Cross::CreatePlatformConfigDir(std::string &in)
 	}
 }
 
-std::string CROSS_ResolveHome(const std::string &str)
+std_fs::path resolve_home(const std::string &str) noexcept
 {
 	if (!str.size() || str[0] != '~') // No ~
 		return str;
@@ -272,10 +264,10 @@ bool Cross::IsPathAbsolute(const std::string& in)
 #if defined (WIN32)
 
 dir_information* open_directory(const char* dirname) {
-	if (dirname == NULL) return NULL;
+	if (dirname == nullptr) return nullptr;
 
 	size_t len = strlen(dirname);
-	if (len == 0) return NULL;
+	if (len == 0) return nullptr;
 
 	static dir_information dir;
 
@@ -332,7 +324,7 @@ dir_information* open_directory(const char* dirname) {
 	static dir_information dir;
 	dir.dir=opendir(dirname);
 	safe_strcpy(dir.base_path, dirname);
-	return dir.dir?&dir:NULL;
+	return dir.dir?&dir:nullptr;
 }
 
 bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory) {
@@ -343,7 +335,7 @@ bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_dire
 bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory) {
 	if (!dirp) return false;
 	struct dirent* dentry = readdir(dirp->dir);
-	if (dentry==NULL) {
+	if (dentry==nullptr) {
 		return false;
 	}
 
@@ -407,12 +399,12 @@ FILE *fopen_wrap(const char *path, const char *mode) {
 			//However as realpath only works for exising files. The testing is 
 			//in that case not done against new files.
 		}
-		char* check = realpath(work,NULL);
+		char* check = realpath(work,nullptr);
 		if (check) {
 			if ( ( strlen(check) == 5 && strcmp(check,"/proc") == 0) || strncmp(check,"/proc/",6) == 0) {
 //				LOG_MSG("lst hit %s blocking!",path);
 				free(check);
-				return NULL;
+				return nullptr;
 			}
 			free(check);
 		}
@@ -498,10 +490,35 @@ bool wild_match(const char *haystack, const char *needle)
 	return *haystack == '\0';
 }
 
-bool WildFileCmp(const char *file, const char *wild, bool long_compare)
+static bool wildcard_matches_hidden_file(const std::string_view filename,
+                                         const std::string_view wildcard)
+{
+	const auto is_wildcard_first = wildcard.find_first_of("?*") !=
+	                               std::string_view::npos;
+
+	// DOS files can be named ".EXT", so at a minimum we only consider files
+	// long than this pattern (that also begin with a dot).
+	constexpr size_t min_length = 5;
+
+	const auto is_hidden_file = filename.size() >= min_length &&
+	                            filename[0] == '.' &&
+	                            !(filename == "." || filename == "..");
+
+	return is_wildcard_first && is_hidden_file;
+}
+
+bool WildFileCmp(const char* file, const char* wild, bool long_compare)
 {
 	if (!file || !wild || (*file && !*wild) || strlen(wild) > LFN_NAMELENGTH)
 		return false;
+
+	// Shell commands (like cp, rm, find) ignore dot files in wildcard
+	// patterns on MSYS2, MacOS, Linux, and BSD, so we mirror that behaviour.
+	if (wildcard_matches_hidden_file(file, wild)) {
+		LOG_WARNING("FS: Skipping hidden file '%s' for pattern '%s'", file, wild);
+		return false;
+	}
+
 	char file_name[LFN_NAMELENGTH + 1];
 	char file_ext[LFN_NAMELENGTH + 1];
 	char wild_name[LFN_NAMELENGTH + 1];
@@ -542,7 +559,7 @@ bool WildFileCmp(const char *file, const char *wild, bool long_compare)
 	upcase(file_ext);
 	char nwild[LFN_NAMELENGTH + 2];
 	strcpy(nwild, wild);
-	if (long_compare && strrchr(nwild, '*') && strrchr(nwild, '.') == NULL)
+	if (long_compare && strrchr(nwild, '*') && strrchr(nwild, '.') == nullptr)
 		strcat(nwild, ".*");
 	find_ext = strrchr(nwild, '.');
 	if (find_ext) {

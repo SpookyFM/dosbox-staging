@@ -28,9 +28,8 @@
 #if C_OPENGL
 #include <SDL_opengl.h>
 #endif
+#include "render.h"
 #include "video.h"
-
-#include "../libs/ppscale/ppscale.h"
 
 #define SDL_NOFRAME 0x00000020
 
@@ -48,38 +47,41 @@ enum SCREEN_TYPES	{
 #endif
 };
 
-enum class FRAME_MODE {
-	UNSET,
-	CFR,        // constant frame rate, as defined by the emulated system
-	VFR,        // variable frame rate, as defined by the emulated system
-	SYNCED_CFR, // constant frame rate, synced with the display's refresh rate
-	THROTTLED_VFR, // variable frame rate, throttled to the display's rate
+enum class FrameMode {
+	Unset,
+	Cfr,          // constant frame rate, as defined by the emulated system
+	Vfr,          // variable frame rate, as defined by the emulated system
+	ThrottledVfr, // variable frame rate, throttled to the display's rate
 };
 
-enum class HOST_RATE_MODE {
-	AUTO,
-	SDI, // serial digital interface
-	VRR, // variable refresh rate
-	CUSTOM,
+enum class HostRateMode {
+	Auto,
+	Sdi, // serial digital interface
+	Vrr, // variable refresh rate
+	Custom,
 };
 
-enum class SCALING_MODE { NONE, NEAREST, PERFECT };
+enum class InterpolationMode { Bilinear, NearestNeighbour };
 
-enum class VSYNC_STATE {
-	UNSET = -2,
-	ADAPTIVE = -1,
-	OFF = 0,
-	ON = 1,
+enum class VsyncState {
+	Unset    = -2,
+	Adaptive = -1,
+	Off      = 0,
+	On       = 1,
+	Yield    = 2,
 };
 
-// A vsync preference consists of three parts:
-//  - What the user asked for
-//  - What the host reports vsync as after setting it
-//  - What the actual resulting state is after setting it
-struct VsyncPreference {
-	VSYNC_STATE requested = VSYNC_STATE::UNSET;
-	VSYNC_STATE reported = VSYNC_STATE::UNSET;
-	VSYNC_STATE resultant = VSYNC_STATE::UNSET;
+// The vsync settings consists of three parts:
+//  - What the user asked for.
+//  - What the measured state is after setting the requested vsync state.
+//    The video driver may honor the requested vsync state, ignore it, change
+//    it, or be outright buggy.
+//  - The benchmarked rate is the actual frame rate after setting the requested
+//    stated, and is used to determined the measured state.
+//
+struct VsyncSettings {
+	VsyncState requested = VsyncState::Unset;
+	VsyncState measured  = VsyncState::Unset;
 	int benchmarked_rate = 0;
 };
 
@@ -99,13 +101,15 @@ struct SDL_Block {
 	bool update_display_contents = true;
 	bool resizing_window = false;
 	bool wait_on_error = false;
-	SCALING_MODE scaling_mode = SCALING_MODE::NONE;
+
+	InterpolationMode interpolation_mode    = InterpolationMode::Bilinear;
+	IntegerScalingMode integer_scaling_mode = IntegerScalingMode::Off;
+
 	struct {
 		int width = 0;
 		int height = 0;
 		double scalex = 1.0;
 		double scaley = 1.0;
-		double pixel_aspect = 1.0;
 		uint16_t previous_mode = 0;
 		bool has_changed = false;
 		GFX_CallBack_t callback = nullptr;
@@ -149,7 +153,7 @@ struct SDL_Block {
 		// position when leaving fullscreen for the first time.
 		// See FinalizeWindowState function for details.
 		bool lazy_init_window_size = false;
-		HOST_RATE_MODE host_rate_mode = HOST_RATE_MODE::AUTO;
+		HostRateMode host_rate_mode = HostRateMode::Auto;
 		double preferred_host_rate = 0.0;
 		bool want_resizable_window = false;
 		SCREEN_TYPES type = SCREEN_SURFACE;
@@ -161,12 +165,13 @@ struct SDL_Block {
 		std::string hint_paused_str = {};
 		std::string cycles_ms_str   = {};
 	} title_bar = {};
+
 	struct {
-		VsyncPreference when_windowed = {};
-		VsyncPreference when_fullscreen = {};
-		VSYNC_STATE current = VSYNC_STATE::ON;
-		int skip_us = 0;
+		VsyncSettings when_windowed   = {};
+		VsyncSettings when_fullscreen = {};
+		int skip_us                   = 0;
 	} vsync = {};
+
 #if C_OPENGL
 	struct {
 		SDL_GLContext context;
@@ -207,26 +212,30 @@ struct SDL_Block {
 	SDL_Renderer *renderer = nullptr;
 	std::string render_driver = "";
 	int display_number = 0;
+
 	struct {
 		SDL_Surface *input_surface = nullptr;
 		SDL_Texture *texture = nullptr;
 		SDL_PixelFormat *pixelFormat = nullptr;
 	} texture = {};
+
 	struct {
-		present_frame_f *present = present_frame_noop;
-		update_frame_buffer_f *update = update_frame_noop;
-		FRAME_MODE desired_mode = FRAME_MODE::UNSET;
-		FRAME_MODE mode = FRAME_MODE::UNSET;
-		double period_ms = 0.0; // in ms, for use with PIC timers
-		int period_us = 0;      // same but in us, for use with chrono
+		present_frame_f* present      = present_frame_noop;
+		update_frame_buffer_f* update = update_frame_noop;
+		FrameMode desired_mode        = FrameMode::Unset;
+		FrameMode mode                = FrameMode::Unset;
+		double period_ms    = 0.0; // in ms, for use with PIC timers
+		int period_us       = 0; // same but in us, for use with chrono
 		int period_us_early = 0;
-		int period_us_late = 0;
+		int period_us_late  = 0;
 		int8_t vfr_dupe_countdown = 0;
 	} frame = {};
-	PPScale pp_scale = {};
+
 	SDL_Rect updateRects[1024] = {};
+
 	bool use_exact_window_resolution = false;
 	bool use_viewport_limits = false;
+
 	SDL_Point viewport_resolution = {-1, -1};
 #if defined (WIN32)
 	// Time when sdl regains focus (Alt+Tab) in windowed mode
@@ -238,7 +247,5 @@ struct SDL_Block {
 };
 
 extern SDL_Block sdl;
-
-std::optional<SDL_Surface *> SDLMAIN_GetRenderedSurface();
 
 #endif

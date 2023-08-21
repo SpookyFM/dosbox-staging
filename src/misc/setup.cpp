@@ -27,6 +27,7 @@
 #include <regex>
 #include <sstream>
 #include <string_view>
+#include <unordered_map>
 
 #include "control.h"
 #include "cross.h"
@@ -46,7 +47,7 @@ using namespace std;
 std::unique_ptr<Config> control = {};
 
 // Set by parseconfigfile so Prop_path can use it to construct the realpath
-static std::string current_config_dir;
+static std_fs::path current_config_dir;
 
 Value::operator bool() const
 {
@@ -166,29 +167,15 @@ bool Value::SetDouble(const std::string& in)
 	return true;
 }
 
+// Sets the '_bool' member variable to either the parsed boolean value or false
+// if it couldn't be parsed. Returns true if the provided string was parsed.
 bool Value::SetBool(const std::string& in)
 {
-	istringstream input(in);
-	string result;
-	input >> result;
-	lowcase(result);
-	_bool = false;
-
-	if (!result.size()) {
-		return false;
-	}
-
-	if (result == "0" || result == "disabled" || result == "false" ||
-	    result == "off" || result == "no") {
-		_bool = false;
-	} else if (result == "1" || result == "enabled" || result == "true" ||
-	           result == "on" || result == "yes") {
-		_bool = true;
-	} else {
-		return false;
-	}
-
-	return true;
+	auto in_lowercase = in;
+	lowcase(in_lowercase);
+	const auto parsed = parse_bool_setting(in_lowercase);
+	_bool = parsed ? *parsed : false;
+	return parsed.has_value();
 }
 
 void Value::SetString(const std::string& in)
@@ -415,6 +402,16 @@ bool Prop_string::IsValidValue(const Value& in)
 		return true;
 	}
 
+	// If the property's valid values includes either positive or negative
+	// bool strings ("on", "false", etc..), then check if this incoming
+	// value is either.
+	if (is_positive_bool_valid && has_true(in.ToString())) {
+		return true;
+	}
+	if (is_negative_bool_valid && has_false(in.ToString())) {
+		return true;
+	}
+
 	for (const auto& val : valid_values) {
 		if (val == in) { // Match!
 			return true;
@@ -447,19 +444,17 @@ bool Prop_path::SetValue(const std::string& input)
 		return false;
 	}
 
-	std::string workcopy(input);
-	Cross::ResolveHomedir(workcopy);
+	const auto temp_path = resolve_home(input);
 
-	// Prepend config directory in it exists. Check for absolute paths later
-	if (current_config_dir.empty()) {
-		realpath = workcopy;
-	} else {
-		realpath = current_config_dir + CROSS_FILESPLIT + workcopy;
+	if (temp_path.is_absolute()) {
+		realpath = temp_path;
+		return is_valid;
 	}
 
-	// Absolute paths
-	if (Cross::IsPathAbsolute(workcopy)) {
-		realpath = workcopy;
+	if (current_config_dir.empty()) {
+		realpath = get_platform_config_dir() / temp_path;
+	} else {
+		realpath = current_config_dir / temp_path;
 	}
 
 	return is_valid;
@@ -675,6 +670,21 @@ const std::vector<Value>& PropMultiVal::GetValues() const
 	return valid_values;
 }
 
+// When setting a property's list of valid values (For example, composite =
+// [auto, on, off]), this function inspects the given valid value to see if it's
+// boolean string (ie: "on" or "off"). If so, this records if a boolean is valid
+// and its direction (either positive or negative) so we can accept all of those
+// corresponding boolean strings from the user (ie: composite = disabled")
+//
+void Property::MaybeSetBoolValid(const std::string_view valid_value)
+{
+	if (has_true(valid_value)) {
+		is_positive_bool_valid = true;
+	} else if (has_false(valid_value)) {
+		is_negative_bool_valid = true;
+	}
+}
+
 void Property::Set_values(const char* const* in)
 {
 	Value::Etype type = default_value.type;
@@ -682,6 +692,7 @@ void Property::Set_values(const char* const* in)
 	int i = 0;
 
 	while (in[i]) {
+		MaybeSetBoolValid(in[i]);
 		Value val(in[i], type);
 		valid_values.push_back(val);
 		i++;
@@ -700,6 +711,7 @@ void Property::Set_values(const std::vector<std::string>& in)
 {
 	Value::Etype type = default_value.type;
 	for (auto& str : in) {
+		MaybeSetBoolValid(str);
 		Value val(str, type);
 		valid_values.push_back(val);
 	}
@@ -1188,12 +1200,16 @@ void Config::Init() const
 
 void Section::AddEarlyInitFunction(SectionFunction func, bool changeable_at_runtime)
 {
-	early_init_functions.emplace_back(func, changeable_at_runtime);
+	if (func) {
+		early_init_functions.emplace_back(func, changeable_at_runtime);
+	}
 }
 
 void Section::AddInitFunction(SectionFunction func, bool changeable_at_runtime)
 {
-	initfunctions.emplace_back(func, changeable_at_runtime);
+	if (func) {
+		init_functions.emplace_back(func, changeable_at_runtime);
+	}
 }
 
 void Section::AddDestroyFunction(SectionFunction func, bool changeable_at_runtime)
@@ -1205,16 +1221,38 @@ void Section::ExecuteEarlyInit(bool init_all)
 {
 	for (const auto& fn : early_init_functions) {
 		if (init_all || fn.changeable_at_runtime) {
+			assert(fn.function);
 			fn.function(this);
 		}
 	}
 }
 
-void Section::ExecuteInit(bool initall)
+void Section::ExecuteInit(const bool init_all)
 {
-	for (const auto& fn : initfunctions) {
-		if (initall || fn.changeable_at_runtime) {
-			fn.function(this);
+	for (size_t i = 0; i < init_functions.size(); ++i) {
+		// Can we skip calling this function?
+		if (!(init_all || init_functions[i].changeable_at_runtime)) {
+			continue;
+		}
+
+		// Track the size of our container because it might grow.
+		const auto size_on_entry = init_functions.size();
+
+		assert(init_functions[i].function);
+		init_functions[i].function(this);
+
+		const auto size_on_exit = init_functions.size();
+
+		if (size_on_exit > size_on_entry) {
+			//
+			// If the above function call appended items then we
+			// need to avoid calling them immediately in this
+			// current pass by advancing our index across them. The
+			// setup class will call the added function itself.
+			//
+			const auto num_appended = size_on_exit - size_on_entry;
+			i += num_appended;
+			assert(i < init_functions.size());
 		}
 	}
 }
@@ -1309,7 +1347,7 @@ bool Config::ParseConfigFile(const std::string& type,
 	configFilesCanonical.push_back(canonical_path);
 
 	// Get directory from config_file_name, used with relative paths.
-	current_config_dir = canonical_path.parent_path().string();
+	current_config_dir = canonical_path.parent_path();
 
 	// If this is an autoexec section, the above takes care of the joining
 	// while this handles the overwrriten mode. We need to be prepared for
@@ -1390,7 +1428,7 @@ bool Config::ParseConfigFile(const std::string& type,
 	// So internal changes don't use the path information
 	current_config_dir.clear();
 
-	LOG_INFO("CONFIG: Loaded '%s' config file '%s'",
+	LOG_INFO("CONFIG: Loaded %s config file '%s'",
 	         type.c_str(),
 	         config_file_name.c_str());
 
@@ -1433,6 +1471,37 @@ parse_environ_result_t parse_environ(const char* const* envp) noexcept
 	}
 
 	return props_to_set;
+}
+
+std::optional<bool> parse_bool_setting(const std::string_view setting)
+{
+	static const std::unordered_map<std::string_view, bool> mapping{
+	        {"enabled", true},
+	        {"true", true},
+	        {"on", true},
+	        {"yes", true},
+
+	        {"disabled", false},
+	        {"false", false},
+	        {"off", false},
+	        {"no", false},
+	        {"none", false},
+	};
+
+	const auto it = mapping.find(setting);
+	return it != mapping.end() ? std::optional<bool>(it->second) : std::nullopt;
+}
+
+bool has_true(const std::string_view setting)
+{
+	const auto has_bool = parse_bool_setting(setting);
+	return (has_bool && *has_bool == true);
+}
+
+bool has_false(const std::string_view setting)
+{
+	const auto has_bool = parse_bool_setting(setting);
+	return (has_bool && *has_bool == false);
 }
 
 void Config::ParseEnv()
@@ -1494,382 +1563,6 @@ Verbosity Config::GetStartupVerbosity() const
 	LOG_WARNING("SETUP: Unknown verbosity mode '%s', defaulting to 'high'",
 	            user_choice.c_str());
 	return Verbosity::High;
-}
-
-bool CommandLine::FindExist(const char* name, bool remove)
-{
-	cmd_it it;
-	if (!(FindEntry(name, it, false))) {
-		return false;
-	}
-	if (remove) {
-		cmds.erase(it);
-	}
-	return true;
-}
-
-// Checks if any of the command line arguments are found in the pre_args *and*
-// exist prior to any of the post_args. If none of the command line arguments
-// are found in the pre_args then false is returned.
-bool CommandLine::ExistsPriorTo(const std::list<std::string_view>& pre_args,
-                                const std::list<std::string_view>& post_args) const
-{
-	auto any_of_iequals = [](const auto& haystack, const auto& needle) {
-		return std::any_of(haystack.begin(),
-		                   haystack.end(),
-		                   [&needle](const auto& hay) {
-			                   return iequals(hay, needle);
-		                   });
-	};
-
-	for (const auto& cli_arg : cmds) {
-		// If any of the pre-args are insensitive-equal-to the CLI
-		// argument
-		if (any_of_iequals(pre_args, cli_arg)) {
-			return true;
-		}
-		if (any_of_iequals(post_args, cli_arg)) {
-			return false;
-		}
-	}
-	return false;
-}
-
-bool CommandLine::FindInt(const char* name, int& value, bool remove)
-{
-	cmd_it it, it_next;
-
-	if (!(FindEntry(name, it, true))) {
-		return false;
-	}
-
-	it_next = it;
-	++it_next;
-	value = atoi((*it_next).c_str());
-
-	if (remove) {
-		cmds.erase(it, ++it_next);
-	}
-	return true;
-}
-
-bool CommandLine::FindString(const char* name, std::string& value, bool remove)
-{
-	cmd_it it, it_next;
-
-	if (!(FindEntry(name, it, true))) {
-		return false;
-	}
-
-	it_next = it;
-	++it_next;
-	value = *it_next;
-
-	if (remove) {
-		cmds.erase(it, ++it_next);
-	}
-	return true;
-}
-
-bool CommandLine::FindCommand(unsigned int which, std::string& value)
-{
-	if (which < 1) {
-		return false;
-	}
-	if (which > cmds.size()) {
-		return false;
-	}
-	cmd_it it = cmds.begin();
-	for (; which > 1; which--) {
-		it++;
-	}
-	value = (*it);
-	return true;
-}
-
-// Was a directory provided on the command line?
-bool CommandLine::HasDirectory() const
-{
-	return std::any_of(cmds.begin(), cmds.end(), is_directory);
-}
-
-// Was an executable filename provided on the command line?
-bool CommandLine::HasExecutableName() const
-{
-	for (const auto& arg : cmds) {
-		if (is_executable_filename(arg)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-bool CommandLine::FindEntry(const char* name, cmd_it& it, bool neednext)
-{
-	for (it = cmds.begin(); it != cmds.end(); ++it) {
-		if (!strcasecmp((*it).c_str(), name)) {
-			cmd_it itnext = it;
-			++itnext;
-			if (neednext && (itnext == cmds.end())) {
-				return false;
-			}
-			return true;
-		}
-	}
-	return false;
-}
-
-bool CommandLine::FindStringBegin(const char* const begin, std::string& value,
-                                  bool remove)
-{
-	size_t len = strlen(begin);
-	for (cmd_it it = cmds.begin(); it != cmds.end(); ++it) {
-		if (strncmp(begin, (*it).c_str(), len) == 0) {
-			value = ((*it).c_str() + len);
-			if (remove) {
-				cmds.erase(it);
-			}
-			return true;
-		}
-	}
-	return false;
-}
-
-bool CommandLine::FindStringRemain(const char* name, std::string& value)
-{
-	cmd_it it;
-	value.clear();
-	if (!FindEntry(name, it)) {
-		return false;
-	}
-	++it;
-	for (; it != cmds.end(); ++it) {
-		value += " ";
-		value += (*it);
-	}
-	return true;
-}
-
-// Only used for parsing command.com /C
-// Allowing /C dir and /Cdir
-// Restoring quotes back into the commands so command /C mount d "/tmp/a b"
-// works as intended
-bool CommandLine::FindStringRemainBegin(const char* name, std::string& value)
-{
-	cmd_it it;
-	value.clear();
-
-	if (!FindEntry(name, it)) {
-		size_t len = strlen(name);
-
-		for (it = cmds.begin(); it != cmds.end(); ++it) {
-			if (strncasecmp(name, (*it).c_str(), len) == 0) {
-				std::string temp = ((*it).c_str() + len);
-				// Restore quotes for correct parsing in later
-				// stages
-				if (temp.find(' ') != std::string::npos) {
-					value = std::string("\"") + temp +
-					        std::string("\"");
-				} else {
-					value = temp;
-				}
-				break;
-			}
-		}
-		if (it == cmds.end()) {
-			return false;
-		}
-	}
-
-	++it;
-
-	for (; it != cmds.end(); ++it) {
-		value += " ";
-		std::string temp = (*it);
-		if (temp.find(' ') != std::string::npos) {
-			value += std::string("\"") + temp + std::string("\"");
-		} else {
-			value += temp;
-		}
-	}
-	return true;
-}
-
-bool CommandLine::GetStringRemain(std::string& value)
-{
-	if (!cmds.size()) {
-		return false;
-	}
-
-	cmd_it it = cmds.begin();
-	value     = (*it++);
-
-	for (; it != cmds.end(); ++it) {
-		value += " ";
-		value += (*it);
-	}
-	return true;
-}
-
-unsigned int CommandLine::GetCount(void)
-{
-	return (unsigned int)cmds.size();
-}
-
-void CommandLine::FillVector(std::vector<std::string>& vector)
-{
-	for (cmd_it it = cmds.begin(); it != cmds.end(); ++it) {
-		vector.push_back((*it));
-	}
-#ifdef WIN32
-	// Add back the \" if the parameter contained a space
-	for (Bitu i = 0; i < vector.size(); i++) {
-		if (vector[i].find(' ') != std::string::npos) {
-			vector[i] = "\"" + vector[i] + "\"";
-		}
-	}
-#endif
-}
-
-int CommandLine::GetParameterFromList(const char* const params[],
-                                      std::vector<std::string>& output)
-{
-	// Return values: 0 = P_NOMATCH, 1 = P_NOPARAMS
-	// TODO return nomoreparams
-	int retval = 1;
-	output.clear();
-
-	enum { P_START, P_FIRSTNOMATCH, P_FIRSTMATCH } parsestate = P_START;
-
-	cmd_it it = cmds.begin();
-
-	while (it != cmds.end()) {
-		bool found = false;
-
-		for (int i = 0; *params[i] != 0; ++i) {
-			if (!strcasecmp((*it).c_str(), params[i])) {
-				// Found a parameter
-				found = true;
-				switch (parsestate) {
-				case P_START:
-					retval     = i + 2;
-					parsestate = P_FIRSTMATCH;
-					break;
-				case P_FIRSTMATCH:
-				case P_FIRSTNOMATCH: return retval;
-				}
-			}
-		}
-
-		if (!found) {
-			switch (parsestate) {
-			case P_START:
-				// No match
-				retval     = 0;
-				parsestate = P_FIRSTNOMATCH;
-				output.push_back(*it);
-				break;
-			case P_FIRSTMATCH:
-			case P_FIRSTNOMATCH: output.push_back(*it); break;
-			}
-		}
-
-		cmd_it itold = it;
-		++it;
-
-		cmds.erase(itold);
-	}
-
-	return retval;
-}
-
-CommandLine::CommandLine(int argc, const char* const argv[])
-{
-	if (argc > 0) {
-		file_name = argv[0];
-	}
-
-	int i = 1;
-
-	while (i < argc) {
-		cmds.push_back(argv[i]);
-		i++;
-	}
-}
-
-uint16_t CommandLine::Get_arglength()
-{
-	if (cmds.empty()) {
-		return 0;
-	}
-
-	size_t total_length = 0;
-	for (const auto& cmd : cmds) {
-		total_length += cmd.size() + 1;
-	}
-
-	if (total_length > UINT16_MAX) {
-		LOG_WARNING("SETUP: Command line length too long, truncating");
-		total_length = UINT16_MAX;
-	}
-
-	return static_cast<uint16_t>(total_length);
-}
-
-CommandLine::CommandLine(const char* name, const char* cmdline)
-{
-	if (name) {
-		file_name = name;
-	}
-
-	// Parse the commands and put them in the list
-	bool inword, inquote;
-	char c;
-	inword  = false;
-	inquote = false;
-	std::string str;
-
-	const char* c_cmdline = cmdline;
-
-	while ((c = *c_cmdline) != 0) {
-		if (inquote) {
-			if (c != '"') {
-				str += c;
-			} else {
-				inquote = false;
-				cmds.push_back(str);
-				str.erase();
-			}
-		} else if (inword) {
-			if (c != ' ') {
-				str += c;
-			} else {
-				inword = false;
-				cmds.push_back(str);
-				str.erase();
-			}
-		} else if (c == '\"') {
-			inquote = true;
-		} else if (c != ' ') {
-			str += c;
-			inword = true;
-		}
-		c_cmdline++;
-	}
-
-	if (inword || inquote) {
-		cmds.push_back(str);
-	}
-}
-
-void CommandLine::Shift(unsigned int amount)
-{
-	while (amount--) {
-		file_name = cmds.size() ? (*(cmds.begin())) : "";
-		if (cmds.size()) {
-			cmds.erase(cmds.begin());
-		}
-	}
 }
 
 const std::string& SETUP_GetLanguage()

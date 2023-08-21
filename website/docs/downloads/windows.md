@@ -16,13 +16,13 @@ sha256: 94b961f397f3b70a13daf3b573857b52<wbr>62515e75d490bfc19f019479fe1694f8
 [Download DOSBox Staging 0.80.1 64-bit (zip)][0_80_1_x64_ZIP]
 <br>
 <small>
-sha256: 3680cbdf7a91467877b51c95e468ef45<wbr>b186b42518c3163fab85c727923ee659
+sha256: e7ab98013b55f6fd6db1f529574b8f29<wbr>05d374225f532ce0905666281cbe32af
 </small>
 
 [Download DOSBox Staging 0.80.1 32-bit (zip)][0_80_1_x32_ZIP]
 <br>
 <small>
-sha256: cd73b86699e9732bcee9fe33d4bc05e1<wbr>9262d0b1cc64478b18be9853fe28f083
+sha256: 63a8c5b084231364961f7c8b6415e446<wbr>22c5ab9822e49839c2aca1bddd3a9459
 </small>
 
 Check out the [0.80.1 release notes](release-notes/0.80.1.md) to learn about
@@ -138,18 +138,6 @@ command-line install parameters, please see [Inno's documentation page](https://
   sha256: 8c7045dfea6dc20bb985cff516d2faee<wbr>51d2ecaf054db60632857b6941d3d648
   </small>
 
-- [DOSBox Staging 0.79.0 64-bit (installer)][0_79_0_x64_INSTALLER] (Windows 7 or newer)
-  <br>
-  <small>
-  sha256: 154c663f76d0ca46d1d23d8c2bcea2d8<wbr>3717f1ba9103067a6a6f5ce814cf0cb2
-  </small>
-
-- [DOSBox Staging 0.79.0 64-bit (zip)][0_79_0_x64_ZIP] (Windows 7 or newer)
-  <br>
-  <small>
-  sha256: b3633d425489fbb5f6f9b3de75e4c2c6<wbr>dd0713c3aec504e42cac948cc1550bbe
-  </small>
-
 - [DOSBox Staging 0.78.1 64-bit (zip)][0_78_1_x64_MSYS2] (Windows Vista or newer)
   <br>
   <small>
@@ -248,8 +236,6 @@ command-line install parameters, please see [Inno's documentation page](https://
 [0_80_0_x64_ZIP]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.80.0/dosbox-staging-windows-msys2-x86_64-v0.80.0.zip
 [0_79_1_x64_INSTALLER]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.79.1/dosbox-staging-v0.79.1-setup.exe
 [0_79_1_x64_ZIP]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.79.1/dosbox-staging-windows-x86_64-v0.79.1.zip
-[0_79_0_x64_INSTALLER]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.79.0/dosbox-staging-v0.79.0-setup.exe
-[0_79_0_x64_ZIP]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.79.0/dosbox-staging-windows-x86_64-v0.79.0.zip
 [0_78_1_x64_MSYS2]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.78.1/dosbox-staging-windows-msys2-x86_64-v0.78.1.zip
 [0_78_1_x64_MSVC]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.78.1/dosbox-staging-windows-x64-v0.78.1.zip
 [0_78_0_x64]: https://github.com/dosbox-staging/dosbox-staging/releases/download/v0.78.0/dosbox-staging-windows-msys2-x86_64-v0.78.0.zip

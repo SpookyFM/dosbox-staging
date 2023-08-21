@@ -85,7 +85,7 @@ static inline void BX_DEBUG(const char *msg, ...)
 	}
 }
 
-bx_ne2k_c* theNE2kDevice = NULL;
+bx_ne2k_c* theNE2kDevice = nullptr;
 
 
 bx_ne2k_c::bx_ne2k_c(void)
@@ -1479,7 +1479,7 @@ public:
 			base=0x300;
 		}
 
-        LOG_MSG("NE2000: Base=0x%x irq=%u", base, irq);
+        LOG_MSG("NE2000: Initialised on port %xh and IRQ %u", base, irq);
 
 		// mac address
 		const char* macstring=section->Get_string("macaddr");
@@ -1530,7 +1530,7 @@ static NE2K* test;
 void NE2K_ShutDown(Section* sec) {
     (void)sec;//UNUSED
 	if(test) delete test;
-	test=0;
+	test=nullptr;
 }
 
 void NE2K_Init(Section* sec)

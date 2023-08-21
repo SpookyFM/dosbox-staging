@@ -420,9 +420,11 @@ static Bitu IRQ1_Handler(void) {
 		}
 		if(flags1 &0x08) {
 			const auto token    = mem_readb(BIOS_KEYBOARD_TOKEN);
-			const auto alt      = get_key_codes_for(scancode).alt & 0xff;
-			const auto combined = token * 10 + alt;
-			mem_writeb(BIOS_KEYBOARD_TOKEN, check_cast<uint8_t>(combined));
+			const auto alt      = get_key_codes_for(scancode).alt;
+			const auto combined = (token * 10 + alt) &
+			                      std::numeric_limits<uint8_t>::max();
+			mem_writeb(BIOS_KEYBOARD_TOKEN,
+			           static_cast<uint8_t>(combined));
 		} else if (flags1 & 0x04) {
 			add_key(get_key_codes_for(scancode).control);
 		} else if (((flags1 & 0x3) != 0) ^ ((flags1 & 0x20) != 0)) {
@@ -677,7 +679,7 @@ void BIOS_SetupKeyboard(void) {
 
 	if (machine==MCH_PCJR) {
 		call_irq6=CALLBACK_Allocate();
-		CALLBACK_Setup(call_irq6,NULL,CB_IRQ6_PCJR,"PCJr kb irq");
+		CALLBACK_Setup(call_irq6,nullptr,CB_IRQ6_PCJR,"PCJr kb irq");
 		RealSetVec(0x0e,CALLBACK_RealPointer(call_irq6));
 		// pseudocode for CB_IRQ6_PCJR:
 		//	push ax

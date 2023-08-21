@@ -68,72 +68,118 @@ constexpr bool USE_NICE_PANNING = true;
 constexpr bool USE_NICE_PARTIAL_MIXING = false;
 
 using Rom = LASynthModel::Rom;
-constexpr auto versioned = LASynthModel::ROM_TYPE::VERSIONED;
-constexpr auto unversioned = LASynthModel::ROM_TYPE::UNVERSIONED;
 
-// Traditional ROMs
-const Rom mt32_pcm_any_f = {"pcm_mt32", "MT32_PCM.ROM", unversioned};
-const Rom mt32_ctrl_any_f = {"ctrl_mt32", "MT32_CONTROL.ROM", unversioned};
-const Rom cm32l_pcm_any_f = {"pcm_cm32l", "CM32L_PCM.ROM", unversioned};
-const Rom cm32l_ctrl_any_f = {"ctrl_cm32l", "CM32L_CONTROL.ROM", unversioned};
-
-// MAME ROMs (versioned)
-const Rom mt32_pcm_100_f = {"pcm_mt32", "r15449121.ic37.bin", versioned};
-const Rom mt32_pcm_100_l = {"pcm_mt32_l", "r15179844.ic21.bin", versioned};
-const Rom mt32_pcm_100_h = {"pcm_mt32_h", "r15179845.ic22.bin", versioned};
-const Rom mt32_ctrl_104_a = {"ctrl_mt32_1_04_a", "mt32_1.0.4.ic27.bin", versioned};
-const Rom mt32_ctrl_104_b = {"ctrl_mt32_1_04_b", "mt32_1.0.4.ic26.bin", versioned};
-const Rom mt32_ctrl_105_a = {"ctrl_mt32_1_05_a", "mt32_1.0.5.ic27.bin", versioned};
-const Rom mt32_ctrl_105_b = {"ctrl_mt32_1_05_b", "mt32_1.0.5.ic26.bin", versioned};
-const Rom mt32_ctrl_106_a = {"ctrl_mt32_1_06_a", "mt32_1.0.6.ic27.bin", versioned};
-const Rom mt32_ctrl_106_b = {"ctrl_mt32_1_06_b", "mt32_1.0.6.ic26.bin", versioned};
-const Rom mt32_ctrl_107_a = {"ctrl_mt32_1_07_a", "mt32_1.0.7.ic27.bin", versioned};
-const Rom mt32_ctrl_107_b = {"ctrl_mt32_1_07_b", "mt32_1.0.7.ic26.bin", versioned};
-const Rom mt32_ctrl_bluer_a = {"ctrl_mt32_bluer_a", "blue_ridge__mt32a.bin", versioned};
-const Rom mt32_ctrl_bluer_b = {"ctrl_mt32_bluer_b", "blue_ridge__mt32b.bin", versioned};
-const Rom mt32_ctrl_204_f = {"ctrl_mt32_2_04", "mt32_2.0.4.ic28.bin", versioned};
-const Rom cm32l_ctrl_100_f = {"ctrl_cm32l_1_00", "lapc-i.v1.0.0.ic3.bin", versioned};
-const Rom cm32l_ctrl_102_f = {"ctrl_cm32l_1_02", "cm32l_control.rom", versioned};
-const Rom cm32l_pcm_100_h = {"pcm_cm32l_h", "r15179945.ic8.bin", versioned};
-const Rom &cm32l_pcm_100_l = mt32_pcm_100_f; // Lower half of samples comes from MT-32
+const Rom mt32_pcm_100_f  = {"pcm_mt32", LASynthModel::ROM_TYPE::PCM};
+const Rom mt32_pcm_100_l  = {"pcm_mt32_l", LASynthModel::ROM_TYPE::PCM};
+const Rom mt32_pcm_100_h  = {"pcm_mt32_h", LASynthModel::ROM_TYPE::PCM};
+const Rom mt32_ctrl_104_f = {"ctrl_mt32_1_04", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_104_a = {"ctrl_mt32_1_04_a", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_104_b = {"ctrl_mt32_1_04_b", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_105_f = {"ctrl_mt32_1_05", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_105_a = {"ctrl_mt32_1_05_a", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_105_b = {"ctrl_mt32_1_05_b", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_106_f = {"ctrl_mt32_1_06", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_106_a = {"ctrl_mt32_1_06_a", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_106_b = {"ctrl_mt32_1_06_b", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_107_f = {"ctrl_mt32_1_07", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_107_a = {"ctrl_mt32_1_07_a", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_107_b = {"ctrl_mt32_1_07_b", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_bluer_f = {"ctrl_mt32_bluer", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_bluer_a = {"ctrl_mt32_bluer_a", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_bluer_b = {"ctrl_mt32_bluer_b", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_203_f = {"ctrl_mt32_2_03", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_204_f = {"ctrl_mt32_2_04", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_206_f = {"ctrl_mt32_2_06", LASynthModel::ROM_TYPE::CONTROL};
+const Rom mt32_ctrl_207_f = {"ctrl_mt32_2_07", LASynthModel::ROM_TYPE::CONTROL};
+const Rom cm32l_ctrl_100_f = {"ctrl_cm32l_1_00", LASynthModel::ROM_TYPE::CONTROL};
+const Rom cm32l_ctrl_102_f = {"ctrl_cm32l_1_02", LASynthModel::ROM_TYPE::CONTROL};
+const Rom cm32ln_ctrl_100_f = {"ctrl_cm32ln_1_00", LASynthModel::ROM_TYPE::CONTROL};
+const Rom cm32l_pcm_100_f = {"pcm_cm32l", LASynthModel::ROM_TYPE::PCM};
+const Rom cm32l_pcm_100_h  = {"pcm_cm32l_h", LASynthModel::ROM_TYPE::PCM};
+const Rom& cm32l_pcm_100_l = mt32_pcm_100_f; // Lower half of samples comes from
+                                             // MT-32
 
 // Roland LA Models (composed of ROMs)
-const LASynthModel mt32_any_model = {"mt32",  &mt32_pcm_any_f,  nullptr,
-                                     nullptr, &mt32_ctrl_any_f, nullptr,
-                                     nullptr};
-const LASynthModel mt32_104_model = {"mt32_104",      &mt32_pcm_100_f,
-                                     &mt32_pcm_100_l, &mt32_pcm_100_h,
-                                     nullptr,         &mt32_ctrl_104_a,
-                                     &mt32_ctrl_104_b};
-const LASynthModel mt32_105_model = {"mt32_105",      &mt32_pcm_100_f,
-                                     &mt32_pcm_100_l, &mt32_pcm_100_h,
-                                     nullptr,         &mt32_ctrl_105_a,
-                                     &mt32_ctrl_105_b};
-const LASynthModel mt32_106_model = {"mt32_106",      &mt32_pcm_100_f,
-                                     &mt32_pcm_100_l, &mt32_pcm_100_h,
-                                     nullptr,         &mt32_ctrl_106_a,
-                                     &mt32_ctrl_106_b};
-const LASynthModel mt32_107_model = {"mt32_107",      &mt32_pcm_100_f,
-                                     &mt32_pcm_100_l, &mt32_pcm_100_h,
-                                     nullptr,         &mt32_ctrl_107_a,
-                                     &mt32_ctrl_107_b};
-const LASynthModel mt32_bluer_model = {"mt32_bluer",      &mt32_pcm_100_f,
-                                       &mt32_pcm_100_l,   &mt32_pcm_100_h,
-                                       nullptr,           &mt32_ctrl_bluer_a,
+const LASynthModel mt32_104_model   = {"mt32_104",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_104_f,
+                                       &mt32_ctrl_104_a,
+                                       &mt32_ctrl_104_b};
+const LASynthModel mt32_105_model   = {"mt32_105",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_105_f,
+                                       &mt32_ctrl_105_a,
+                                       &mt32_ctrl_105_b};
+const LASynthModel mt32_106_model   = {"mt32_106",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_106_f,
+                                       &mt32_ctrl_106_a,
+                                       &mt32_ctrl_106_b};
+const LASynthModel mt32_107_model   = {"mt32_107",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_107_f,
+                                       &mt32_ctrl_107_a,
+                                       &mt32_ctrl_107_b};
+const LASynthModel mt32_bluer_model = {"mt32_bluer",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_bluer_f,
+                                       &mt32_ctrl_bluer_a,
                                        &mt32_ctrl_bluer_b};
-const LASynthModel mt32_204_model = {"mt32_204",       &mt32_pcm_100_f,
-                                     &mt32_pcm_100_l,  &mt32_pcm_100_h,
-                                     &mt32_ctrl_204_f, nullptr,
-                                     nullptr};
-const LASynthModel cm32l_any_model = {"cm32l", &cm32l_pcm_any_f,  nullptr,
-                                      nullptr, &cm32l_ctrl_any_f, nullptr,
-                                      nullptr};
-const LASynthModel cm32l_100_model = {
-        "cm32l_100",       nullptr, &cm32l_pcm_100_l, &cm32l_pcm_100_h,
-        &cm32l_ctrl_100_f, nullptr, nullptr};
+const LASynthModel mt32_203_model   = {"mt32_203",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_203_f,
+                                       nullptr,
+                                       nullptr};
+const LASynthModel mt32_204_model   = {"mt32_204",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_204_f,
+                                       nullptr,
+                                       nullptr};
+const LASynthModel mt32_206_model   = {"mt32_206",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_206_f,
+                                       nullptr,
+                                       nullptr};
+const LASynthModel mt32_207_model   = {"mt32_207",
+                                       &mt32_pcm_100_f,
+                                       &mt32_pcm_100_l,
+                                       &mt32_pcm_100_h,
+                                       &mt32_ctrl_207_f,
+                                       nullptr,
+                                       nullptr};
+const LASynthModel cm32l_100_model  = {"cm32l_100",
+                                       &cm32l_pcm_100_f,
+                                       &cm32l_pcm_100_l,
+                                       &cm32l_pcm_100_h,
+                                       &cm32l_ctrl_100_f,
+                                       nullptr,
+                                       nullptr};
 const LASynthModel cm32l_102_model = {
-        "cm32l_102",       nullptr, &cm32l_pcm_100_l, &cm32l_pcm_100_h,
+        "cm32l_102",       &cm32l_pcm_100_f, &cm32l_pcm_100_l, &cm32l_pcm_100_h,
         &cm32l_ctrl_102_f, nullptr, nullptr};
+const LASynthModel cm32ln_100_model = {"cm32ln_100",
+                                       &cm32l_pcm_100_f,
+                                       &cm32l_pcm_100_l,
+                                       &cm32l_pcm_100_h,
+                                       &cm32ln_ctrl_100_f,
+                                       nullptr,
+                                       nullptr};
 
 // Aliased models
 const LASynthModel mt32_new_model = {"mt32_new", // new is 2.04
@@ -141,16 +187,28 @@ const LASynthModel mt32_new_model = {"mt32_new", // new is 2.04
                                      &mt32_pcm_100_h, &mt32_ctrl_204_f,
                                      nullptr,         nullptr};
 const LASynthModel mt32_old_model = {"mt32_old", // old is 1.07
-                                     &mt32_pcm_100_f,  &mt32_pcm_100_l,
-                                     &mt32_pcm_100_h,  nullptr,
-                                     &mt32_ctrl_107_a, &mt32_ctrl_107_b};
+                                     &mt32_pcm_100_f,
+                                     &mt32_pcm_100_l,
+                                     &mt32_pcm_100_h,
+                                     &mt32_ctrl_107_f,
+                                     &mt32_ctrl_107_a,
+                                     &mt32_ctrl_107_b};
 
 // In order that "model = auto" will load
-const LASynthModel *all_models[] = {
-        &cm32l_any_model, &cm32l_102_model,  &cm32l_100_model, &mt32_any_model,
-        &mt32_old_model,  &mt32_107_model,   &mt32_106_model,  &mt32_105_model,
-        &mt32_104_model,  &mt32_bluer_model, &mt32_new_model,  &mt32_204_model,
-};
+const LASynthModel* all_models[] = {&cm32ln_100_model,
+                                    &cm32l_102_model,
+                                    &cm32l_100_model,
+                                    &mt32_old_model,
+                                    &mt32_107_model,
+                                    &mt32_106_model,
+                                    &mt32_105_model,
+                                    &mt32_104_model,
+                                    &mt32_bluer_model,
+                                    &mt32_new_model,
+                                    &mt32_204_model,
+                                    &mt32_207_model,
+                                    &mt32_206_model,
+                                    &mt32_203_model};
 
 MidiHandler_mt32 mt32_instance;
 
@@ -158,11 +216,10 @@ static void init_mt32_dosbox_settings(Section_prop &sec_prop)
 {
 	constexpr auto when_idle = Property::Changeable::WhenIdle;
 
-	const char *models[] = {"auto",
-	                        cm32l_any_model.GetName(),
+	const char* models[] = {"auto",
+	                        cm32ln_100_model.GetName(),
 	                        cm32l_102_model.GetName(),
 	                        cm32l_100_model.GetName(),
-	                        mt32_any_model.GetName(),
 	                        mt32_old_model.GetName(),
 	                        mt32_107_model.GetName(),
 	                        mt32_106_model.GetName(),
@@ -171,7 +228,10 @@ static void init_mt32_dosbox_settings(Section_prop &sec_prop)
 	                        mt32_bluer_model.GetName(),
 	                        mt32_new_model.GetName(),
 	                        mt32_204_model.GetName(),
-	                        0};
+	                        mt32_207_model.GetName(),
+	                        mt32_206_model.GetName(),
+	                        mt32_203_model.GetName(),
+	                        nullptr};
 	auto *str_prop       = sec_prop.Add_string("model", when_idle, "auto");
 	str_prop->Set_values(models);
 	str_prop->Set_help(
@@ -231,7 +291,7 @@ static std::deque<std_fs::path> get_rom_dirs()
 {
 	return {
 	        get_platform_config_dir() / "mt32-roms",
-	        CROSS_ResolveHome("~/Library/Audio/Sounds/MT32-Roms/"),
+	        resolve_home("~/Library/Audio/Sounds/MT32-Roms/"),
 	        "/usr/local/share/mt32-rom-data/",
 	        "/usr/share/mt32-rom-data/",
 	};
@@ -241,10 +301,8 @@ static std::deque<std_fs::path> get_rom_dirs()
 
 static std::deque<std_fs::path> get_rom_dirs()
 {
-	// First priority is $XDG_DATA_HOME
-	const char *xdg_data_home_env = getenv("XDG_DATA_HOME");
-	const auto xdg_data_home      = std_fs::path(CROSS_ResolveHome(
-                xdg_data_home_env ? xdg_data_home_env : "~/.local/share"));
+	// First priority is user-specific data location
+	const auto xdg_data_home = get_xdg_data_home();
 
 	std::deque<std_fs::path> dirs = {
 	        xdg_data_home / "dosbox/mt32-roms",
@@ -252,18 +310,8 @@ static std::deque<std_fs::path> get_rom_dirs()
 	};
 
 	// Second priority are the $XDG_DATA_DIRS
-	const char *xdg_data_dirs_env = getenv("XDG_DATA_DIRS");
-	if (!xdg_data_dirs_env)
-		xdg_data_dirs_env = "/usr/local/share:/usr/share";
-
-	for (auto xdg_data_dir : split(xdg_data_dirs_env, ':')) {
-		trim(xdg_data_dir);
-		if (xdg_data_dir.empty()) {
-			continue;
-		}
-		const auto resolved_dir = std_fs::path(
-		        CROSS_ResolveHome(xdg_data_dir));
-		dirs.emplace_back(resolved_dir / "mt32-rom-data");
+	for (const auto& data_dir : get_xdg_data_dirs()) {
+		dirs.emplace_back(data_dir / "mt32-rom-data");
 	}
 
 	// Third priority is $XDG_CONF_HOME, for convenience
@@ -291,7 +339,7 @@ static std::deque<std_fs::path> get_selected_dirs()
 		selected_romdir += CROSS_FILESPLIT;
 
 	// Make sure we search the user's configured directory first
-	rom_dirs.emplace_front(CROSS_ResolveHome((selected_romdir)));
+	rom_dirs.emplace_front(resolve_home(selected_romdir));
 	return rom_dirs;
 }
 
@@ -382,9 +430,6 @@ static mt32emu_report_handler_i get_report_handler_interface()
 	return REPORT_HANDLER_I;
 }
 
-MidiHandler_mt32::MidiHandler_mt32() : keep_rendering(false)
-{}
-
 MidiHandler_mt32::service_t MidiHandler_mt32::GetService()
 {
 	const std::lock_guard<std::mutex> lock(service_mutex);
@@ -398,9 +443,8 @@ MidiHandler_mt32::service_t MidiHandler_mt32::GetService()
 // Calculates the maximum width available to print the rom directory, given
 // the terminal's width, indent size, and space needed for the model names:
 // [indent][max_dir_width][N columns + N delimeters]
-static size_t get_max_dir_width(const LASynthModel *(&models_without_aliases)[10],
-                                const char *indent,
-                                const char *column_delim)
+static size_t get_max_dir_width(const LASynthModel* (&models_without_aliases)[12],
+                                const char* indent, const char* column_delim)
 {
 	const size_t column_delim_width = strlen(column_delim);
 	size_t header_width = strlen(indent);
@@ -444,11 +488,18 @@ MIDI_RC MidiHandler_mt32::ListAll(Program *caller)
 	constexpr char trailing_dots[] = "..";
 	const auto delim_width = strlen(column_delim);
 
-	const LASynthModel *models_without_aliases[] = {
-	        &cm32l_any_model, &cm32l_102_model, &cm32l_100_model,
-	        &mt32_any_model,  &mt32_107_model,  &mt32_106_model,
-	        &mt32_105_model,  &mt32_104_model,  &mt32_bluer_model,
-	        &mt32_204_model};
+	const LASynthModel* models_without_aliases[] = {&cm32ln_100_model,
+	                                                &cm32l_102_model,
+	                                                &cm32l_100_model,
+	                                                &mt32_107_model,
+	                                                &mt32_106_model,
+	                                                &mt32_105_model,
+	                                                &mt32_104_model,
+	                                                &mt32_bluer_model,
+	                                                &mt32_204_model,
+	                                                &mt32_207_model,
+	                                                &mt32_206_model,
+	                                                &mt32_203_model};
 
 	const size_t max_dir_width = get_max_dir_width(models_without_aliases,
 	                                               indent, column_delim);
@@ -588,7 +639,7 @@ bool MidiHandler_mt32::Open([[maybe_unused]] const char *conf)
 	mt32_service->getROMInfo(&rom_info);
 
 	assert(loaded_model_and_dir.has_value());
-	LOG_MSG("MT32: Initialized %s from %s",
+	LOG_MSG("MT32: Initialised %s from %s",
 	        rom_info.control_rom_description,
 	        loaded_model_and_dir->second.string().c_str());
 
@@ -673,7 +724,6 @@ bool MidiHandler_mt32::Open([[maybe_unused]] const char *conf)
 	model_and_dir = std::move(loaded_model_and_dir);
 
 	// Start rendering audio
-	keep_rendering = true;
 	const auto render = std::bind(&MidiHandler_mt32::Render, this);
 	renderer = std::thread(render);
 	set_thread_name(renderer, "dosbox:mt32");
@@ -704,11 +754,9 @@ void MidiHandler_mt32::Close()
 	if (channel)
 		channel->Enable(false);
 
-	// Stop rendering and drain the fifo
-	keep_rendering = false;
-	while (audio_frame_fifo.Size()) {
-		(void)audio_frame_fifo.Dequeue();
-	}
+	// Stop queueing new MIDI work and audio frames
+	work_fifo.Stop();
+	audio_frame_fifo.Stop();
 
 	// Wait for the rendering thread to finish
 	if (renderer.joinable())
@@ -793,10 +841,19 @@ void MidiHandler_mt32::MixerCallBack(const uint16_t requested_audio_frames)
 	}
 
 	static std::vector<AudioFrame> audio_frames = {};
-	audio_frame_fifo.BulkDequeue(audio_frames, requested_audio_frames);
-	channel->AddSamples_sfloat(requested_audio_frames, &audio_frames[0][0]);
 
-	last_rendered_ms = PIC_FullIndex();
+	const auto has_dequeued = audio_frame_fifo.BulkDequeue(audio_frames,
+	                                                       requested_audio_frames);
+
+	if (has_dequeued) {
+		assert(audio_frames.size() == requested_audio_frames);
+		channel->AddSamples_sfloat(requested_audio_frames,
+		                           &audio_frames[0][0]);
+		last_rendered_ms = PIC_FullIndex();
+	} else {
+		assert(!audio_frame_fifo.IsRunning());
+		channel->AddSilence();
+	}
 }
 
 void MidiHandler_mt32::RenderAudioFramesToFifo(const uint16_t num_frames)
@@ -819,39 +876,42 @@ void MidiHandler_mt32::RenderAudioFramesToFifo(const uint16_t num_frames)
 void MidiHandler_mt32::ProcessWorkFromFifo()
 {
 	const auto work = work_fifo.Dequeue();
+	if (!work) {
+		return;
+	}
 
 	/* // Comment-in to log inter-cycle rendering
 	if (work.num_pending_audio_frames > 0) {
-	        LOG_MSG("MT32: %2u audio frames prior to %s message, followed by
-	"
+	        LOG_MSG("MT32: %2u audio frames prior to %s message, followed by"
 	                "%2lu more messages. Have %4lu audio frames queued",
 	                work.num_pending_audio_frames,
 	                work.message_type == MessageType::Channel ? "channel" :
-	"sysex", work_fifo.Size(), audio_frame_fifo.Size());
+	                "sysex", work_fifo.Size(), audio_frame_fifo.Size());
 	}*/
 
-	if (work.num_pending_audio_frames > 0) {
-		RenderAudioFramesToFifo(work.num_pending_audio_frames);
+	if (work->num_pending_audio_frames > 0) {
+		RenderAudioFramesToFifo(work->num_pending_audio_frames);
 	}
 
 	// Request exclusive access prior to applying messages
 	const std::lock_guard<std::mutex> lock(service_mutex);
 
-	if (work.message_type == MessageType::Channel) {
-		assert(work.message.size() >= MaxMidiMessageLen);
-		const auto &data = work.message.data();
+	if (work->message_type == MessageType::Channel) {
+		assert(work->message.size() >= MaxMidiMessageLen);
+		const auto& data   = work->message.data();
 		const uint32_t msg = data[0] + (data[1] << 8) + (data[2] << 16);
 		service->playMsg(msg);
 	} else {
-		assert(work.message_type == MessageType::SysEx);
-		service->playSysex(work.message.data(), static_cast<uint32_t>(work.message.size()));
+		assert(work->message_type == MessageType::SysEx);
+		service->playSysex(work->message.data(),
+		                   static_cast<uint32_t>(work->message.size()));
 	}
 }
 
 // Keep the fifo populated with freshly rendered buffers
 void MidiHandler_mt32::Render()
 {
-	while (keep_rendering.load()) {
+	while (work_fifo.IsRunning()) {
 		work_fifo.IsEmpty() ? RenderAudioFramesToFifo()
 		                    : ProcessWorkFromFifo();
 	}

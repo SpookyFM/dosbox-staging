@@ -527,10 +527,10 @@ bool DOS_CloseFile(uint16_t entry, bool fcb, uint8_t * refcnt) {
 	Bits refs=Files[handle]->RemoveRef();
 	if (refs<=0) {
 		delete Files[handle];
-		Files[handle]=0;
+		Files[handle]=nullptr;
 		refs=0;
 	}
-	if (refcnt!=NULL) *refcnt=static_cast<uint8_t>(refs+1);
+	if (refcnt!=nullptr) *refcnt=static_cast<uint8_t>(refs+1);
 	return true;
 }
 
@@ -935,8 +935,10 @@ static bool isvalid(const char in){
 #define PARSE_RET_BADDRIVE      0xff
 
 // TODO: Refactor and document this function until it's understandable
-uint8_t FCB_Parsename(uint16_t seg,uint16_t offset,uint8_t parser ,char *string, uint8_t *change) {
-	char * string_begin=string;
+uint8_t FCB_Parsename(uint16_t seg, uint16_t offset, uint8_t parser,
+                      const char* string, uint8_t* change)
+{
+	const char* string_begin = string;
 	uint8_t ret=0;
 	if (!(parser & PARSE_DFLT_DRIVE)) {
 		// default drive forced, this intentionally invalidates an extended FCB
@@ -985,7 +987,7 @@ uint8_t FCB_Parsename(uint16_t seg,uint16_t offset,uint8_t parser ,char *string,
 
 	/* Check for a drive */
 	if (string[1]==':') {
-		unsigned char d = *reinterpret_cast<unsigned char*>(&string[0]);
+		unsigned char d = *reinterpret_cast<const unsigned char*>(&string[0]);
 		if (!isvalid(toupper(d))) {string += 2; goto savefcb;} //TODO check (for ret value)
 		fcb_name.part.drive[0]=0;
 		hasdrive=true;
@@ -1011,7 +1013,8 @@ uint8_t FCB_Parsename(uint16_t seg,uint16_t offset,uint8_t parser ,char *string,
 	index = 0;
 	/* Copy the name */	
 	while (true) {
-		unsigned char nc = *reinterpret_cast<unsigned char*>(&string[0]);
+		unsigned char nc = *reinterpret_cast<const unsigned char*>(
+		        &string[0]);
 		char ncs = (char)toupper(nc); //Should use DOS_ToUpper, but then more calls need to be changed.
 		if (ncs == '*') { //Handle *
 			fill = '?';
@@ -1036,7 +1039,8 @@ checkext:
 	fill = ' ';
 	index = 0;
 	while (true) {
-		unsigned char nc = *reinterpret_cast<unsigned char*>(&string[0]);
+		unsigned char nc = *reinterpret_cast<const unsigned char*>(
+		        &string[0]);
 		char ncs = (char)toupper(nc);
 		if (ncs == '*') { //Handle *
 			fill = '?';

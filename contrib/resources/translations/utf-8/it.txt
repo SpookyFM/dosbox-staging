@@ -76,7 +76,7 @@ Abilita le decorazioni delle finestre in modalità finestra
 .
 :CONFIG_TRANSPARENCY
 Imposta la trasparenza della finestra di DOSBox Staging (predefinito 0).
-Da 0 (nessuna trasparenza) a 90 (alta trasparenza).
+Da 0 (nessuna trasparenza) a 90 (trasparenza elevata).
 .
 :CONFIG_MAX_RESOLUTION
 Questa impostazione è stata rinominata in viewport_resolution.
@@ -89,24 +89,37 @@ Imposta la frequenza di aggiornamento dell'host:
              (SDI), senza ulteriori regolazioni.
   vrr:       Sottrae 3 Hz dalla frequenza riportata (necessario su schermi VRR)
   <custom>:  Specifica una frequenza personalizzata come valore intero o
-             decimale maggiore di 23.000 (23 Hz).
+             decimale espresso in Hz (23.000 è il minimo consentito).
 .
 :CONFIG_VSYNC
-Sincronizza con la frequenza di aggiornamento dello schermo, se supportato,
-per ridurre il tremolio e lo strappo (predefinito abilitato).
+Imposta la modalità di sincronizzazione verticale (vsync) del driver video:
+  auto:      Limita il vsync solo in casi d'uso vantaggiosi, come quando si
+             utilizza uno schermo VRR con funzionalità di interpolazione in
+             modalità schermo intero (predefinito).
+  on:        Abilita il vsync. Ciò può impedire gli strappi dell'immagine su
+             schermo (tearing), ma influirà sulle prestazioni o causerà perdite
+             di fotogrammi quando la frequenza DOS supera la frequenza
+             dell'host (es. Frequenza DOS di 70 Hz rispetto alla frequenza
+             dell'host di 60 Hz).
+  off:       Prova a disabilitare il vsync per consentire una presentazione più
+             rapida dei fotogrammi con il rischio di strappi dell'immagine su
+             schermo in alcuni giochi.
+  yield:     Consenti al driver video dell'host di controllare la
+             sincronizzazione video.
 .
 :CONFIG_VSYNC_SKIP
 Numero di microsecondi per consentire il blocco del rendering prima di saltare
-al fotogramma successivo (predefinito 7000). Un valore di 0 disabilita
-questa funzione.
+al fotogramma successivo. Ad esempio, un valore di 7000 è circa la metà della
+durata del fotogramma a 70 hz. 0 disabilita questa funzione (predefinito).
 .
 :CONFIG_PRESENTATION_MODE
 Seleziona la modalità di presentazione dei fotogrammi:
   auto:  Determina la durata e taglia i fotogrammi in modo intelligente per
          prevenire lo stallo dell'emulazione, in base alla frequenza dei
          fotogrammi host e DOS (predefinito).
-  cfr:   Presenta sempre i fotogrammi DOS ad una frequenza costante.
-  vfr:   Presenta sempre i fotogrammi DOS modificati ad una frequenza variabile
+  cfr:   Visualizza sempre i fotogrammi DOS ad una frequenza costante.
+  vfr:   Visualizza sempre i fotogrammi DOS modificati ad una frequenza
+         variabile.
 .
 :CONFIG_OUTPUT
 Sistema video da utilizzare per l'output (predefinito 'opengl').
@@ -162,11 +175,38 @@ Note: Questa impostazione, se utilizzata, sovrascriverà la variabile
       Si prega di tenerla insieme all'eseguibile per supportare questa funzione
 .
 :CONFIG_MACHINE
-Tipo di macchina che DOSBox sta cercando di emulare (predefinito 'svga_s3').
+Imposta la scheda video o la macchina da emulare:
+  hercules:       Scheda grafica Hercules (HGC)
+                  (vedi impostazione 'monochrome_palette').
+  cga_mono:       Scheda grafica CGA collegata a un monitor monocromatico
+                  (vedi impostazione 'monochrome_palette').
+  cga:            IBM Color Graphics Adapter (CGA). Abilita anche l'emulazione
+                  del video composito (vedi sezione [composite]).
+  pcjr:           Macchina IBM PCjr. Abilita anche l'emulazione audio PCjr e
+                  del video composito (vedi sezione [composite]).
+  tandy:          Macchina Tandy 1000 con adattatore grafico TGA.
+                  Abilita anche l'emulazione audio Tandy e del video composito
+                  (vedi sezione [composite]).
+  ega:            IBM Enhanced Graphics Adapter (EGA).
+  svga_paradise:  Scheda grafica SVGA Paradise PVGA1A (nessun supporto a VESA
+                  VBE; 512K di memoria video per impostazione predefinita, può
+                  essere impostata a 256K o 1MB con 'vmemsize'). È la scheda
+                  che più si avvicina all'adattatore VGA originale di IBM.
+  svga_et3000:    Scheda grafica SVGA Tseng Labs ET3000 (nessun supporto a VESA
+                  VBE; 512K di memoria video).
+  svga_et4000:    Scheda grafica SVGA Tseng Labs ET4000 (nessun supporto a VESA
+                  VBE; 1MB di memoria video per impostazione predefinita, può
+                  essere impostata a 256K o 512K con 'vmemsize').
+  svga_s3:        Scheda grafica S3 Trio64 (VESA VBE 2.0; 4MB di memoria video
+                  per impostazione predefinita, può essere impostata a 512K,
+                  1MB, 2MB, o 8MB con 'vmemsize') (predefinito).
+  vesa_oldvbe:    Equivalente a 'svga_s3' ma limitato a VESA VBE 1.2.
+  vesa_nolfb:     Equivalente a 'svga_s3' (VESA VBE 2.0), con in aggiunta
+                  l'hack "nessun framebuffer lineare" (necessario solo per
+                  alcuni giochi).
 .
 :CONFIG_CAPTURES
-Directory in cui vengono salvate le acquisizioni di audio, video, MIDI
-e instantanee dello schermo (predefinito 'capture').
+Spostato nella sezione [capture] e rinominato in 'capture_dir'.
 .
 :CONFIG_MEMSIZE
 Quantità di memoria della macchina emulata in MB (predefinito 16).
@@ -175,27 +215,30 @@ giochi, anche se altri potrebbero richiedere un valore più alto.
 Di solito non vi è nessun guadagno in velocità aumentando questo valore.
 .
 :CONFIG_MCB_FAULT_STRATEGY
-Come gestire i blocchi della catena di memoria software corrotti:
-  deny:    Chiude (e segnala) quando vengono rilevati errori (predefinito).
-  repair:  Ripara (e segnala) gli errori con blocchi di catena adiacenti.
+Gestisce i blocchi della catena di memoria software corrotti:
+  repair:  Segnala gli errori e li ripara con blocchi adiacenti (predefinito).
   report:  Segnala solo gli errori.
   allow:   Gli errori non vengono segnalati (comportamento hardware).
-L'impostazione predefinita ('deny') è consigliata a meno che un gioco non
-abbia errori di corruzione MCB.
+  deny:    Segnala gli errori rilevati e arresta l'emulazione.
 .
 :CONFIG_VMEMSIZE
 Memoria video in MB (1-8) o KB (da 256 a 8192).
-'auto' usa il valore predefinito in base all'adattatore video scelto
-(predefinito 'auto').
+'auto' utilizza il valore predefinito in base alla scheda video selezionata
+(predefinito 'auto'). Fare riferimento all'impostazione 'machine' per l'elenco
+delle opzioni valide per ogni scheda.
+.
+:CONFIG_FORCE_VGA_SINGLE_SCAN
+Forza la scansione singola nelle modalità inferiori a 350 linee nelle schede
+grafiche VGA (predefinito disabilitato).
 .
 :CONFIG_DOS_RATE
 Personalizza la frequenza dei fotogrammi della modalità video emulata, in Hz:
   default:   La frequenza è determinata dalla modalità video DOS
              (consigliato; predefinito).
-  host:      Abbina la frequenza DOS alla frequenza host (vedi impostazione
-             'host_rate').
-  <valore>:  Imposta la frequenza su un valore esatto, compreso tra 
-             24.000 (24 Hz) e 1000.000 (1000 Hz).
+  host:      Abbina la frequenza DOS alla frequenza dell'host
+             (vedi impostazione 'host_rate').
+  <valore>:  Imposta la frequenza su un valore intero o decimale espresso
+             in Hz, compreso tra 24.000 e 1000.000.
 Si consiglia la frequenza dei fotogrammi predefinita ('default'), altrimenti
 provare ed impostare in base al gioco.
 .
@@ -209,7 +252,11 @@ Controlla la selezione delle modalità VESA 1.2 e 2.0 offerte:
   all:         Offre tutte le modalità per una data dimensione della memoria
                video, tuttavia alcuni giochi potrebbero non utilizzarle
                correttamente (sfarfallio) o potrebbe essere necessaria più
-               memoria di sistema (mem = ).
+               memoria di sistema.
+.
+:CONFIG_VGA_8DOT_FONT
+Utilizza caratteri larghi 8 pixel nelle schede grafiche VGA
+(predefinito disabilitato).
 .
 :CONFIG_SPEED_MODS
 Consente modifiche note per migliorare le prestazioni (predefinito abilitato).
@@ -260,18 +307,33 @@ Prendi in considerazione l'idea di limitare la frequenza dei fotogrammi
 utilizzando l'impostazione '[sdl] host_rate'.
 .
 :CONFIG_ASPECT
-Ridimensiona la risoluzione verticale dello schermo per produrre un rapporto
-d'aspetto 4:3, corrispondente a quello dei monitor originali per i quali sono
-stati progettati la maggior parte dei giochi DOS (predefinito abilitato).
+Applica la correzione delle proporzioni per i moderni schermi piatti a pixel
+quadrati, in modo tale che le risoluzioni DOS con pixel non quadrati appaiano
+come sui monitor CRT con rapporto d'aspetto 4:3, per i quali sono stati
+progettati la maggior parte dei giochi DOS (predefinito abilitato).
 Questa impostazione ha effetto solo sulle modalità video che utilizzano pixel
 non quadrati, come 320x200 o 640x400; Le modalità video a pixel quadrati,
-come 640x480 e 800x600, verranno visualizzate così come sono.
+come 320x240, 640x480 e 800x600 verranno visualizzate così come sono.
+.
+:CONFIG_INTEGER_SCALING
+Vincola il fattore di scala orizzontale o verticale a valori interi.
+Saranno mantenute sempre le proporzioni corrette, il che può comportare
+l'applicazione di un fattore di scala non intero nell'altra dimensione.
+Se l'immagine è più grande dell'area di visualizzazione, il ridimensionamento
+dei numeri interi viene disabilitato automaticamente (equivalente ad 'off').
+  off:         Nessun ridimensionamento dei numeri interi; l'immagine con
+               proporzioni corrette riempie l'area di visualizzazione
+               (predefinito).
+  horizontal:  Vincola il fattore di scala orizzontale a valori interi
+               all'interno dell'area di visualizzazione.
+  vertical:    Vincola il fattore di scala verticale a valori interi
+               all'interno dell'area di visualizzazione.
 .
 :CONFIG_MONOCHROME_PALETTE
 Seleziona la tavolozza predefinita per la visualizzazione monocromatica
 (predefinito 'white').
 Funziona solo quando si emula 'hercules' o 'cga_mono'.
-È possibile scorrere i colori disponibili usando il tasto F11.
+È possibile scorrere i colori disponibili utilizzando il tasto F11.
 .
 :CONFIG_CGA_COLORS
 Imposta l'interpretazione dei colori CGA RGBI. Interessa tutti i tipi di
@@ -358,9 +420,8 @@ Tipo di CPU usata nell'emulazione (predefinito 'auto').
 .
 :CONFIG_CYCLES
 Numero di istruzioni che DOSBox tenta di emulare ogni millisecondo
-(predefinito 'auto').
-Un valore troppo alto può causare perdite nell'audio e ritardi.
-Impostazioni possibili:
+(predefinito 'auto'). Un valore troppo alto può causare perdite nell'audio
+e ritardi.
   auto:            Prova a indovinare le necessità del gioco. 
                    Di solito funziona, ma può fallire con alcuni giochi.
   fixed <numero>:  Imposta un numero fisso di cicli. Questo è ciò di cui hai
@@ -374,11 +435,40 @@ Numero di cicli di cui aumentare utilizzando i tasti di scelta rapida
 .
 :CONFIG_CYCLEDOWN
 Numero di cicli di cui diminuire utilizzando i tasti di scelta rapida
-(predefinito 20).
-Un valore più basso di 100 indica una percentuale.
+(predefinito 20). Un valore più basso di 100 indica una percentuale.
+.
+:CONFIG_CAPTURE_DIR
+Directory in cui vengono salvate le acquisizioni audio, video, MIDI e
+instantanee dello schermo (predefinito 'capture' nella directory di lavoro
+corrente).
+.
+:CONFIG_DEFAULT_IMAGE_CAPTURE_FORMATS
+Imposta il formato di acquisizione delle instantanee dello schermo
+(predefinito 'upscaled'):
+  raw:       Viene acquisito il contenuto del framebuffer non elaborato
+             (comportamento originale; risulta sempre in pixel quadrati).
+             I nomi dei file delle instantanee non elaborate terminano
+             con '_raw' (es. 'image0001_raw.png').
+  upscaled:  L'immagine viene ridimensionata utilizzando il metodo di 
+             ricampionamento bilineare più nitido, con un'altezza di circa
+             1200 pixel e mantenendo le proporzioni corrette (a seconda
+             dell'impostazione 'aspect'). Il fattore di scala verticale è
+             sempre un numero intero. Ad esempio, i contenuti con risoluzione
+             320x200 vengono ridimensionati a 1600x1200 (ridimensionamento dei
+             numeri interi 5:6), quelli 640x480 a 1920x1440 (ridimensionamento
+             dei numeri interi 3:3) e quelli 640x350 a 1867 x 1400
+             (ridimensionamento 2,9165:4, fattore di scala con numeri interi in
+             verticale e frazionario in orizzontale).
+  rendered:  Viene acquisita l'immagine postrenderizzata mostrata sullo schermo
+             I nomi dei file delle instantanee renderizzate terminano con
+             '_rendered' (es. 'image0001_rendered.png').
+Se vengono specificati più formati separati da spazi, l'acquisizione comporterà
+il salvataggio di più immagini in tutti i formati specificati. Inoltre sono
+disponibili tasti di scelta rapida per effettuare le acquisizioni in un formato
+specifico.
 .
 :CONFIG_MOUSE_CAPTURE
-Imposta la modalità di cattura dell mouse:
+Imposta la modalità di cattura del mouse:
    onclick:      Cattura il mouse quando fai clic con qualsiasi pulsante
                  del mouse all'interno della finestra (predefinito).
    onstart:      Cattura il mouse immediatamente all'avvio. Potrebbe non
@@ -387,8 +477,8 @@ Imposta la modalità di cattura dell mouse:
                  di DOSBox e il resto del desktop; è possibile catturarlo con
                  il pulsante centrale del mouse o l'apposito tasto di scelta
                  rapida. Questa modalità non funziona correttamente con tutti
-                 i giochi. Windows 3.1x può essere reso compatibile con un
-                 driver del mouse personalizzato
+                 i giochi. In Windows 3.1x è necessario l'utilizzo di un
+                 driver del mouse personalizzato.
    nomouse:      Nasconde il mouse e impedisce che venga inviato l'input del
                  mouse al gioco.
 Per gli schermi tattili, utilizzare la modalità di controllo senza soluzione
@@ -412,8 +502,8 @@ Note: Dovresti impostarlo su 'false' nel caso in cui vengano rilevati
 Sensibilità del mouse per gli assi orizzontale e verticale, in percentuale
 (predefinito 100,100).
 Valori negativi invertono gli assi, zero disabilita il mouse. 
-Fornendo un solo valore si imposta la sensibilità per entrambi gli assi.
-Questa impostazione può essere regolata durante l'esecuzione del programma
+Fornendo un solo valore, si imposta la sensibilità per entrambi gli assi.
+Questa impostazione può essere regolata durante l'esecuzione dell'emulatore
 (per ogni interfaccia del mouse) utilizzando lo strumento interno MOUSECTL.COM,
 disponibile sull'unità Z.
 .
@@ -535,9 +625,12 @@ Note: È possibile regolare con precisione i livelli di coro per ogni canale
 :CONFIG_MIDIDEVICE
 Imposta dove vengono inviati i dati MIDI dall'interfaccia MPU-401 emulata
 (predefinito 'auto'):
-  win32:       Utilizza l'interfaccia di riproduzione MIDI Win32.
+  win32:       Utilizza l'interfaccia di riproduzione MIDI Win32 di Windows.
   oss:         Utilizza l'interfaccia di riproduzione MIDI OSS di Linux.
   alsa:        Utilizza l'interfaccia di riproduzione MIDI ALSA di Linux.
+  coremidi:    Utilizza qualsiasi dispositivo configurato nelle impostazioni
+               audio MIDI di macOS.
+  coreaudio:   Utilizza il sintetizzatore MIDI integrato in macOS.
   fluidsynth:  Utilizza il sintetizzatore MIDI FluidSynth incluso in DOSBox.
                Fare riferimento alla sezione [fluidsynth] per una
                configurazione dettagliata.
@@ -548,7 +641,7 @@ Imposta dove vengono inviati i dati MIDI dall'interfaccia MPU-401 emulata
                (se `midiconfig` è impostato su 'fluidsynth' o 'mt32'), o un
                dispositivo MIDI esterno a DOSBox (qualsiasi altro valore in
                'midiconfig'). Quest'ultimo potrebbe essere un sintetizzatore
-               software o un dispositivo fisico. (predefinito)
+               software o un dispositivo fisico (predefinito).
   none:        Disabilita l'uscita MIDI.
 .
 :CONFIG_MIDICONFIG
@@ -561,6 +654,7 @@ Note: - Questa opzione non ha effetto quando si utilizzano i sintetizzatori
       - Quando si utilizza ALSA, utilizzare il comando Linux 'aconnect -l' per
         elencare le porte MIDI aperte e selezionarne una
         (ad esempio 'midiconfig = 14:0' per il client sequencer 14, porta 0).
+      - Quando si utilizza 'coreaudio', puoi specificare un SoundFont qui.
       - Se stai usando un vero Roland MT-32 con revisione 0 del PCB, l'hardware
         potrebbe richiedere un ritardo per evitare che il suo buffer si
         sovraccarichi. In tal caso, aggiungi 'delaysysex', ad esempio:
@@ -587,9 +681,10 @@ Percorso di un file SoundFont in formato .sf2 (predefinito 'default.sf2').
 Puoi utilizzare un percorso relativo o assoluto, o il nome di un file .sf2
 all'interno della cartella 'soundfonts' situata nella directory di
 configurazione di DOSBox.
-Note: La percentuale di ridimensionamento del volume dopo il nome del file è
-      stata deprecata. Si prega invece di utilizzare il comando del mixer per
-      modificare il volume del canale audio FluidSynth, es.'MIXER FSYNTH 200'.
+Un valore percentuale opzionale dopo il nome ridimensionerà il volume del
+SoundFont. Questo è utile per normalizzare il volume di diversi SoundFont.
+Es. 'il_mio_soundfont.sf2 50' attenuerà il volume del 50%.
+Il valore percentuale può variare da 1 a 800.
 .
 :CONFIG_FSYNTH_CHORUS
 Effetto coro: 'auto' (predefinito), 'on', 'off', o valori personalizzati.
@@ -677,7 +772,7 @@ Tipo di Sound Blaster da emulare (predefinito 'sb16').
 'gb' è il Game Blaster.
 .
 :CONFIG_SBBASE
-Indirizzo porta IO della scheda Sound Blaster (predefinito 220).
+Indirizzo porta I/O della scheda Sound Blaster (predefinito 220).
 .
 :CONFIG_IRQ
 Numero IRQ della scheda Sound Blaster (predefinito 7).
@@ -686,7 +781,7 @@ Numero IRQ della scheda Sound Blaster (predefinito 7).
 Canale DMA della scheda Sound Blaster (predefinito 1).
 .
 :CONFIG_HDMA
-Canale High DMA della scheda Sound Blaster (predefinito 5).
+Canale High DMA della scheda Sound Blaster 16 (predefinito 5).
 .
 :CONFIG_SBMIXER
 Permette al mixer della scheda Sound Blaster di modificare il mixer
@@ -752,9 +847,14 @@ Filtro per l'uscita audio CMS della scheda Sound Blaster:
 .
 :CONFIG_GUS
 Abilita l'emulazione della scheda Gravis UltraSound (predefinito disabilitato).
+Le impostazioni predefinite di indirizzo porta I/O 240, IRQ 5 e DMA 3 sono
+state scelte in modo tale che la scheda GUS possa coesistere con una scheda
+Sound Blaster. Funziona bene per la maggior parte dei programmi, ma alcuni
+giochi e demo si aspettano le impostazioni predefinite di fabbrica della scheda
+GUS, cioè: indirizzo porta I/O 220, IRQ 11 e DMA 1.
 .
 :CONFIG_GUSBASE
-Indirizzo porta IO della scheda Gravis Ultrasound (predefinito 240).
+Indirizzo porta I/O della scheda Gravis Ultrasound (predefinito 240).
 .
 :CONFIG_GUSIRQ
 Numero IRQ della scheda Gravis UltraSound (predefinito 5).
@@ -764,9 +864,8 @@ Canale DMA della scheda Gravis UltraSound (predefinito 3).
 .
 :CONFIG_ULTRADIR
 Percorso per la directory UltraSound (predefinito 'C:\ULTRASND'). 
-In essa dovrebbe essere presente una directory MIDI con al suo interno
-i file di patch per la riproduzione GUS.
-I set di patch utilizzati con Timidity dovrebbero funzionare.
+In essa dovrebbe essere presente una directory 'MIDI' con al suo interno
+i campioni audio Gravis Ultrasound per la riproduzione MIDI.
 .
 :CONFIG_GUS_FILTER
 Filtro per l'uscita audio della scheda Gravis UltraSound:
@@ -778,7 +877,7 @@ Filtro per l'uscita audio della scheda Gravis UltraSound:
 Abilita la scheda IBM Music Feature (predefinito disabilitato).
 .
 :CONFIG_IMFC_BASE
-Indirizzo porta IO della scheda IBM Music Feature (predefinito 2A20).
+Indirizzo porta I/O della scheda IBM Music Feature (predefinito 2A20).
 .
 :CONFIG_IMFC_IRQ
 Numero IRQ della scheda IBM Music Feature (predefinito 3).
@@ -795,9 +894,9 @@ Modello di chip da emulare nella scheda Innovation SSI-2001:
   auto:  Utilizza il chip 6581.
   6581:  Il chip originale, noto per il suo suono basso e ricco.
   8580:  Una revisione successiva che corrispondeva più da vicino alla
-          specifica SID. 
-          Ha corretto il bias DC del 6581 ed è meno incline alla distorsione.
-          L'8580 è un'opzione sulle schede di riproduzione, come il DuoSID.
+         specifica SID. È stata corretta la polarizzazione CC del 6581 ed è
+         meno incline alla distorsione. L'8580 è un'opzione sulle schede di
+         riproduzione, come il DuoSID.
   none:  Disabilita la scheda (predefinito).
 .
 :CONFIG_SIDCLOCK
@@ -809,7 +908,7 @@ sulle schede di riproduzione.
   hardsid: 1.000 MHz, disponibile sul DuoSID.
 .
 :CONFIG_SIDPORT
-Indirizzo porta IO della scheda Innovation SSI-2001 (predefinito 280).
+Indirizzo porta I/O della scheda Innovation SSI-2001 (predefinito 280).
 .
 :CONFIG_6581FILTER
 Regola l'intensità del filtro del chip 6581 come percentuale da 0 a 100
@@ -845,11 +944,19 @@ Filtro per l'uscita audio dell'altoparlante interno del PC (PC Speaker):
              fare riferimento a 'sb_filter' per ulteriori dettagli.
 .
 :CONFIG_ZERO_OFFSET
-Il DC offset è ora eliminato globalmente dall'uscita del mixer principale.
+La compensazione CC è ora rimossa globalmente dall'uscita del mixer principale.
 .
 :CONFIG_TANDY
-Abilita l'emulazione del sistema audio Tandy (predefinito 'auto').
-Se 'auto', l'emulazione è presente solo se la macchina è impostata su 'tandy'.
+Configura l'emulazione del sistema audio Tandy/PCjr a 3 voci:
+  auto:  Abilita automaticamente il sistema audio Tandy/PCjr solo per i tipi
+         di macchina 'tandy' e 'pcjr' (predefinito).
+  on:    Abilita il sistema audio Tandy/PCjr con il supporto al DAC, quando
+         possibile. La maggior parte dei giochi richiede inoltre che la
+         macchina sia impostata su 'tandy' o 'pcjr'.
+  psg:   Abilita solo il generatore sonoro programmabile a tre voci della
+         scheda audio, senza DAC, per evitare conflitti con altre schede che
+         utilizzano il DMA 1.
+  off:   Disabilita il sistema audio Tandy/PCjr.
 .
 :CONFIG_TANDY_FILTER
 Filtro per l'uscita audio del sintetizzatore Tandy:
@@ -919,7 +1026,7 @@ Modifica la frequenza dei fotogrammi utilizzata durante la riproduzione video.
   0:      Nessuna modifica: tenta il rilevamento automatico della frequenza
           (predefinito).
   1 - 7:  Modifica la frequenza dei fotogrammi con una delle seguenti:
-          1=23.976, 2=24, 3=25, 4=29.97, 5=30, 6=50, o 7=59.94 FPS.
+          1=23.976, 2=24, 3=25, 4=29.97, 5=30, 6=50 o 7=59.94 FPS.
 .
 :CONFIG_JOYSTICKTYPE
 Tipo di joystick da emulare:
@@ -966,13 +1073,14 @@ degli assi X e Y del joystick (predefinito disabilitato). Consideralo solo se
 la calibrazione all'interno del gioco fallisce e sono state provate altre
 impostazioni.
   - Ctrl/Cmd+TastiFreccia regola il valore scalare dell'asse:
-      - Sinistra e Destra diminuiscono o ingrandiscono rispettivamente lo
+      - Destra e Sinistra ingrandiscono o diminuiscono rispettivamente lo
         scalare dell'asse X.
-      - In basso ed In alto diminuiscono o ingrandiscono rispettivamente lo
-        scalare dell'asse Y.
-  - Alt+TastiFreccia regola la posizione di offset dell'asse:
-      - Sinistra e Destra sposta l'offset dell'asse X nella direzione data.
-      - In basso ed In alto sposta l'offset dell'asse Y nella direzione data.
+      - Su e Giù ingrandiscono o diminuiscono rispettivamente lo scalare
+        dell'asse Y.
+  - Alt+TastiFreccia regola la posizione di compensazione dell'asse:
+      - Destra e Sinistra spostano la compensazione dell'asse X nella direzione
+        data.
+      - Su e Giù spostano la compensazione dell'asse Y nella direzione data.
   - Reimpostare la calibrazione X e Y utilizzando rispettivamente Ctrl+Canc e
     Ctrl+Home.
 Ad ogni pressione dei tasti precedentemente indicati, saranno riportati i
@@ -981,11 +1089,11 @@ i parametri che funzionano, esci dal gioco, ripristina questa impostazione su
 'false' e inserisci i parametri di calibrazione segnalati.
 .
 :CONFIG_JOY_X_CALIBRATION
-Applica i parametri di calibrazione dell'asse X dai tasti di scelta rapida
+Applica i parametri di calibrazione dell'asse X precedentemente acquisiti
 (predefinito 'auto').
 .
 :CONFIG_JOY_Y_CALIBRATION
-Applica i parametri di calibrazione dell'asse Y dai tasti di scelta rapida
+Applica i parametri di calibrazione dell'asse Y precedentemente acquisiti
 (predefinito 'auto').
 .
 :CONFIG_SERIAL1
@@ -1018,15 +1126,15 @@ File utilizzato per mappare numeri di telefono falsi su indirizzi
 (predefinito 'phonebook.txt'). 
 .
 :CONFIG_XMS
-Abilita supporto XMS (predefinito abilitato).
+Abilita il supporto alla memoria estesa XMS (predefinito abilitato).
 .
 :CONFIG_EMS
-Abilita supporto EMS (predefinito abilitato). L'abilitazione fornisce la
-migliore compatibilità ma alcune applicazioni potrebbero funzionare meglio
-con altre scelte, o richiedere la disabilitazione del supporto EMS.
+Abilita il supporto alla memoria espansa EMS (predefinito abilitato).
+L'abilitazione fornisce la migliore compatibilità ma alcune applicazioni
+potrebbero funzionare meglio con altre scelte, o richiederne la disabilitazione
 .
 :CONFIG_UMB
-Abilita supporto UMB (predefinito abilitato).
+Abilita il supporto alla memoria superiore UMB (predefinito abilitato).
 .
 :CONFIG_VER
 Imposta la versione DOS (predefinito 5.0).
@@ -1040,13 +1148,22 @@ Ciò influisce su informazioni come data, ora e formati decimali.
 Se impostato a 0, verrà utilizzato il codice paese corrispondente al layout
 di tastiera selezionato.
 .
+:CONFIG_KEYBOARDLAYOUT
+Codice lingua del layout della tastiera, o 'auto' (predefinito 'auto').
+.
 :CONFIG_EXPAND_SHELL_VARIABLE
 Abilita l'espansione delle variabili di ambiente come %PATH% nella shell
 dei comandi DOS (predefinito 'auto', viene abilitato se la versione DOS >= 7.0)
 COMMAND.COM di FreeDOS e MS-DOS 7/8 supporta questa funzione.
 .
-:CONFIG_KEYBOARDLAYOUT
-Codice lingua del layout della tastiera, o 'auto' (predefinito 'auto').
+:CONFIG_SHELL_HISTORY_FILE
+File contenente la cronologia dei comandi digitati dall'utente sulla riga di
+comando (predefinito 'shell_history.txt').
+.
+:CONFIG_SETVER_TABLE_FILE
+File contenente l'elenco dei programmi e le versioni DOS loro assegnate,
+separati tramite tabulazione, utilizzato da SETVER.EXE come memoria persistente
+(predefinito non impostato).
 .
 :CONFIG_IPX
 Abilita IPX attraverso l'emulazione UDP/IP (predefinito abilitato).
@@ -1114,104 +1231,142 @@ Puoi inserire i tuoi comandi MOUNT qui.
 :CONFIG_VALID_VALUES
 Valori possibili
 .
+:CONFIG_DEPRECATED_VALUES
+Valori deprecati
+.
 :PROGRAM_CONFIG_PROPERTY_ERROR
 Sezione o proprietà non trovata: %s
 
 .
 :PROGRAM_CONFIG_NO_PROPERTY
-La proprietà "%s" non è presente nella sezione "%s".
+La proprietà '%s' non è presente nella sezione [%s]
 
 .
 :PROGRAM_CONFIG_SET_SYNTAX
-Sintassi corretta: config -set "[sezione] proprietà=valore".
+Utilizzo: [color=green]config [/reset]-set [color=cyan][SEZIONE][/reset] [color=white]PROPRIETÀ[/reset][=][color=white]VALORE[/reset]
 
 .
 :PROGRAM_CONFIG_NOCONFIGFILE
-Nessun file di configurazione caricato!
+Nessun file di configurazione caricato
 
 .
 :PROGRAM_CONFIG_PRIMARY_CONF
-File di configurazione primario: 
-%s
+[color=white]File di configurazione primario:[reset]
+  %s
 
 .
 :PROGRAM_CONFIG_ADDITIONAL_CONF
-File di configurazione aggiuntivi:
+
+[color=white]File di configurazione aggiuntivi:[reset]
 
 .
 :PROGRAM_CONFIG_CONFDIR
-Directory di configurazione di DOSBox Staging %s: 
-%s
+[color=white]Directory di configurazione di DOSBox Staging %s:[reset] 
+  %s
 
 
 .
 :PROGRAM_CONFIG_FILE_ERROR
 
-Impossibile aprire il file %s
+Impossibile aprire il file di configurazione '%s'
 
 .
 :PROGRAM_CONFIG_FILE_WHICH
-Scrittura del file di configurazione in %s
+Scrittura del file di configurazione in '%s'
 
 .
 :SHELL_CMD_CONFIG_HELP_LONG
-Regola i parametri configurabili di DOSBox Staging.
+Gestisce le opzioni di configurazione ed esegue azioni varie.
 
--writeconf o -wc Scrive nel file di configigurazione primario caricato.
--writeconf o -wc [nomefile] Scrive il file nella directory di configurazione.
--writelang o -wl [nomefile] Scrive le stringhe della lingua corrente.
--r [parametri]
- Riavvia DOSBox, utilizzando i parametri precedenti o quelli aggiunti.
--wcp [nomefile]
- Scrive il file di configurazione nella directory del programma, con il nome
- 'dosbox.conf' o quello specificato.
--wcd Scrive nel file di configurazione predefinito.
--l Elenca i parametri di configurazione.
--h, -help, -? sections / nomeSezione / nomeProprietà
- Senza parametri, visualizza questa guida. Aggiungi "sections" per elencare le
- sezioni. Per informazioni su una sezione o proprietà specifica, aggiungere il
- suo nome alla fine del comando (es. config -h sdl).
--axclear Pulisce la sezione 'autoexec'.
--axadd [riga] Aggiunge una riga alla sezione 'autoexec'.
--axtype Stampa il contenuto della sezione 'autoexec'.
--securemode Passa alla modalità sicura.
--avistart Avvia la registrazione AVI.
--avistop Interrompe la registrazione AVI.
--startmapper Avvia il keymapper.
--get "[sezione] proprietà" Restituisce il valore della proprietà.
--set "[sezione] proprietà=valore" Imposta il valore.
+Utilizzo:
+  [color=green]config[reset] [color=white]COMANDO[reset] [color=cyan][PARAMETRI][reset]
 
+Dove [color=white]COMANDO[reset] è uno dei seguenti:
+  -writeconf
+  -wc               Scrive le opzioni di configurazione nel file `dosbox.conf`
+                    nella directory di lavoro corrente.
+
+  -writeconf [color=white]PERCORSO[reset]
+  -wc [color=white]PERCORSO      [reset]Se [color=white]PERCORSO[reset] è il nome di un file, le opzioni
+                    di configurazione verranno scritte in un file con tale nome
+                    nella directory di lavoro corrente, altrimenti nel percorso
+                    assoluto o relativo specificato.
+
+  -wcd              Scrive le opzioni di configurazione nel file globale
+                    `dosbox-staging.conf` nella directory di configurazione.
+
+  -writelang [color=white]NOMEFILE[reset]
+  -wl [color=white]NOMEFILE      [reset]Scrive le stringhe della lingua corrente in [color=white]NOMEFILE[reset] nella
+                    directory di lavoro corrente.
+
+  -r [color=cyan][PROPRIETÀ1=VALORE1 [PROPRIETÀ2=VALORE2 ...]][reset]
+                    Riavvia DOSBox con le proprietà di configurazione fornite
+                    facoltativamente.
+
+  -l                Mostra i file di configurazione attualmente caricati e gli
+                    argomenti della riga di comando forniti all'avvio.
+
+  -help sections
+  -h    sections
+  -?    sections    Elenca i nomi di tutte le sezioni di configurazione.
+
+  -help [color=white]SEZIONE[reset]
+  -h    [color=white]SEZIONE[reset]
+  -?    [color=white]SEZIONE     [reset]Elenca i nomi di tutte le proprietà di una data sezione di
+                    configurazione.
+
+  -help [color=cyan][SEZIONE][reset] [color=white]PROPRIETÀ[reset]
+  -h    [color=cyan][SEZIONE][reset] [color=white]PROPRIETÀ[reset]
+  -?    [color=cyan][SEZIONE][reset] [color=white]PROPRIETÀ[reset]
+                    Mostra la descrizione e il valore corrente di una proprietà
+                    di configurazione.
+
+  -axclear          Pulisce la sezione [autoexec].
+  -axadd [color=white]RIGA[reset]       Aggiunge una riga alla fine della sezione [autoexec].
+  -axtype           Mostra il contenuto della sezione [autoexec].
+  -securemode       Passa alla modalità sicura.
+  -avistart         Avvia la registrazione AVI.
+  -avistop          Interrompe la registrazione AVI.
+  -startmapper      Avvia il keymapper.
+
+  -get [color=white]SEZIONE      [reset]Mostra tutte le proprietà e i relativi valori di una data
+                    sezione di configurazione.
+  -get [color=cyan][SEZIONE][reset] [color=white]PROPRIETÀ[reset]
+                    Mostra il valore di una singola proprietà di configurazione
+
+  -set [color=cyan][SEZIONE][reset] [color=white]PROPRIETÀ[reset][=][color=white]VALORE[reset]
+                    Imposta il valore di una proprietà di configurazione.
 .
 :PROGRAM_CONFIG_HLP_PROPHLP
-Scopo della proprietà "%s" (contenuto nella sezione "%s"):
+[color=white]Scopo della proprietà [color=green]'%s'[color=white] (contenuto nella sezione [color=cyan][%s][color=white])[reset]:
+
 %s
 
-Valori possibili: %s
-Valore predefinito: %s
-Valore corrente: %s
+[color=white]Valori possibili:[reset]   %s
+[color=white]Valore predefinito:[reset] %s
+[color=white]Valore corrente:[reset]    %s
 
 .
 :PROGRAM_CONFIG_HLP_LINEHLP
-Scopo della sezione "%s":
+[color=white]Scopo della sezione [%s][reset]:
 %s
-Valore corrente:
+[color=white]Valore corrente:[reset]
 %s
 
 .
 :PROGRAM_CONFIG_HLP_NOCHANGE
-Questa proprietà non può essere modificata mentre il programma è in esecuzione.
+Questa proprietà non può essere modificata mentre l'emulatore è in esecuzione.
 
 .
 :PROGRAM_CONFIG_HLP_POSINT
 numero intero positivo.
 .
 :PROGRAM_CONFIG_HLP_SECTHLP
-La sezione %s contiene le seguenti proprietà:
+[color=white]La sezione [color=cyan][%s] [color=white]contiene le seguenti proprietà:[reset]
 
 .
 :PROGRAM_CONFIG_HLP_SECTLIST
-La configurazione di DOSBox contiene le seguenti sezioni:
-
+[color=white]La configurazione di DOSBox contiene le seguenti sezioni:[reset]
 
 .
 :PROGRAM_CONFIG_SECURE_ON
@@ -1223,21 +1378,21 @@ Operazione non consentita in modalità sicura.
 
 .
 :PROGRAM_CONFIG_SECTION_ERROR
-La sezione "%s" non esiste.
+La sezione [%s] non esiste.
 
 .
 :PROGRAM_CONFIG_VALUE_ERROR
-"%s" non è un valore valido per la proprietà "%s".
+'%s' non è un valore valido per la proprietà '%s'.
 
 .
 :PROGRAM_CONFIG_GET_SYNTAX
-Sintassi corretta: config -get "[sezione] proprietà".
+Utilizzo: [color=green]config[reset] -get [color=cyan][SEZIONE][reset] [color=white]PROPRIETÀ[reset]
 
 .
 :PROGRAM_CONFIG_PRINT_STARTUP
 
-DOSBox è stato avviato con i seguenti parametri della riga di comando:
-%s
+[color=white]DOSBox è stato avviato con i seguenti argomenti della riga di comando:[reset]
+  %s
 
 .
 :PROGRAM_CONFIG_MISSINGPARAM
@@ -1245,11 +1400,11 @@ Parametro mancante.
 
 .
 :PROGRAM_PATH_TOO_LONG
-Il percorso "%s" supera la lunghezza massima DOS di %d carattere/i.
+Il percorso '%s' supera il limite DOS di %d caratteri.
 
 .
 :PROGRAM_EXECUTABLE_MISSING
-File eseguibile non trovato: %s
+File eseguibile non trovato: '%s'
 
 .
 :CONJUNCTION_AND
@@ -2004,6 +2159,9 @@ Dove:
 Note:
   - '-t overlay' reindirizza le scritture per l'unità montata in un'altra
     directory.
+  - '-usecd ID' permette l'accesso diretto ad un'unità CD-ROM.
+    Questo è necessario per la riproduzione CD audio (supportato solo su
+    Windows e Linux). Esegui 'mount -cd' per trovare l'elenco degli ID validi.
   - Ulteriori opzioni sono descritte nel manuale (file README, capitolo 4).
 
 Esempi:
@@ -2111,7 +2269,7 @@ Dove:
   -reset      ripristina tutte le impostazioni dal file di configurazione.
 
 Note:
-  Se sensibilità o frequenza sono omessi, verrà usato il valore predefinito.
+  Se sensibilità o frequenza sono omessi, verranno usati i valori predefiniti.
 
 Esempi:
   [color=green]mousectl[reset] [color=white]DOS[reset] [color=white]COM1[reset] -map    ; chiede all'utente di selezionare i mouse da usare
@@ -2314,6 +2472,74 @@ Il tipo deve essere uno dei seguenti:
   %s
 
 .
+:PROGRAM_SETVER_HELP_LONG
+Visualizza o imposta la versione che DOS comunica ad un programma.
+
+Utilizzo:
+  [color=green]setver[reset] \[/b] [/p]
+  [color=green]setver[reset] [color=cyan]FILE[reset] [color=cyan]VERSIONE[reset] [/q]
+  [color=green]setver[reset] [color=cyan]FILE[reset] /d [/q]
+  [color=green]setver[reset] [color=cyan]VERSIONE[reset] /g [/q]
+  [color=green]setver[reset] /d /g [/q]
+  [color=green]setver[reset] /d /all [/q]
+
+Dove:
+  [color=cyan]FILE[reset]     è il nome file di un programma a cui applicare le impostazioni.
+  [color=cyan]VERSIONE[reset] è una versione DOS, nel formato [color=white]n[reset].[color=white]nn[reset], [color=white]n[reset].[color=white]n[reset] o [color=white]n[reset].
+  /g       impostazione globale, viene applicata a tutti gli eseguibili.
+  /d o /delete     elimina il programma specificato dalla tabella di versione.
+  /all     insieme a /d cancella il contenuto dell'intera tabella di versione.
+  /b       visualizza l'elenco in un formato file batch.
+  /p       visualizza una pagina alla volta.
+  /q o /quiet      modalità silenziosa, salta i messaggi di conferma.
+
+Note:
+  Per fare in modo che la tabella di versione rimanga persistente, specificare
+  il percorso del file da utilizzare come memoria persistente utilizzando
+  l'impostazione 'setver_table_file = [color=cyan]MEMORIA[reset]', nella sezione [dos] del file
+  di configurazione.
+
+Esempi:
+  [color=green]setver[reset] /b              ; visualizza le impostazioni come un file batch
+  [color=green]setver[reset] [color=cyan]RETRO.COM[reset] [color=white]6[reset].[color=white]22[reset]  ; comunica la versione DOS 6.22 ad ogni file RETRO.COM
+  [color=green]setver[reset] [color=cyan]RETRO.COM[reset] /d    ; smette di sovrascrivere la versione DOS riportata
+.
+:PROGRAM_SETVER_WRONG_TABLE
+È supportata solo la tabella di versione nella directory Z:\.
+.
+:PROGRAM_SETVER_INVALID_VERSION
+Versione DOS non valida.
+.
+:PROGRAM_SETVER_TABLE_UPDATED
+Tabella di versione aggiornata.
+.
+:PROGRAM_SETVER_TABLE_CLEARED
+Contenuto della tabella di versione cancellato.
+.
+:PROGRAM_SETVER_TABLE_ALREADY_EMPTY
+Tabella di versione già vuota.
+.
+:PROGRAM_SETVER_TABLE_ENTRY_REMOVED
+Voce rimossa dalla tabella di versione.
+.
+:PROGRAM_SETVER_TABLE_ENTRY_NOT_FOUND
+Voce non trovata nella tabella di versione.
+.
+:PROGRAM_SETVER_TABLE_EMPTY
+Tabella di versione vuota.
+.
+:PROGRAM_SETVER_GLOBAL
+Versione riportata per impostazione globale
+.
+:PROGRAM_SETVER_BATCH_GLOBAL
+regola per ogni eseguibile
+.
+:PROGRAM_SETVER_BATCH_BY_FILE_NAME
+regole per corrispondenza solo per nome file
+.
+:PROGRAM_SETVER_BATCH_BY_FILE_PATH
+regole per corrispondenza per nome file con percorso
+.
 :PROGRAM_TREE_HELP_LONG
 Visualizza graficamente la struttura delle directory.
 
@@ -2359,20 +2585,42 @@ Nessun file o sottodirectory da visualizzare.
 Troppi file o sottodirectory.
 
 .
+:AUTOEXEC_BAT_GENERATED
+generato dal file di configurazione e dalla riga di comando
+.
+:AUTOEXEC_BAT_CONFIG_SECTION
+dalla sezione [autoexec]
+.
 :SHELL_ILLEGAL_PATH
 Percorso non valido.
 
 .
+:SHELL_ILLEGAL_FILE_NAME
+Nome file non valido.
+
+.
 :SHELL_ILLEGAL_SWITCH
-Opzione non valida: %s.
+Opzione non valida: %s
+
+.
+:SHELL_ILLEGAL_SWITCH_COMBO
+Combinazione di opzioni non valide.
 
 .
 :SHELL_MISSING_PARAMETER
 Parametro richiesto mancante.
 
 .
+:SHELL_TOO_MANY_PARAMETERS
+Troppi parametri.
+
+.
+:SHELL_EXPECTED_FILE_NOT_DIR
+Previsto un file, non una directory.
+
+.
 :SHELL_SYNTAX_ERROR
-La sintassi del comando non è corretta.
+Sintassi del comando errata.
 
 .
 :SHELL_ACCESS_DENIED
@@ -2395,8 +2643,20 @@ File non trovato - '%s'
 Il file '%s' esiste già.
 
 .
+:SHELL_DIRECTORY_NOT_FOUND
+Directory non trovata - '%s'
+
+.
+:SHELL_READ_ERROR
+Errore durante la lettura del file - '%s'
+
+.
+:SHELL_WRITE_ERROR
+Errore durante la scrittura del file - '%s'
+
+.
 :SHELL_CMD_HELP
-Per una lista di tutti i comandi supportati, digita [color=yellow]help /all[reset].
+Per una lista di tutti i comandi supportati, esegui [color=yellow]help /all[reset].
 Segue una breve lista dei comandi più comuni:
 
 .
@@ -2426,28 +2686,28 @@ Esempi:
 
 .
 :SHELL_CMD_ECHO_ON
-ECHO attivato.
+Echo attivato.
 
 .
 :SHELL_CMD_ECHO_OFF
-ECHO disattivato.
+Echo disattivato.
 
 .
 :SHELL_CMD_CHDIR_ERROR
-Impossibile spostarsi su: %s.
+Impossibile spostarsi su: %s
 
 .
 :SHELL_CMD_CHDIR_HINT
-Suggerimento: Per spostarsi su un'altra unità, digita [color=light-red]%c:[reset]
+Suggerimento: Per spostarsi su un'altra unità, esegui [color=yellow]%c:[reset]
 
 .
 :SHELL_CMD_CHDIR_HINT_2
 Il nome della directory è più lungo di 8 caratteri e/o contiene spazi.
-Prova [color=light-red]cd %s[reset]
+Prova [color=yellow]cd %s[reset]
 
 .
 :SHELL_CMD_CHDIR_HINT_3
-Sei ancora nell'unità Z:, passa ad un'unità montata con [color=light-red]C:[reset].
+Sei ancora nell'unità Z:; passa ad un'unità montata con [color=yellow]C:[reset].
 
 .
 :SHELL_CMD_DATE_HELP
@@ -2465,7 +2725,7 @@ La data specificata non è corretta.
 Data corrente: 
 .
 :SHELL_CMD_DATE_SETHLP
-Digita 'date %s' per cambiare la data.
+Esegui [color=yellow]date %s[reset] per cambiare la data corrente.
 
 .
 :SHELL_CMD_DATE_HELP_LONG
@@ -2501,7 +2761,7 @@ L'ora specificata non è corretta.
 Ora attuale: 
 .
 :SHELL_CMD_TIME_SETHLP
-Digita 'time %s' per cambiare l'orario.
+Esegui [color=yellow]time %s[reset] per cambiare l'orario corrente.
 
 .
 :SHELL_CMD_TIME_HELP_LONG
@@ -2538,7 +2798,7 @@ Impossibile eliminare: %s.
 
 .
 :SHELL_CMD_SET_NOT_SET
-Variabile di ambiente %s non definita.
+Variabile di ambiente '%s' non definita.
 
 .
 :SHELL_CMD_SET_OUT_OF_SPACE
@@ -2562,11 +2822,11 @@ Nessuna etichetta fornita al comando GOTO.
 
 .
 :SHELL_CMD_GOTO_LABEL_NOT_FOUND
-GOTO: Etichetta %s non trovata.
+GOTO: Etichetta '%s' non trovata.
 
 .
 :SHELL_CMD_DUPLICATE_REDIRECTION
-Reindirizzamento duplicato - %s
+Reindirizzamento duplicato: %s
 
 .
 :SHELL_CMD_FAILED_PIPE
@@ -2588,17 +2848,17 @@ Controllare la variabile %%TEMP%%.
 
 .
 :SHELL_CMD_DIR_BYTES_FREE
-%17d Directory  %21s byte disponibili
+%17d Directory  %15s byte disponibili
 
 .
 :SHELL_EXECUTE_DRIVE_NOT_FOUND
 Unità %c inesistente!
-È necessario montare l'unità con il comando [color=light-red]mount[reset]. 
-Per maggiori informazioni, digita [color=yellow]intro[reset] o [color=yellow]intro mount[reset].
+È necessario prima montare l'unità con il comando [color=yellow]mount[reset].
+Per maggiori informazioni, esegui [color=yellow]intro[reset] o [color=yellow]intro mount[reset].
 
 .
 :SHELL_EXECUTE_ILLEGAL_COMMAND
-Comando non valido: %s.
+Comando non valido: %s
 
 .
 :SHELL_CMD_PAUSE
@@ -2638,8 +2898,8 @@ Impossibile rimuovere, unità non in uso.
 
 .
 :SHELL_CMD_SUBST_FAILURE
-SUBST fallito. È stato commesso un errore nella riga di comando o l'unità di
-destinazione è già in uso. È possibile utilizzare SUBST solo su unità locali.
+SUBST fallito, l'unità di destinazione potrebbe già esistere.
+Si noti che è possibile utilizzare SUBST solo su unità locali.
 .
 :SHELL_STARTUP_BEGIN
 [bgcolor=blue][color=white]╔══════════════════════════════════════════════════════════════════════╗
@@ -3273,27 +3533,22 @@ Esempi:
 
 .
 :SHELL_CMD_VER_HELP
-Visualizza o imposta la versione DOS riportata.
+Visualizza la versione DOS.
 
 .
 :SHELL_CMD_VER_HELP_LONG
 Utilizzo:
   [color=green]ver[reset]
-  [color=green]ver[reset] [color=white]set[reset] [color=cyan]VERSIONE[reset]
 
-Dove:
-  [color=cyan]VERSIONE[reset] può essere un numero intero, ad esempio [color=cyan]5[reset], o includere un valore
-           decimale a due cifre, ad esempio: [color=cyan]6.22[reset], [color=cyan]7.01[reset], o [color=cyan]7.10[reset].
-           In alternativa, il valore decimale può essere separato da spazi,
-           ad esempio: [color=cyan]6 22[reset], [color=cyan]7 01[reset], o [color=cyan]7 10[reset].
 Note:
-  La versione DOS può anche essere impostata nel file di configurazione nella 
-  sezione [dos] usando l'impostazione "ver = [color=cyan]VERSIONE[reset]".
+  È possibile modificare la versione DOS utilizzando l'impostazione
+  'ver = [color=cyan]VERSIONE[reset]', nella sezione [dos] del file di configurazione.
+  La versione DOS comunicata ai programmi può essere cambiata utilizzando il
+  comando [color=green]setver[reset]. La vecchia sintassi '[color=green]ver[reset] [color=white]set[reset] [color=cyan]VERSIONE[reset]' per cambiare la
+  versione DOS è stata deprecata.
 
 Esempi:
-  [color=green]ver[reset] [color=white]set[reset] [color=cyan]6.22[reset]
-  [color=green]ver[reset] [color=white]set[reset] [color=cyan]7 10[reset]
-
+  [color=green]ver[reset]
 .
 :SHELL_CMD_VER_VER
 DOSBox Staging versione %s
@@ -3302,6 +3557,64 @@ DOS versione %d.%02d
 .
 :SHELL_CMD_VER_INVALID
 La versione DOS specificata non è corretta.
+
+.
+:SHELL_CMD_VOL_HELP
+Visualizza l'etichetta di volume e il numero di serie del disco.
+
+.
+:SHELL_CMD_VOL_HELP_LONG
+Utilizzo:
+  [color=green]vol[reset] [color=cyan][UNITÀ:][reset]
+
+Dove:
+  [color=cyan]UNITÀ[reset] è una lettera di unità seguita da due punti.
+
+Note:
+  L'esecuzione di [color=green]vol[reset] senza un argomento visualizza le informazioni dell'unità
+  corrente.
+
+Esempi:
+  [color=green]vol[reset]
+  [color=green]vol[reset] [color=cyan]c:[reset]
+
+.
+:SHELL_CMD_VOL_OUTPUT
+
+ Il volume nell'unità %c è %s
+ Numero di serie del volume: %04X-%04X
+
+
+.
+:SHELL_CMD_MOVE_HELP
+Consente di spostare file e rinominare file e directory.
+
+.
+:SHELL_CMD_MOVE_HELP_LONG
+Utilizzo:
+  [color=green]move[reset] [color=white]NOMEFILE1[,NOMEFILE2,...][reset] [color=cyan]DESTINAZIONE[reset]
+  [color=green]move[reset] [color=white]DIRECTORY1[reset] [color=cyan]DIRECTORY2[reset]
+
+Dove:
+  [color=white]NOMEFILE[reset]     è un nome file specifico o con caratteri jolly, cioè
+               asterisco (*) e punto di domanda (?). Possono essere forniti
+               nomi di file multipli separati da una virgola.
+  [color=white]DIRECTORY[reset]    è un nome di directory, che non contiene caratteri jolly.
+  [color=cyan]DESTINAZIONE[reset] è un nome di file o directory, che non contiene caratteri jolly.
+
+Note:
+  Se vengono specificati più file di origine, la destinazione deve essere una
+  directory. Se questa non esiste, ne verrà creata una. 
+  Se viene specificato un singolo file di origine, un eventuale file con lo
+  stesso nome nel percorso di destinazione sarà sovrascritto.
+
+Esempi:
+  [color=green]move[reset] [color=white]origine.bat[reset] [color=cyan]nuovo.bat[reset]
+  [color=green]move[reset] [color=white]file1.txt,file2.txt[reset] [color=cyan]dir[reset]
+
+.
+:SHELL_CMD_MOVE_MULTIPLE_TO_SINGLE
+Impossibile spostare più file in un singolo file.
 
 .
 :HELP_UTIL_CATEGORY_DOSBOX

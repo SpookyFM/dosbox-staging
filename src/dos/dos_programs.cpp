@@ -37,10 +37,12 @@
 #include "program_more.h"
 #include "program_mount.h"
 #include "program_mousectl.h"
+#include "program_move.h"
 #include "program_placeholder.h"
 #include "program_rescan.h"
 #include "program_serial.h"
 #include "program_setver.h"
+#include "program_subst.h"
 #include "program_tree.h"
 
 #if C_DEBUG
@@ -92,6 +94,8 @@ void Add_VFiles(const bool add_autoexec)
 	PROGRAMS_MakeFile("SERIAL.COM", ProgramCreate<SERIAL>);
 	PROGRAMS_MakeFile("SETVER.EXE", ProgramCreate<SETVER>);
 	PROGRAMS_MakeFile("TREE.COM", ProgramCreate<TREE>);
+	PROGRAMS_MakeFile("MOVE.EXE", ProgramCreate<MOVE>);
+	PROGRAMS_MakeFile("SUBST.EXE", ProgramCreate<SUBST>);
 	PROGRAMS_MakeFile("COMMAND.COM", SHELL_ProgramCreate);
 
 	if (add_autoexec) {

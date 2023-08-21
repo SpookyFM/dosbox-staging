@@ -36,11 +36,11 @@ public:
 	isoFile(const isoFile &) = delete;            // prevent copying
 	isoFile &operator=(const isoFile &) = delete; // prevent assignment
 
-	bool Read(uint8_t *data, uint16_t *size);
-	bool Write(uint8_t *data, uint16_t *size);
-	bool Seek(uint32_t *pos, uint32_t type);
-	bool Close();
-	uint16_t GetInformation(void);
+	bool Read(uint8_t *data, uint16_t *size) override;
+	bool Write(uint8_t *data, uint16_t *size) override;
+	bool Seek(uint32_t *pos, uint32_t type) override;
+	bool Close() override;
+	uint16_t GetInformation(void) override;
 
 private:
 	isoDrive *drive = nullptr;
@@ -417,7 +417,7 @@ int isoDrive::GetDirIterator(const isoDirEntry* de) {
 
 bool isoDrive::GetNextDirEntry(const int dirIteratorHandle, isoDirEntry* de) {
 	bool result = false;
-	uint8_t* buffer = NULL;
+	uint8_t* buffer = nullptr;
 	DirIterator& dirIterator = dirIterators[dirIteratorHandle];
 
 	// check if the directory entry is valid
@@ -517,7 +517,7 @@ int isoDrive :: readDirEntry(isoDirEntry *de, uint8_t *data) {
 		}
 	}
 	char* dotpos = strchr((char*)de->ident, '.');
-	if (dotpos!=NULL) {
+	if (dotpos!=nullptr) {
 		if (strlen(dotpos)>4) dotpos[4]=0;
 		if (dotpos-(char*)de->ident>8) {
 			constexpr int pos = 8;
@@ -554,7 +554,7 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 	strreplace(isoPath, '\\', '/');
 
 	// iterate over all path elements (name), and search each of them in the current de
-	for(char* name = strtok(isoPath, "/"); NULL != name; name = strtok(NULL, "/")) {
+	for(char* name = strtok(isoPath, "/"); nullptr != name; name = strtok(nullptr, "/")) {
 
 		bool found = false;
 		// current entry must be a directory, abort otherwise

@@ -2,7 +2,6 @@
  *  SPDX-License-Identifier: GPL-2.0-or-later
  *
  *  Copyright (C) 2023-2023  The DOSBox Staging Team
- *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,12 +18,42 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifndef DOSBOX_CAPTURE_IMAGE_H
-#define DOSBOX_CAPTURE_IMAGE_H
+#include "file_reader.h"
 
-void capture_image(const uint16_t width, const uint16_t height,
-                   const uint8_t bits_per_pixel, const uint16_t pitch,
-                   const uint8_t capture_flags, const uint8_t* image_data,
-                   const uint8_t* palette_data);
+std::optional<std::unique_ptr<FileReader>> FileReader::GetFileReader(std::string_view file)
+{
+	auto reader = std::make_unique<FileReader>(file, PrivateOnly());
+	if (!reader->valid) {
+		return std::nullopt;
+	}
+	return reader;
+}
 
-#endif
+FileReader::FileReader(std::string_view file, [[maybe_unused]] PrivateOnly key)
+        : filename(file),
+          valid(DOS_OpenFile(filename.c_str(), (DOS_NOT_INHERIT | OPEN_READ), &handle))
+{}
+
+std::optional<char> FileReader::Read()
+{
+	std::uint8_t data        = 0;
+	std::uint16_t bytes_read = 1;
+	DOS_ReadFile(handle, &data, &bytes_read);
+
+	if (bytes_read == 0) {
+		return std::nullopt;
+	}
+
+	return static_cast<char>(data);
+}
+
+void FileReader::Reset()
+{
+	std::uint32_t cursor = 0;
+	DOS_SeekFile(handle, &cursor, DOS_SEEK_SET);
+}
+
+FileReader::~FileReader()
+{
+	DOS_CloseFile(handle);
+}

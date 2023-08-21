@@ -29,6 +29,7 @@
 
 #include "midi.h"
 #include "pic.h"
+#include "support.h"
 
 static struct {
 	FILE* handle = nullptr;
@@ -79,7 +80,7 @@ static void raw_midi_add_number(const uint32_t val)
 
 static void create_midi_file()
 {
-	midi.handle = CAPTURE_CreateFile("MIDI output", ".mid");
+	midi.handle = CAPTURE_CreateFile(CaptureType::Midi);
 	if (!midi.handle) {
 		return;
 	}
@@ -113,8 +114,6 @@ void capture_midi_add_data(const bool sysex, const size_t len, const uint8_t* da
 void capture_midi_finalise()
 {
 	if (!midi.handle) {
-		LOG_MSG("CAPTURE: Stopped capturing MIDI output before any "
-		        "MIDI message was output (no MIDI file has been created)");
 		return;
 	}
 	// Delta time
@@ -132,7 +131,7 @@ void capture_midi_finalise()
 	constexpr auto midi_header_size_offset = 18;
 	if (fseek(midi.handle, midi_header_size_offset, SEEK_SET) != 0) {
 		LOG_WARNING("CAPTURE: Failed to seek in captured MIDI file '%s'",
-		            strerror(errno));
+		            safe_strerror(errno).c_str());
 		return;
 	}
 

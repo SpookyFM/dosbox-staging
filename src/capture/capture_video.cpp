@@ -21,12 +21,14 @@
 
 #include "capture.h"
 
+#include <cassert>
+
 #include "mem.h"
 #include "render.h"
-#include "rgb24.h"
+#include "rgb888.h"
+#include "support.h"
 
-#if (C_SSHOT)
-#include "../libs/zmbv/zmbv.h"
+#include "zmbv/zmbv.h"
 
 static constexpr auto NumSampleFramesInBuffer = 16 * 1024;
 
@@ -287,7 +289,7 @@ static void create_avi_file(const uint16_t width, const uint16_t height,
                             const uint8_t bits_per_pixel,
                             const float frames_per_second, ZMBV_FORMAT format)
 {
-	video.handle = CAPTURE_CreateFile("video output", ".avi");
+	video.handle = CAPTURE_CreateFile(CaptureType::Video);
 	if (!video.handle) {
 		return;
 	}
@@ -317,22 +319,24 @@ static void create_avi_file(const uint16_t width, const uint16_t height,
 	video.audio.bytes_written   = 0;
 }
 
-void capture_video_add_frame(const uint16_t width, const uint16_t height,
-                             const uint8_t bits_per_pixel, const uint16_t pitch,
-                             const uint8_t capture_flags,
-                             const float frames_per_second,
-                             const uint8_t* image_data, const uint8_t* palette_data)
+void capture_video_add_frame(const RenderedImage& image, const float frames_per_second)
 {
+	assert(image.width <= SCALER_MAXWIDTH);
+
+	const auto video_width = image.double_width ? image.width * 2 : image.width;
+	const auto video_height = image.double_height ? image.height * 2
+	                                              : image.height;
+
 	// Disable capturing if any of the test fails
-	if (video.handle && (video.width != width || video.height != height ||
-	                     video.bits_per_pixel != bits_per_pixel ||
+	if (video.handle && (video.width != video_width || video.height != video_height ||
+	                     video.bits_per_pixel != image.bits_per_pixel ||
 	                     video.frames_per_second != frames_per_second)) {
 		capture_video_finalise();
 	}
 
 	ZMBV_FORMAT format;
 
-	switch (bits_per_pixel) {
+	switch (image.bits_per_pixel) {
 	case 8: format = ZMBV_FORMAT::BPP_8; break;
 	case 15: format = ZMBV_FORMAT::BPP_15; break;
 	case 16: format = ZMBV_FORMAT::BPP_16; break;
@@ -344,11 +348,15 @@ void capture_video_add_frame(const uint16_t width, const uint16_t height,
 	// rgb24's int() cast operator up-convert.
 	case 24: format = ZMBV_FORMAT::BPP_32; break;
 	case 32: format = ZMBV_FORMAT::BPP_32; break;
-	default: return;
+	default: assertm(false, "Invalid bits_per_pixel value"); return;
 	}
 
 	if (!video.handle) {
-		create_avi_file(width, height, bits_per_pixel, frames_per_second, format);
+		create_avi_file(video_width,
+		                video_height,
+		                image.bits_per_pixel,
+		                frames_per_second,
+		                format);
 	}
 	if (!video.handle) {
 		return;
@@ -358,74 +366,90 @@ void capture_video_add_frame(const uint16_t width, const uint16_t height,
 
 	if (!video.codec->PrepareCompressFrame(codec_flags,
 	                                       format,
-	                                       palette_data,
+	                                       image.palette_data,
 	                                       video.buf.data(),
 	                                       video.buf_size)) {
 		return;
 	}
 
-	const bool is_double_width = capture_flags & CaptureFlagDoubleWidth;
-	const auto height_divisor = (capture_flags & CaptureFlagDoubleHeight) ? 1 : 0;
+	alignas(uint32_t) uint8_t row_buffer[SCALER_MAXWIDTH * 4];
 
-	alignas(uint32_t) uint8_t double_row[SCALER_MAXWIDTH * 4];
+	auto src_row = image.image_data;
 
-	for (auto i = 0; i < height; ++i) {
-		const uint8_t* row_ptr = double_row;
-		const auto src_line = image_data + (i >> height_divisor) * pitch;
+	for (auto i = 0; i < image.height; ++i) {
+		const uint8_t* row_pointer = row_buffer;
 
-		if (is_double_width) {
-			const auto count_width = width >> 1;
-			switch (bits_per_pixel) {
+		// TODO This all assumes little-endian byte order; should be
+		// made endianness-aware like capture_image.cpp
+		if (image.double_width) {
+			switch (image.bits_per_pixel) {
+			// Indexed8
 			case 8:
-				for (auto x = 0; x < count_width; ++x)
-					double_row[x * 2 + 0] =
-					        double_row[x * 2 + 1] = src_line[x];
-				break;
-
-			case 15:
-			case 16:
-				for (auto x = 0; x < count_width; ++x)
-					((uint16_t*)double_row)[x * 2 + 0] = ((
-					        uint16_t*)double_row)[x * 2 + 1] =
-					        ((uint16_t*)src_line)[x];
-				break;
-
-			case 24:
-				for (auto x = 0; x < count_width; ++x) {
-					const auto pixel = reinterpret_cast<const rgb24*>(
-					        src_line)[x];
-					reinterpret_cast<uint32_t*>(
-					        double_row)[x * 2 + 0] = pixel;
-					reinterpret_cast<uint32_t*>(
-					        double_row)[x * 2 + 1] = pixel;
+				for (auto x = 0; x < image.width; ++x) {
+					const auto pixel      = src_row[x];
+					row_buffer[x * 2 + 0] = pixel;
+					row_buffer[x * 2 + 1] = pixel;
 				}
 				break;
 
+			// BGR555
+			case 15:
+			// BGR565
+			case 16:
+				for (auto x = 0; x < image.width; ++x) {
+					const auto pixel = ((uint16_t*)src_row)[x];
+
+					((uint16_t*)row_buffer)[x * 2 + 0] = pixel;
+					((uint16_t*)row_buffer)[x * 2 + 1] = pixel;
+				}
+				break;
+
+			// BGR888
+			case 24:
+				for (auto x = 0; x < image.width; ++x) {
+					const auto pixel = reinterpret_cast<const Rgb888*>(
+					        src_row)[x];
+
+					reinterpret_cast<uint32_t*>(
+					        row_buffer)[x * 2 + 0] = pixel;
+					reinterpret_cast<uint32_t*>(
+					        row_buffer)[x * 2 + 1] = pixel;
+				}
+				break;
+
+			// BGRX8888
 			case 32:
-				for (auto x = 0; x < count_width; ++x)
-					((uint32_t*)double_row)[x * 2 + 0] = ((
-					        uint32_t*)double_row)[x * 2 + 1] =
-					        ((uint32_t*)src_line)[x];
+				for (auto x = 0; x < image.width; ++x) {
+					const auto pixel = ((uint32_t*)src_row)[x];
+
+					((uint32_t*)row_buffer)[x * 2 + 0] = pixel;
+					((uint32_t*)row_buffer)[x * 2 + 1] = pixel;
+				}
 				break;
 			}
-			row_ptr = double_row;
+			row_pointer = row_buffer;
 
 		} else {
-			if (bits_per_pixel == 24) {
-				for (auto x = 0; x < width; ++x) {
-					const auto pixel = reinterpret_cast<const rgb24*>(
-					        src_line)[x];
+			if (image.bits_per_pixel == 24) {
+				for (auto x = 0; x < image.width; ++x) {
+					const auto pixel = reinterpret_cast<const Rgb888*>(
+					        src_row)[x];
+
 					reinterpret_cast<uint32_t*>(
-					        double_row)[x] = pixel;
+					        row_buffer)[x] = pixel;
 				}
-				// Using double_row for this conversion when it
-				// is not actually double row!
-				row_ptr = double_row;
+				row_pointer = row_buffer;
 			} else {
-				row_ptr = src_line;
+				row_pointer = src_row;
 			}
 		}
-		video.codec->CompressLines(1, &row_ptr);
+
+		auto lines_to_write = image.double_height ? 2 : 1;
+		while (lines_to_write--) {
+			video.codec->CompressLines(1, &row_pointer);
+		}
+
+		src_row += image.pitch;
 	}
 
 	const auto written = video.codec->FinishCompressFrame();
@@ -449,5 +473,3 @@ void capture_video_add_frame(const uint16_t width, const uint16_t height,
 		video.audio.buf_frames_used = 0;
 	}
 }
-
-#endif

@@ -63,7 +63,7 @@ enum ResTypes {
 #define TEL_CLIENT 0
 #define TEL_SERVER 1
 
-bool MODEM_ReadPhonebook(const std::string &filename);
+bool MODEM_ReadPhonebook(const std_fs::path &path);
 void MODEM_ClearPhonebook();
 
 class CFifo {
@@ -178,7 +178,7 @@ private:
 class CSerialModem final : public CSerial {
 public:
 	CSerialModem(const uint8_t port_idx, CommandLine *cmd);
-	~CSerialModem();
+	~CSerialModem() override;
 	void Reset();
 
 	void SendLine(const char *line);
@@ -200,19 +200,19 @@ public:
 
 	void Echo(uint8_t ch);
 	void Timer2();
-	void handleUpperEvent(uint16_t type);
+	void handleUpperEvent(uint16_t type) override;
 
 	void RXBufferEmpty();
 
-	void transmitByte(uint8_t val, bool first);
-	void updatePortConfig(uint16_t divider, uint8_t lcr);
-	void updateMSR();
+	void transmitByte(uint8_t val, bool first) override;
+	void updatePortConfig(uint16_t divider, uint8_t lcr) override;
+	void updateMSR() override;
 
-	void setBreak(bool);
+	void setBreak(bool) override;
 
-	void setRTSDTR(bool rts, bool dtr);
-	void setRTS(bool val);
-	void setDTR(bool val);
+	void setRTSDTR(bool rts, bool dtr) override;
+	void setRTS(bool val) override;
+	void setDTR(bool val) override;
 
 	std::unique_ptr<CFifo> rqueue;
 	std::unique_ptr<CFifo> tqueue;

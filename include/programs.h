@@ -37,14 +37,14 @@
 class CommandLine {
 public:
 	CommandLine(int argc, char const *const argv[]);
-	CommandLine(const char *name, const char *cmdline);
+	CommandLine(std::string_view name, std::string_view cmdline);
 
-	const char *GetFileName() { return file_name.c_str(); }
+	const char *GetFileName() const { return file_name.c_str(); }
 
 	bool FindExist(char const * const name,bool remove=false);
 	bool FindInt(char const * const name,int & value,bool remove=false);
 	bool FindString(char const * const name,std::string & value,bool remove=false);
-	bool FindCommand(unsigned int which,std::string & value);
+	bool FindCommand(unsigned int which,std::string & value) const;
 	bool FindStringBegin(char const * const begin,std::string & value, bool remove=false);
 	bool FindStringRemain(char const * const name,std::string & value);
 	bool FindStringRemainBegin(char const *const name, std::string &value);
@@ -86,10 +86,6 @@ public:
 	DOS_PSP *psp = nullptr;
 
 	virtual void Run(void)=0;
-	bool GetEnvStr(const char *entry, std::string &result) const;
-	bool GetEnvNum(Bitu num, std::string &result) const;
-	Bitu GetEnvCount() const;
-	bool SetEnv(const char * entry,const char * new_string);
 	virtual void WriteOut(const char *format, const char * arguments);
 	virtual void WriteOut(const char *format, ...);	// printf to DOS stdout
 	void WriteOut_NoParsing(const char *str); // write string to DOS stdout

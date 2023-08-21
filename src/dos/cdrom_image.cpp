@@ -58,6 +58,9 @@ using track_iter       = vector<CDROM_Interface_Image::Track>::iterator;
 using track_const_iter = vector<CDROM_Interface_Image::Track>::const_iterator;
 using tracks_size_t    = vector<CDROM_Interface_Image::Track>::size_type;
 
+// Ensure the maximum allowed redbook bytes stays within the API type sizes
+static_assert(MAX_REDBOOK_BYTES <= UINT32_MAX);
+
 // Report bad seeks that would go beyond the end of the track
 bool CDROM_Interface_Image::TrackFile::offsetInsideTrack(const uint32_t offset)
 {
@@ -501,7 +504,7 @@ CDROM_Interface_Image::CDROM_Interface_Image(uint8_t sub_unit)
 			player.channel->Enable(false); // only enabled during playback periods
 		}
 #ifdef DEBUG
-		LOG_MSG("CDROM: Initialized the CDAUDIO audio channel");
+		LOG_MSG("CDROM: Initialised the CDAUDIO audio channel");
 #endif
 	}
 	refCount++;
@@ -632,6 +635,7 @@ bool CDROM_Interface_Image::GetAudioSub(unsigned char& attr,
 		 // reserve the track_file as a shared_ptr to avoid deletion in another thread
 		const auto track_file = player.trackFile.lock();
 		if (track_file) {
+			LagDriveResponse();
 			const uint32_t sample_rate = track_file->getRate();
 			const uint32_t played_frames = ceil_udivide(player.playedTrackFrames
 			                               * REDBOOK_FRAMES_PER_SECOND, sample_rate);
@@ -804,8 +808,9 @@ bool CDROM_Interface_Image::PlayAudioSector(uint32_t start, uint32_t len)
 bool CDROM_Interface_Image::PauseAudio(bool resume)
 {
 	player.isPaused = !resume;
-	if (player.channel)
+	if (player.channel) {
 		player.channel->Enable(resume);
+	}
 #ifdef DEBUG
 	LOG_MSG("CDROM: PauseAudio => audio is now %s",
 	        resume ? "unpaused" : "paused");
@@ -817,8 +822,9 @@ bool CDROM_Interface_Image::StopAudio(void)
 {
 	player.isPlaying = false;
 	player.isPaused = false;
-	if (player.channel)
+	if (player.channel) {
 		player.channel->Enable(false);
+	}
 #ifdef DEBUG
 	LOG_MSG("CDROM: StopAudio => stopped playback and halted the mixer");
 #endif

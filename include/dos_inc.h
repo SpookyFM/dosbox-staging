@@ -40,7 +40,8 @@
 #endif
 struct CommandTail{
 	uint8_t count = 0;     /* number of bytes returned */
-	char buffer[127] = {}; /* the buffer itself */
+	static constexpr size_t MaxCmdtailBufferSize = 126;
+	char buffer[MaxCmdtailBufferSize + 1] = {}; /* the buffer itself */
 } GCC_ATTRIBUTE(packed);
 #ifdef _MSC_VER
 #pragma pack ()
@@ -118,7 +119,7 @@ void DOS_SetupFiles (void);
 bool DOS_ReadFile(uint16_t handle,uint8_t * data,uint16_t * amount, bool fcb = false);
 bool DOS_WriteFile(uint16_t handle,uint8_t * data,uint16_t * amount,bool fcb = false);
 bool DOS_SeekFile(uint16_t handle,uint32_t * pos,uint32_t type,bool fcb = false);
-bool DOS_CloseFile(uint16_t handle,bool fcb = false,uint8_t * refcnt = NULL);
+bool DOS_CloseFile(uint16_t handle,bool fcb = false,uint8_t * refcnt = nullptr);
 bool DOS_FlushFile(uint16_t handle);
 bool DOS_DuplicateEntry(uint16_t entry,uint16_t * newentry);
 bool DOS_ForceDuplicateEntry(uint16_t entry,uint16_t newentry);
@@ -241,7 +242,8 @@ bool DOS_FCBGetFileSize(uint16_t seg,uint16_t offset);
 bool DOS_FCBDeleteFile(uint16_t seg,uint16_t offset);
 bool DOS_FCBRenameFile(uint16_t seg, uint16_t offset);
 void DOS_FCBSetRandomRecord(uint16_t seg, uint16_t offset);
-uint8_t FCB_Parsename(uint16_t seg,uint16_t offset,uint8_t parser ,char *string, uint8_t *change);
+uint8_t FCB_Parsename(uint16_t seg, uint16_t offset, uint8_t parser,
+                      const char* string, uint8_t* change);
 bool DOS_GetAllocationInfo(uint8_t drive,uint16_t * _bytes_sector,uint8_t * _sectors_cluster,uint16_t * _total_clusters);
 
 /* Extra DOS Interrupts */

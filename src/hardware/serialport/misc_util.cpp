@@ -21,7 +21,6 @@
 #if C_MODEM
 
 #define ENET_IMPLEMENTATION
-#include "../../libs/enet/include/enet.h" // Must be included before misc_util.h
 
 #include "misc_util.h"
 
@@ -128,7 +127,7 @@ public:
 		         ENET_VERSION_MAJOR, ENET_VERSION_MINOR, ENET_VERSION_PATCH);
 		is_initialized = enet_initialize() == 0;
 		if (is_initialized)
-			LOG_INFO("ENET: Initialized successfully");
+			LOG_INFO("ENET: Initialised successfully");
 		else
 			LOG_WARNING("ENET: failed to initialize ENet\n");
 	}
@@ -503,7 +502,7 @@ public:
 
 		is_initialized = SDLNet_Init() != -1;
 		if (is_initialized)
-			LOG_INFO("SDLNET: Initialized SDL network subsystem");
+			LOG_INFO("SDLNET: Initialised SDL network subsystem");
 		else
 			LOG_WARNING("SDLNET: failed to initialize SDL network subsystem: %s\n",
 			            SDLNet_GetError());
@@ -581,7 +580,7 @@ TCPClientSocket::TCPClientSocket(TCPsocket source)
 	if (!NetWrapper_InitializeSDLNet())
 		return;
 
-	if(source!=0) {
+	if(source!=nullptr) {
 		mysock = source;
 		listensocketset = SDLNet_AllocSocketSet(1);
 		if(!listensocketset) return;
@@ -727,7 +726,7 @@ NETClientSocket *TCPServerSocket::Accept()
 	new_tcpsock=SDLNet_TCP_Accept(mysock);
 	if(!new_tcpsock) {
 		//printf("SDLNet_TCP_Accept: %s\n", SDLNet_GetError());
-		return 0;
+		return nullptr;
 	}
 	
 	return new TCPClientSocket(new_tcpsock);

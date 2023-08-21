@@ -31,7 +31,7 @@
 #include "math_utils.h"
 #include "mem.h"
 #include "pic.h"
-#include "reelmagic/vga_passthrough.h"
+#include "reelmagic.h"
 #include "render.h"
 #include "vga.h"
 
@@ -582,7 +582,7 @@ static void update_cga16_color_pcjr()
 			const auto b = to_linear_rgb(-0.0272f * R - 0.0401f * G + 1.1677f * B);
 
 			const uint8_t index = bits | ((x & 1) == 0 ? 0x30 : 0x80) | ((x & 2) == 0 ? 0x40 : 0);
-			RENDER_SetPal(index, r, g, b);
+			ReelMagic_RENDER_SetPal(index, r, g, b);
 		}
 	}
 }
@@ -1474,10 +1474,21 @@ static void composite_init(Section *sec)
 	assert(sec);
 	const auto conf = static_cast<Section_prop *>(sec);
 	assert(conf);
-	const std::string state = conf->Get_string("composite");
-	cga_comp = (state == "auto" ? COMPOSITE_STATE::AUTO
-	            : state == "on" ? COMPOSITE_STATE::ON
-	                            : COMPOSITE_STATE::OFF);
+	const std::string_view state = conf->Get_string("composite");
+
+	if (state == "auto") {
+		cga_comp = COMPOSITE_STATE::AUTO;
+	} else {
+		const auto state_has_bool = parse_bool_setting(state);
+		if (state_has_bool) {
+			cga_comp = *state_has_bool ? COMPOSITE_STATE::ON
+			                           : COMPOSITE_STATE::OFF;
+		} else {
+			LOG_WARNING("COMPOSITE: Invalid 'composite' value: '%s', using 'off'",
+			            state.data());
+			cga_comp = COMPOSITE_STATE::OFF;
+		}
+	}
 
 	const auto era_choice = std::string(conf->Get_string("era"));
 	is_composite_new_era = era_choice == "new" ||
@@ -1501,7 +1512,7 @@ static void composite_settings(Section_prop &secprop)
 {
 	constexpr auto when_idle = Property::Changeable::WhenIdle;
 
-	const char* states[] = {"auto", "on", "off", 0};
+	const char* states[] = {"auto", "on", "off", nullptr};
 	auto str_prop = secprop.Add_string("composite", when_idle, "auto");
 	str_prop->Set_values(states);
 	str_prop->Set_help(
@@ -1510,7 +1521,7 @@ static void composite_settings(Section_prop &secprop)
 	        "Notes: Fine-tune the settings below (i.e., hue) using the composite hotkeys,\n"
 	        "       then read the new settings from your console and enter them here.");
 
-	const char* eras[] = {"auto", "old", "new", 0};
+	const char* eras[] = {"auto", "old", "new", nullptr};
 	str_prop           = secprop.Add_string("era", when_idle, "auto");
 	str_prop->Set_values(eras);
 	str_prop->Set_help("Era of composite technology ('auto' by default).\n"

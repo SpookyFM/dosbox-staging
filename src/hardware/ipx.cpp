@@ -23,9 +23,10 @@
 
 #include <SDL_net.h>
 
-#include <string.h>
-#include <time.h>
-#include <stdio.h>
+#include <cinttypes>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
 
 #include "cross.h"
 #include "string_utils.h"
@@ -112,13 +113,13 @@ ECBClass::ECBClass(uint16_t segment, uint16_t offset)
 		RealOffset(ECBAddr)+4),segment,offset);
 #endif
 
-	if (ECBList == NULL)
+	if (ECBList == nullptr)
 		ECBList = this;
 	else {
 		// Transverse the list until we hit the end
 		ECBClass *useECB = ECBList;
 
-		while(useECB->nextECB != NULL)
+		while(useECB->nextECB != nullptr)
 			useECB = useECB->nextECB;
 
 		useECB->nextECB = this;
@@ -130,7 +131,7 @@ ECBClass::ECBClass(uint16_t segment, uint16_t offset)
 }
 
 void ECBClass::writeDataBuffer(uint8_t* buffer, uint16_t length) {
-	if(databuffer!=0) delete [] databuffer;
+	if(databuffer!=nullptr) delete [] databuffer;
 	databuffer = new uint8_t[length];
 	memcpy(databuffer,buffer,length);
 	buflen=length;
@@ -204,23 +205,23 @@ void ECBClass::NotifyESR(void) {
 	if(ESRval || databuffer) { // databuffer: write data at realmode/v86 time
 		// LOG_IPX("ECB: SN%7d to be notified.", SerialNumber);
 		// take the ECB out of the current list
-		if(prevECB == NULL) {	// was the first in the list
+		if(prevECB == nullptr) {	// was the first in the list
 			ECBList = nextECB;
-			if(ECBList != NULL) ECBList->prevECB = NULL;
+			if(ECBList != nullptr) ECBList->prevECB = nullptr;
 		} else {		// not the first
 			prevECB->nextECB = nextECB;
-			if(nextECB != NULL) nextECB->prevECB = prevECB;
+			if(nextECB != nullptr) nextECB->prevECB = prevECB;
 		}
 
-		nextECB = NULL;
+		nextECB = nullptr;
 		// put it to the notification queue
-		if(ESRList==NULL) {
+		if(ESRList==nullptr) {
 			ESRList = this;
-			prevECB = NULL;
+			prevECB = nullptr;
 		} else  {// put to end of ESR list
 			ECBClass* useECB = ESRList;
 
-			while(useECB->nextECB != NULL)
+			while(useECB->nextECB != nullptr)
 				useECB = useECB->nextECB;
 
 			useECB->nextECB = this;
@@ -253,15 +254,15 @@ ECBClass::~ECBClass() {
 		// in ESR list, always the first element is deleted.
 		ESRList=nextECB;
 	} else {
-		if(prevECB == NULL) {	// was the first in the list
+		if(prevECB == nullptr) {	// was the first in the list
 			ECBList = nextECB;
-			if(ECBList != NULL) ECBList->prevECB = NULL;
+			if(ECBList != nullptr) ECBList->prevECB = nullptr;
 		} else {	// not the first
 			prevECB->nextECB = nextECB;
-			if(nextECB != NULL) nextECB->prevECB = prevECB;
+			if(nextECB != nullptr) nextECB->prevECB = prevECB;
 		}
 	}
-	if(databuffer!=0) delete [] databuffer;
+	if(databuffer!=nullptr) delete [] databuffer;
 }
 
 
@@ -324,7 +325,7 @@ static void CloseSocket(void) {
 	--socketCount;
 
 	// delete all ECBs of that socket
-	while(tmpECB!=0) {
+	while(tmpECB!=nullptr) {
 		tmp2ECB = tmpECB->nextECB;
 		if(tmpECB->getSocket()==sockNum) {
 			tmpECB->setCompletionFlag(COMP_CANCELLED);
@@ -352,7 +353,7 @@ static void IPX_AES_EventHandler(uint32_t param)
 {
 	ECBClass* tmpECB = ECBList;
 	ECBClass* tmp2ECB;
-	while(tmpECB!=0) {
+	while(tmpECB!=nullptr) {
 		tmp2ECB = tmpECB->nextECB;
 		if(tmpECB->iuflag==USEFLAG_AESCOUNT && param==(Bitu)tmpECB->ECBAddr) {
 			tmpECB->setCompletionFlag(COMP_SUCCESS);
@@ -593,7 +594,7 @@ static void receivePacket(uint8_t *buffer, int16_t bufSize) {
 	}
 
 	useECB = ECBList;
-	while(useECB != NULL)
+	while(useECB != nullptr)
 	{
 		nextECB = useECB->nextECB;
 		if(useECB->iuflag == USEFLAG_LISTENING && useECB->mysocket == useSocket) {
@@ -802,11 +803,10 @@ bool ConnectToServer(const char* strAddr)
 			} else {
 				// Wait for return packet from server.
 				// This will contain our IPX address and port num
-				uint32_t elapsed;
 				const auto ticks = GetTicks();
 
 				while(true) {
-					elapsed = GetTicksSince(ticks);
+					const auto elapsed = GetTicksSince(ticks);
 					if(elapsed > 5000) {
 						LOG_MSG("Timeout connecting to server at %s", strAddr);
 						SDLNet_UDP_Close(ipxClientSocket);
@@ -915,7 +915,7 @@ public:
 		}
 	}
 
-	void Run(void)
+	void Run(void) override
 	{
 		WriteOut("IPX Tunneling utility for DOSBox\n\n");
 		if(!cmd->GetCount()) {
@@ -949,7 +949,7 @@ public:
 					if(!cmd->FindCommand(2, temp_line)) {
 						udpPort = 213;
 					} else {
-						udpPort = strtol(temp_line.c_str(), NULL, 10);
+						udpPort = strtol(temp_line.c_str(), nullptr, 10);
 					}
 					startsuccess = IPX_StartServer((uint16_t)udpPort);
 					if(startsuccess) {
@@ -991,7 +991,7 @@ public:
 				if(!cmd->FindCommand(3, temp_line)) {
 					udpPort = 213;
 				} else {
-					udpPort = strtol(temp_line.c_str(), NULL, 10);
+					udpPort = strtol(temp_line.c_str(), nullptr, 10);
 				}
 
 				if(ConnectToServer(strHost)) {
@@ -1053,7 +1053,7 @@ public:
 					CALLBACK_Idle();
 					if(pingCheck(&pingHead)) {
 						WriteOut(
-						        "Response from %d.%d.%d.%d, port %d time=%dms\n",
+						        "Response from %d.%d.%d.%d, port %d time=ms\n",
 						        CONVIP(pingHead.src.addr.byIP.host),
 						        SDLNet_Read16(&pingHead.src.addr.byIP.port),
 						        GetTicksSince(ticks));
@@ -1068,7 +1068,7 @@ public:
 
 Bitu IPX_ESRHandler(void) {
 	LOG_IPX("ESR: >>>>>>>>>>>>>>>" );
-	while(ESRList!=NULL) {
+	while(ESRList!=nullptr) {
 		// LOG_IPX("ECB: SN%7d notified.", ESRList->SerialNumber);
 		if(ESRList->databuffer) ESRList->writeData();
 		if(ESRList->getESRAddr()) {
@@ -1101,8 +1101,8 @@ private:
 public:
 	IPX(Section *configuration) : Module_base(configuration)
 	{
-		ECBList = NULL;
-		ESRList = NULL;
+		ECBList = nullptr;
+		ESRList = nullptr;
 		isIpxServer = false;
 		isIpxConnected = false;
 

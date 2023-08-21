@@ -129,32 +129,32 @@ TEST(NaturalCompare, AtEndNum)
 
 TEST(StartsWith, Prefix)
 {
-	EXPECT_TRUE(starts_with("ab", "abcd"));
-	EXPECT_TRUE(starts_with("ab", std::string{"abcd"}));
+	EXPECT_TRUE(starts_with("abcd", "ab"));
+	EXPECT_TRUE(starts_with(std::string{"abcd"}, "ab"));
 }
 
 TEST(StartsWith, NotPrefix)
 {
-	EXPECT_FALSE(starts_with("xy", "abcd"));
-	EXPECT_FALSE(starts_with("xy", std::string{"abcd"}));
+	EXPECT_FALSE(starts_with("abcd", "xy"));
+	EXPECT_FALSE(starts_with(std::string{"abcd"}, "xy"));
 }
 
 TEST(StartsWith, TooLongPrefix)
 {
-	EXPECT_FALSE(starts_with("abcd", "ab"));
-	EXPECT_FALSE(starts_with("abcd", std::string{"ab"}));
+	EXPECT_FALSE(starts_with("ab", "abcd"));
+	EXPECT_FALSE(starts_with(std::string{"ab"}, "abcd"));
 }
 
 TEST(StartsWith, EmptyPrefix)
 {
-	EXPECT_TRUE(starts_with("", "abcd"));
-	EXPECT_TRUE(starts_with("", std::string{"abcd"}));
+	EXPECT_TRUE(starts_with("abcd", ""));
+	EXPECT_TRUE(starts_with(std::string{"abcd"}, ""));
 }
 
 TEST(StartsWith, EmptyString)
 {
-	EXPECT_FALSE(starts_with("ab", ""));
-	EXPECT_FALSE(starts_with("ab", std::string{""}));
+	EXPECT_FALSE(starts_with("", "ab"));
+	EXPECT_FALSE(starts_with(std::string{""}, "ab"));
 }
 
 TEST(SafeSprintF, PreventOverflow)
@@ -435,6 +435,15 @@ TEST(ParsePrefixedBoth, Invalid)
 	EXPECT_EQ(parse_prefixed_percentage('z', ""), empty);
 	EXPECT_EQ(parse_prefixed_value(' ', "----", 0, 1), empty);
 	EXPECT_EQ(parse_prefixed_percentage(' ', ""), empty);
+}
+
+TEST(FormatString, Valid)
+{
+	EXPECT_EQ(format_string(""), "");
+ 	EXPECT_EQ(format_string("abcd"), "abcd");
+	EXPECT_EQ(format_string("%d", 42), "42");
+	EXPECT_EQ(format_string("%d\0", 42), "42\0");
+	EXPECT_EQ(format_string("%s%d%s", "abcd", 42, "xyz"), "abcd42xyz");
 }
 
 } // namespace

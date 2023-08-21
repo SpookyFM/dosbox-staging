@@ -1,5 +1,8 @@
 /*
- *  Copyright (C) 2022 Jon Dennis
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ *  Copyright (C) 2023-2023  The DOSBox Staging Team
+ *  Copyright (C) 2022  Jon Dennis
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +14,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 //
@@ -30,8 +33,9 @@
 #include <string>
 
 #include "../../gui/render_scalers.h" //SCALER_MAXWIDTH SCALER_MAXHEIGHT
+#include "fraction.h"
 #include "render.h"
-#include "rgb16.h"
+#include "rgb565.h"
 #include "setup.h"
 
 namespace {
@@ -50,8 +54,8 @@ struct RMException : ::std::exception {
 		va_end(vl);
 		LOG(LOG_REELMAGIC, LOG_ERROR)("%s", _msg.c_str());
 	}
-	virtual ~RMException() throw() {}
-	virtual const char* what() const throw()
+	~RMException() noexcept override = default;
+	const char* what() const noexcept override
 	{
 		return _msg.c_str();
 	}
@@ -70,7 +74,7 @@ struct RenderOutputPixel {
 };
 
 struct VGA16bppPixel {
-	Rgb16 pixel = {};
+	Rgb565 pixel = {};
 	template <typename T>
 	constexpr void CopyRGBTo(T& out) const
 	{
@@ -192,13 +196,14 @@ uint8_t VGAOverPalettePixel::_alphaChannelIndex      = 0;
 static uint32_t _vgaWidth  = 0;
 static uint32_t _vgaHeight = 0;
 
+static bool _vgaDoubleWidth  = false;
+static bool _vgaDoubleHeight = false;
+
 // != 0 on this variable means we have collected the first call
 static uint32_t _vgaBitsPerPixel = 0;
 
-static double _vgaFramesPerSecond = 0.0;
-static double _vgaRatio           = 0.0;
-static bool _vgaDoubleWidth       = false;
-static bool _vgaDoubleHeight      = false;
+static double _vgaFramesPerSecond    = 0.0;
+static Fraction _vgaPixelAspectRatio = {};
 
 // state captured from current/active MPEG player
 static PlayerPicturePixel _mpegPictureBuffer[SCALER_MAXWIDTH * SCALER_MAXHEIGHT];
@@ -531,13 +536,15 @@ static void SetupVideoMixer(const bool updateRenderMode)
 	if (!_videoMixerEnabled) {
 		// video mixer is disabled... VGA mode dictates RENDER mode just like "normal dosbox"
 		ReelMagic_RENDER_DrawLine = &RMR_DrawLine_Passthrough;
+
 		RENDER_SetSize(_vgaWidth,
 		               _vgaHeight,
-		               _vgaBitsPerPixel,
-		               _vgaFramesPerSecond,
-		               _vgaRatio,
 		               _vgaDoubleWidth,
-		               _vgaDoubleHeight);
+		               _vgaDoubleHeight,
+		               _vgaPixelAspectRatio,
+		               _vgaBitsPerPixel,
+		               _vgaFramesPerSecond);
+
 		LOG(LOG_REELMAGIC, LOG_NORMAL)
 		("Video Mixer is Disabled. Passed through VGA RENDER_SetSize()");
 		return;
@@ -574,11 +581,11 @@ static void SetupVideoMixer(const bool updateRenderMode)
 		_renderHeight             = 240;
 		RENDER_SetSize(_renderWidth,
 		               _renderHeight,
-		               VIDEOMIXER_BITSPERPIXEL,
-		               _vgaFramesPerSecond,
-		               _vgaRatio,
 		               _vgaDoubleWidth,
-		               _vgaDoubleHeight);
+		               _vgaDoubleHeight,
+		               _vgaPixelAspectRatio,
+		               VIDEOMIXER_BITSPERPIXEL,
+		               _vgaFramesPerSecond);
 		return;
 	}
 
@@ -586,11 +593,11 @@ static void SetupVideoMixer(const bool updateRenderMode)
 	if (updateRenderMode)
 		RENDER_SetSize(_renderWidth,
 		               _renderHeight,
-		               VIDEOMIXER_BITSPERPIXEL,
-		               _vgaFramesPerSecond,
-		               _vgaRatio,
 		               _vgaDoubleWidth,
-		               _vgaDoubleHeight);
+		               _vgaDoubleHeight,
+		               _vgaPixelAspectRatio,
+		               VIDEOMIXER_BITSPERPIXEL,
+		               _vgaFramesPerSecond);
 
 	// if no active player, set the VGA only function... the difference between this and
 	// "passthrough mode" is that this keeps the video mixer enabled with a RENDER output
@@ -695,16 +702,19 @@ void ReelMagic_RENDER_SetPal(uint8_t entry, uint8_t red, uint8_t green, uint8_t 
 	RENDER_SetPal(entry, red, green, blue);
 }
 
-void ReelMagic_RENDER_SetSize(uint32_t width, uint32_t height, uint32_t bpp, double fps,
-                              double ratio, bool dblw, bool dblh)
+void ReelMagic_RENDER_SetSize(const uint32_t width, const uint32_t height,
+                              const bool double_width, const bool double_height,
+                              const Fraction& pixel_aspect_ratio,
+                              const uint32_t bits_per_pixel,
+                              const double frames_per_second)
 {
-	_vgaWidth           = width;
-	_vgaHeight          = height;
-	_vgaBitsPerPixel    = bpp;
-	_vgaFramesPerSecond = fps;
-	_vgaRatio           = ratio;
-	_vgaDoubleWidth     = dblw;
-	_vgaDoubleHeight    = dblh;
+	_vgaWidth             = width;
+	_vgaHeight            = height;
+	_vgaDoubleWidth       = double_width;
+	_vgaDoubleHeight      = double_height;
+	_vgaPixelAspectRatio  = pixel_aspect_ratio;
+	_vgaBitsPerPixel      = bits_per_pixel;
+	_vgaFramesPerSecond   = frames_per_second;
 
 	SetupVideoMixer(!_mpegDictatesOutputSize);
 }

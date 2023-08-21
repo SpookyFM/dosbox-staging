@@ -25,6 +25,7 @@
 
 #include "bit_view.h"
 #include "control.h"
+#include "fraction.h"
 #include "inout.h"
 
 //Don't enable keeping changes and mapping lfb probably...
@@ -69,12 +70,12 @@ constexpr uint16_t EGA_LINE_DOUBLE = 1 << 1;
 constexpr uint16_t VGA_PIXEL_DOUBLE = 1 << 2;
 
 // Refresh rate constants
-constexpr auto REFRESH_RATE_MIN = 23;
-constexpr auto REFRESH_RATE_HOST_VRR_LFC = 48;
-constexpr auto REFRESH_RATE_HOST_DEFAULT = 60;
-constexpr auto REFRESH_RATE_DOS_DEFAULT = 70;
-constexpr auto REFRESH_RATE_HOST_VRR_MIN = 75;
-constexpr auto REFRESH_RATE_MAX = 1000;
+constexpr auto RefreshRateMin            = 23;
+constexpr auto RefreshRateHostVrrLfc     = 48;
+constexpr auto RefreshRateHostDefault    = 60;
+constexpr auto RefreshRateDosDefault     = 70;
+constexpr auto InterpolatingVrrMinRateHz = 140;
+constexpr auto RefreshRateMax            = 1000;
 
 #define CLK_25 25175
 #define CLK_28 28322
@@ -148,7 +149,7 @@ struct VGA_Config {
 
 enum Drawmode { PART, DRAWLINE, EGALINE };
 
-enum class VGA_RATE_MODE { DEFAULT, HOST, CUSTOM };
+enum class VgaRateMode { Default, Host, Custom };
 
 enum PixelsPerChar : int8_t {
 	Eight = 8,
@@ -182,10 +183,9 @@ struct VGA_Draw {
 	Bitu split_line = 0;
 
 	// when drawing in parts, how many many 'chunks' should we draw at a
-	// time? a value of 1 is the entire frame (which is the default given we
-	// only use this mode for SVGA+). A value of 2 will draw the top then
-	// the bottom, 4 will draw in quarters, and so on.
-	uint8_t parts_total = 1;
+	// time? a value of 1 is the entire frame where as a value of 2 will
+	// draw the top then the bottom, 4 will draw in quarters, and so on.
+	int parts_total = 0;
 
 	uint32_t parts_lines = 0;
 	uint32_t parts_left = 0;
@@ -201,12 +201,37 @@ struct VGA_Draw {
 		double parts = 0;
 		double per_line_ms = 0;
 	} delay = {};
+
+	// clang-format off
+	//
+	// Non-paletted RGB image data is stored as a continuous stream of BGR
+	// pixel values in memory.
+	//
+	// Valid values are the following:
+	//
+	//  8 - Indexed8   up to 256-colour, paletted;
+	//                 stored as packed uint8 data
+	//
+	// 15 - BGR555     32k hi-colour, 5 bits per red/blue/green component;
+	//                 stored as packed uint16 data with highest bit unused
+	//
+	// 16 - BGR565     64k hi-colour, 5 bits for red/blue, 6 bit for green;
+	//                 stored as packed uint16 data
+	//
+	// 24 - BGR888     16M (24-bit) true-colour, 8 bits per red/blue/green component;
+	//                 stored as packed 24-bit data
+	//
+	// 32 - BGRX8888   24-bit true-colour; 8 bits per red/blue/green component;
+	//                 stored as packed uint32 data with highest 8 bits unused
+	//
+	// clang-format on
 	Bitu bpp = 0;
-	double host_refresh_hz = REFRESH_RATE_HOST_DEFAULT;
-	double dos_refresh_hz = REFRESH_RATE_DOS_DEFAULT;
-	double custom_refresh_hz = REFRESH_RATE_DOS_DEFAULT;
-	VGA_RATE_MODE dos_rate_mode = VGA_RATE_MODE::DEFAULT;
-	double aspect_ratio = 0;
+
+	double host_refresh_hz = RefreshRateHostDefault;
+	double dos_refresh_hz = RefreshRateDosDefault;
+	double custom_refresh_hz = RefreshRateDosDefault;
+	VgaRateMode dos_rate_mode = VgaRateMode::Default;
+	Fraction pixel_aspect_ratio = {};
 	bool double_scan = false;
 	bool doublewidth = false;
 	bool doubleheight = false;
@@ -545,7 +570,10 @@ void VGA_SetMonoPalette(const char *colour);
 void VGA_SetMode(VGAModes mode);
 void VGA_DetermineMode(void);
 void VGA_SetupHandlers(void);
-void VGA_StartResize(Bitu delay=50);
+
+void VGA_StartResize();
+void VGA_StartResizeAfter(const uint16_t delay_ms);
+
 void VGA_SetupDrawing(uint32_t val);
 void VGA_CheckScanLength(void);
 void VGA_ChangedBank(void);
@@ -595,7 +623,7 @@ void VGA_StartUpdateLFB(void);
 void VGA_SetBlinking(uint8_t enabled);
 void VGA_SetCGA2Table(uint8_t val0,uint8_t val1);
 void VGA_SetCGA4Table(uint8_t val0,uint8_t val1,uint8_t val2,uint8_t val3);
-void VGA_ActivateHardwareCursor(void);
+uint8_t VGA_ActivateHardwareCursor();
 void VGA_KillDrawing(void);
 
 void VGA_SetOverride(bool vga_override);

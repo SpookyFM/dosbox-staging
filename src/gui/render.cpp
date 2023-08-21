@@ -35,6 +35,7 @@
 #include "../capture/capture.h"
 #include "control.h"
 #include "cross.h"
+#include "fraction.h"
 #include "mapper.h"
 #include "render.h"
 #include "setup.h"
@@ -182,7 +183,7 @@ bool RENDER_StartUpdate(void)
 	render.scale.inLine     = 0;
 	render.scale.outLine    = 0;
 	render.scale.cacheRead  = (uint8_t *)&scalerSourceCache;
-	render.scale.outWrite   = 0;
+	render.scale.outWrite   = nullptr;
 	render.scale.outPitch   = 0;
 	Scaler_ChangedLines[0]  = 0;
 	Scaler_ChangedLineIndex = 0;
@@ -224,7 +225,7 @@ bool RENDER_StartUpdate(void)
 static void RENDER_Halt(void)
 {
 	RENDER_DrawLine = RENDER_EmptyLineHandler;
-	GFX_EndUpdate(0);
+	GFX_EndUpdate(nullptr);
 	render.updating = false;
 	render.active   = false;
 }
@@ -239,30 +240,36 @@ void RENDER_EndUpdate(bool abort)
 	RENDER_DrawLine = RENDER_EmptyLineHandler;
 
 	if (GCC_UNLIKELY((CAPTURE_IsCapturingImage() || CAPTURE_IsCapturingVideo()))) {
-		uint8_t flags = 0;
-		if (render.src.dblw != render.src.dblh) {
-			if (render.src.dblw) {
-				flags |= CaptureFlagDoubleWidth;
+		bool double_width  = false;
+		bool double_height = false;
+		if (render.src.double_width != render.src.double_height) {
+			if (render.src.double_width) {
+				double_width = true;
 			}
-			if (render.src.dblh) {
-				flags |= CaptureFlagDoubleHeight;
+			if (render.src.double_height) {
+				double_height = true;
 			}
 		}
-		auto fps         = render.src.fps;
-		const auto pitch = render.scale.cachePitch;
 
-		CAPTURE_AddFrame(render.src.width,
-		                 render.src.height,
-		                 render.src.bpp,
-		                 pitch,
-		                 flags,
-		                 static_cast<float>(fps),
-		                 (uint8_t*)&scalerSourceCache,
-		                 (uint8_t*)&render.pal.rgb);
+		RenderedImage image = {};
+
+		image.width              = render.src.width;
+		image.height             = render.src.height;
+		image.double_width       = double_width;
+		image.double_height      = double_height;
+		image.pixel_aspect_ratio = render.src.pixel_aspect_ratio;
+		image.bits_per_pixel     = render.src.bpp;
+		image.pitch              = render.scale.cachePitch;
+		image.image_data         = (uint8_t*)&scalerSourceCache;
+		image.palette_data       = (uint8_t*)&render.pal.rgb;
+
+		const auto frames_per_second = static_cast<float>(render.src.fps);
+
+		CAPTURE_AddFrame(image, frames_per_second);
 	}
 
 	if (render.scale.outWrite) {
-		GFX_EndUpdate(abort ? NULL : Scaler_ChangedLines);
+		GFX_EndUpdate(abort ? nullptr : Scaler_ChangedLines);
 	} else {
 		// If we made it here, then there's nothing new to render.
 		GFX_EndUpdate(nullptr);
@@ -299,8 +306,8 @@ static void RENDER_Reset(void)
 	std::lock_guard<std::mutex> guard(render_reset_mutex);
 
 	Bitu width  = render.src.width;
-	bool dblw   = render.src.dblw;
-	bool dblh   = render.src.dblh;
+	bool double_width  = render.src.double_width;
+	bool double_height = render.src.double_height;
 
 	double gfx_scalew;
 	double gfx_scaleh;
@@ -308,11 +315,14 @@ static void RENDER_Reset(void)
 	Bitu gfx_flags, xscale, yscale;
 	ScalerSimpleBlock_t* simpleBlock = &ScaleNormal1x;
 	if (render.aspect) {
-		if (render.src.ratio > 1.0) {
+		const auto one_per_pixel_aspect =
+		        render.src.pixel_aspect_ratio.Inverse().ToDouble();
+
+		if (one_per_pixel_aspect > 1.0) {
 			gfx_scalew = 1;
-			gfx_scaleh = render.src.ratio;
+			gfx_scaleh = one_per_pixel_aspect;
 		} else {
-			gfx_scalew = (1 / render.src.ratio);
+			gfx_scalew = render.src.pixel_aspect_ratio.ToDouble();
 			gfx_scaleh = 1;
 		}
 	} else {
@@ -325,10 +335,10 @@ static void RENDER_Reset(void)
 	if (render.scale.size > maxsize_current_input)
 		render.scale.size = maxsize_current_input;
 
-	if (dblh && dblw) {
+	if (double_height && double_width) {
 		/* Initialize always working defaults */
 		simpleBlock = &ScaleNormal1x;
-	} else if (dblw) {
+	} else if (double_width) {
 		simpleBlock = &ScaleNormalDw;
 		if (width * simpleBlock->xscale > SCALER_MAXWIDTH) {
 			// This should only happen if you pick really bad
@@ -336,7 +346,7 @@ static void RENDER_Reset(void)
 			// scaler that fits
 			simpleBlock = &ScaleNormal1x;
 		}
-	} else if (dblh) {
+	} else if (double_height) {
 		simpleBlock = &ScaleNormalDh;
 	} else {
 		simpleBlock  = &ScaleNormal1x;
@@ -375,26 +385,19 @@ static void RENDER_Reset(void)
 	const auto height = MakeAspectTable(render.src.height, yscale, yscale);
 
 	// Setup the scaler variables
-	if (dblh)
+	if (double_height) {
 		gfx_flags |= GFX_DBL_H;
-	if (dblw)
+	}
+	if (double_width) {
 		gfx_flags |= GFX_DBL_W;
+	}
 
 #if C_OPENGL
 	GFX_SetShader(render.shader.source);
 #endif
 
-	// The pixel aspect ratio of the source image, assuming 4:3 screen
-	const double real_par = (width / 4.0) / (height / 3.0);
-	const double user_par = (render.aspect ? real_par : 1.0);
-
-	gfx_flags = GFX_SetSize(width,
-	                        height,
-	                        gfx_flags,
-	                        gfx_scalew,
-	                        gfx_scaleh,
-	                        &RENDER_CallBack,
-	                        user_par);
+	gfx_flags = GFX_SetSize(
+	        width, height, gfx_flags, gfx_scalew, gfx_scaleh, &RENDER_CallBack);
 
 	if (gfx_flags & GFX_CAN_8)
 		render.scale.outMode = scalerMode8;
@@ -418,25 +421,25 @@ static void RENDER_Reset(void)
 		break;
 	case 15:
 		render.scale.lineHandler = (*lineBlock)[1][render.scale.outMode];
-		render.scale.linePalHandler = 0;
+		render.scale.linePalHandler = nullptr;
 		render.scale.inMode         = scalerMode15;
 		render.scale.cachePitch     = render.src.width * 2;
 		break;
 	case 16:
 		render.scale.lineHandler = (*lineBlock)[2][render.scale.outMode];
-		render.scale.linePalHandler = 0;
+		render.scale.linePalHandler = nullptr;
 		render.scale.inMode         = scalerMode16;
 		render.scale.cachePitch     = render.src.width * 2;
 		break;
 	case 24:
 		render.scale.lineHandler = (*lineBlock)[3][render.scale.outMode];
-		render.scale.linePalHandler = 0;
+		render.scale.linePalHandler = nullptr;
 		render.scale.inMode         = scalerMode32;
 		render.scale.cachePitch     = render.src.width * 3;
 		break;
 	case 32:
 		render.scale.lineHandler = (*lineBlock)[4][render.scale.outMode];
-		render.scale.linePalHandler = 0;
+		render.scale.linePalHandler = nullptr;
 		render.scale.inMode         = scalerMode32;
 		render.scale.cachePitch     = render.src.width * 4;
 		break;
@@ -452,7 +455,7 @@ static void RENDER_Reset(void)
 	memset(render.pal.modified, 0, sizeof(render.pal.modified));
 	// Finish this frame using a copy only handler
 	RENDER_DrawLine       = RENDER_FinishLineHandler;
-	render.scale.outWrite = 0;
+	render.scale.outWrite = nullptr;
 	/* Signal the next frame to first reinit the cache */
 	render.scale.clearCache = true;
 	render.active           = true;
@@ -467,34 +470,30 @@ static void RENDER_CallBack(GFX_CallBackFunctions_t function)
 		render.scale.clearCache = true;
 		return;
 	} else if (function == GFX_CallBackReset) {
-		GFX_EndUpdate(0);
+		GFX_EndUpdate(nullptr);
 		RENDER_Reset();
 	} else {
 		E_Exit("Unhandled GFX_CallBackReset %d", function);
 	}
 }
 
-void RENDER_SetSize(uint32_t width, uint32_t height, unsigned bpp, double fps,
-                    double ratio, bool dblw, bool dblh)
+void RENDER_SetSize(const uint32_t width, const uint32_t height,
+                    const bool double_width, const bool double_height,
+                    const Fraction& pixel_aspect_ratio,
+                    const unsigned bits_per_pixel, const double frames_per_second)
 {
 	RENDER_Halt();
 	if (!width || !height || width > SCALER_MAXWIDTH || height > SCALER_MAXHEIGHT) {
 		return;
 	}
-	if (ratio > 1) {
-		double target = height * ratio + 0.025;
-		ratio         = target / height;
-	} else {
-		// This would alter the width of the screen, we don't care about
-		// rounding errors here
-	}
-	render.src.width  = width;
-	render.src.height = height;
-	render.src.bpp    = bpp;
-	render.src.dblw   = dblw;
-	render.src.dblh   = dblh;
-	render.src.fps    = fps;
-	render.src.ratio  = ratio;
+	render.src.width              = width;
+	render.src.height             = height;
+	render.src.double_width       = double_width;
+	render.src.double_height      = double_height;
+	render.src.pixel_aspect_ratio = pixel_aspect_ratio;
+	render.src.bpp                = bits_per_pixel;
+	render.src.fps                = frames_per_second;
+
 	RENDER_Reset();
 }
 
@@ -616,7 +615,7 @@ static bool RENDER_GetShader(const std::string &shader_path, std::string &source
 static void parse_shader_options(const std::string &source)
 {
 	try {
-		const std::regex re("^\\s*#pragma\\s+(\\w+)");
+		const std::regex re("\\s*#pragma\\s+(\\w+)");
 		std::sregex_iterator next(source.begin(), source.end(), re);
 		const std::sregex_iterator end;
 
@@ -635,12 +634,12 @@ static void parse_shader_options(const std::string &source)
 	}
 }
 
-bool RENDER_UseSRGBTexture()
+bool RENDER_UseSrgbTexture()
 {
 	return render.shader.use_srgb_texture;
 }
 
-bool RENDER_UseSRGBFramebuffer()
+bool RENDER_UseSrgbFramebuffer()
 {
 	return render.shader.use_srgb_framebuffer;
 }
@@ -690,8 +689,8 @@ void RENDER_InitShaderSource([[maybe_unused]] Section *sec)
 	assert(control);
 	const Section *sdl_sec = control->GetSection("sdl");
 	assert(sdl_sec);
-	const bool using_opengl = starts_with("opengl",
-	                                      sdl_sec->GetPropValue("output"));
+	const bool using_opengl = starts_with(sdl_sec->GetPropValue("output"),
+	                                      "opengl");
 
 	const auto render_sec = static_cast<const Section_prop *>(
 	        control->GetSection("render"));
@@ -710,7 +709,7 @@ void RENDER_InitShaderSource([[maybe_unused]] Section *sec)
 	log_warning_if_legacy_shader_name(filename);
 
 	std::string source = {};
-	if (!RENDER_GetShader(sh->realpath, source) &&
+	if (!RENDER_GetShader(sh->realpath.string(), source) &&
 	    (sh->realpath == filename || !RENDER_GetShader(filename, source))) {
 		sh->SetValue("none");
 		source.clear();
@@ -753,12 +752,24 @@ static void ReloadShader(const bool pressed)
 	if (!pressed)
 		return;
 
+	assert(control);
 	auto render_section = control->GetSection("render");
-	assert(render_section);
 
-	auto sec           = static_cast<const Section_prop *>(render_section);
-	auto glshader_prop = sec->Get_path("glshader");
-	auto shader_path   = std::string(glshader_prop->GetValue());
+	assert(render_section);
+	const auto sec = dynamic_cast<Section_prop*>(render_section);
+
+	auto glshader_prop = sec ? sec->Get_path("glshader") : nullptr;
+	if (!glshader_prop) {
+		LOG_WARNING("RENDER: Failed parsing the 'glshader' setting; not reloading");
+		return;
+	}
+
+	assert(glshader_prop);
+	const auto shader_path = std::string(glshader_prop->GetValue());
+	if (shader_path.empty()) {
+		LOG_WARNING("RENDER: Failed gettina path for 'glshader' setting; not reloading");
+		return;
+	}
 
 	glshader_prop->SetValue("none");
 	RENDER_Init(render_section);
@@ -777,6 +788,7 @@ void RENDER_Init(Section *sec)
 
 	auto prev_aspect       = render.aspect;
 	auto prev_scale_size   = render.scale.size;
+	const auto prev_integer_scaling_mode = GFX_GetIntegerScalingMode();
 
 	render.pal.first = 256;
 	render.pal.last  = 0;
@@ -787,6 +799,8 @@ void RENDER_Init(Section *sec)
 	// Only use the default 1x rendering scaler
 	render.scale.size = 1;
 
+	GFX_SetIntegerScalingMode(section->Get_string("integer_scaling"));
+
 #if C_OPENGL
 	const auto previous_shader_filename = render.shader.filename;
 	RENDER_InitShaderSource(section);
@@ -796,7 +810,8 @@ void RENDER_Init(Section *sec)
 	//  Only ReInit when there is a src.bpp (fixes crashes on startup and
 	//  directly changing the scaler without a screen specified yet)
 	if (running && render.src.bpp &&
-	    ((render.aspect != prev_aspect) || (render.scale.size != prev_scale_size)
+	    ((render.aspect != prev_aspect) || (render.scale.size != prev_scale_size) ||
+	     (GFX_GetIntegerScalingMode() != prev_integer_scaling_mode)
 #if C_OPENGL
 	     || (previous_shader_filename != render.shader.filename)
 #endif

@@ -39,10 +39,12 @@ libdos_sources = files(
     'program_mount.cpp',
     'program_mount_common.cpp',
     'program_mousectl.cpp',
+    'program_move.cpp',
     'program_placeholder.cpp',
     'program_rescan.cpp',
     'program_serial.cpp',
     'program_setver.cpp',
+    'program_subst.cpp',
     'program_tree.cpp',
 )
 
@@ -58,6 +60,7 @@ libdos = static_library(
         libiir_dep,
         libloguru_dep,
     ],
+    cpp_args: warnings,
 )
 
 libdos_dep = declare_dependency(link_with: libdos)

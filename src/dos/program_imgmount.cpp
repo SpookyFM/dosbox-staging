@@ -246,8 +246,8 @@ void IMGMOUNT::Run(void)
 		}
 		drive = int_to_char(i_drive);
 	} else if (fstype == "none") {
-		cmd->FindCommand(1, temp_line);
-		if ((temp_line.size() > 1) || (!isdigit(temp_line[0]))) {
+		if (!cmd->FindCommand(1, temp_line) || temp_line.size() > 1 ||
+		    !isdigit(temp_line[0])) {
 			WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY2"));
 			return;
 		}
@@ -278,8 +278,7 @@ void IMGMOUNT::Run(void)
 				        temp_line.c_str());
 			}
 		} else {
-			std::string home_resolve = temp_line;
-			Cross::ResolveHomedir(home_resolve);
+			const auto home_resolve = resolve_home(temp_line).string();
 			if (home_resolve == real_path) {
 				LOG_MSG("IMGMOUNT: Path '%s' found",
 				        temp_line.c_str());
@@ -295,8 +294,7 @@ void IMGMOUNT::Run(void)
 		struct stat test;
 		if (stat(temp_line.c_str(), &test)) {
 			// See if it works if the ~ are written out
-			std::string homedir(temp_line);
-			Cross::ResolveHomedir(homedir);
+			const auto homedir = resolve_home(temp_line).string();
 			if (!stat(homedir.c_str(), &test)) {
 				temp_line = std::move(homedir);
 			} else {
@@ -466,10 +464,12 @@ void IMGMOUNT::Run(void)
 			const bool should_notify = std::next(it) == fat_pointers.end();
 			DriveManager::CycleDisks(drive_index(drive), should_notify);
 			char root[7] = {drive, ':', '\\', '*', '.', '*', 0};
-			DOS_FindFirst(root, DOS_ATTR_VOLUME); // force obtaining
-			                                      // the label and
-			                                      // saving it in
-			                                      // dirCache
+
+			// Obtain the drive label, saving it in the dirCache
+			if (!DOS_FindFirst(root, DOS_ATTR_VOLUME)) {
+				LOG_WARNING("DRIVE: Unable to find %c drive's volume label",
+				            drive);
+			}
 		}
 		dos.dta(save_dta);
 
@@ -608,7 +608,7 @@ void IMGMOUNT::AddMessages()
 {
 	AddCommonMountMessages();
 	MSG_Add("PROGRAM_IMGMOUNT_HELP_LONG",
-	        "Mount a CD-ROM, floppy, or disk image to a drive letter.\n"
+	        "Mounts a CD-ROM, floppy, or disk image to a drive letter.\n"
 	        "\n"
 	        "Usage:\n"
 	        "  [color=green]imgmount[reset] [color=white]DRIVE[reset] [color=cyan]CDROM-SET[reset] [-fs iso] [-ide] -t cdrom|iso\n"

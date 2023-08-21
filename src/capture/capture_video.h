@@ -22,11 +22,10 @@
 #ifndef DOSBOX_CAPTURE_VIDEO_H
 #define DOSBOX_CAPTURE_VIDEO_H
 
-void capture_video_add_frame(const uint16_t width, const uint16_t height,
-                             const uint8_t bits_per_pixel, const uint16_t pitch,
-                             const uint8_t capture_flags,
-                             const float frames_per_second, const uint8_t* image_data,
-                             const uint8_t* palette_data);
+#include "render.h"
+
+void capture_video_add_frame(const RenderedImage& image,
+                             const float frames_per_second);
 
 void capture_video_add_audio_data(const uint32_t sample_rate,
                                   const uint32_t num_sample_frames,

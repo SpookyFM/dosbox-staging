@@ -326,11 +326,11 @@ public:
 	Virtual_File(const Virtual_File &) = delete; // prevent copying
 	Virtual_File &operator=(const Virtual_File &) = delete; // prevent assignment
 
-	bool Read(uint8_t * data,uint16_t * size);
-	bool Write(uint8_t * data,uint16_t * size);
-	bool Seek(uint32_t * pos,uint32_t type);
-	bool Close();
-	uint16_t GetInformation();
+	bool Read(uint8_t* data, uint16_t* size) override;
+	bool Write(uint8_t* data, uint16_t* size) override;
+	bool Seek(uint32_t* pos, uint32_t type) override;
+	bool Close() override;
+	uint16_t GetInformation() override;
 
 private:
 	const vfile_data_t file_data;
@@ -346,20 +346,24 @@ Virtual_File::Virtual_File(const vfile_data_t& in_data)
 	open = true;
 }
 
-bool Virtual_File::Read(uint8_t * data,uint16_t * size) {
-	uint32_t left = file_data->size() - file_pos;
-	if (left == 0 && *size > 0) {
-		// We have nothing left to read
-		*size = 0;
+bool Virtual_File::Read(uint8_t* data, uint16_t* bytes_requested)
+{
+	if (file_pos > file_data->size()) {
+		// File has been read beyond the end and is in an invalid state,
+		// so inform the caller with a negative rvalue.
+		*bytes_requested = 0;
 		return false;
 	}
-	if (left <= *size) {
-		memcpy(data, &((*file_data)[file_pos]), left);
-		*size = (uint16_t)left;
-	} else {
-		memcpy(data, &((*file_data)[file_pos]), *size);
-	}
-	file_pos += *size;
+
+	const auto bytes_remaining = file_data->size() - file_pos;
+	const auto bytes_to_read = std::min(static_cast<size_t>(bytes_remaining),
+	                                    static_cast<size_t>(*bytes_requested));
+
+	const uint8_t* src = file_data->data() + file_pos;
+	memcpy(data, src, bytes_to_read);
+
+	file_pos += bytes_to_read;
+	*bytes_requested = check_cast<uint16_t>(bytes_to_read);
 	return true;
 }
 

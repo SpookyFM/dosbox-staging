@@ -100,11 +100,11 @@ jobs:
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-opusfile
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-libslirp
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-SDL2
-            mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-SDL2_image
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-SDL2_net
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-zlib
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-speexdsp
             mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-python-pip
+            mingw-w64-${{matrix.conf.toolchain}}${{matrix.conf.arch}}-fluidsynth
 
       - name:  Prepare compiler cache
         id:    prep-ccache
@@ -147,6 +147,11 @@ jobs:
 
       - name: Extract subprojects cache
         run:  scripts/extract-subprojects-tar.sh
+        continue-on-error: true
+        #
+        # As of 2023-06-22, MSYS2's tar warns about being unable to apply
+        # directory permission to files, after which it returns a failure code.
+        # This is a work-around until tar is fixed.
 
       - name: Log environment
         run:  ./scripts/log-env.sh
@@ -221,11 +226,11 @@ jobs:
             mingw-w64-clang-${{matrix.conf.arch}}-opusfile
             mingw-w64-clang-${{matrix.conf.arch}}-libslirp
             mingw-w64-clang-${{matrix.conf.arch}}-SDL2
-            mingw-w64-clang-${{matrix.conf.arch}}-SDL2_image
             mingw-w64-clang-${{matrix.conf.arch}}-SDL2_net
             mingw-w64-clang-${{matrix.conf.arch}}-zlib
             mingw-w64-clang-${{matrix.conf.arch}}-speexdsp
             mingw-w64-clang-${{matrix.conf.arch}}-python-pip
+            mingw-w64-clang-${{matrix.conf.arch}}-fluidsynth
 
       - name:  Prepare compiler cache
         id:    prep-ccache
@@ -267,6 +272,11 @@ jobs:
 
       - name: Extract subprojects cache
         run:  scripts/extract-subprojects-tar.sh
+        continue-on-error: true
+        #
+        # As of 2023-06-22, MSYS2's tar warns about being unable to apply
+        # directory permission to files, after which it returns a failure code.
+        # This is a work-around until tar is fixed.
 
       - name: Log environment
         run:  ./scripts/log-env.sh
@@ -286,10 +296,10 @@ jobs:
 
       - name: Setup release build
         run: |
-          meson setup -Ddefault_library=static -Db_lto=true -Db_lto_threads=$(nproc) $BUILD_RELEASE_DIR
+          meson setup -Db_lto=true -Db_lto_threads=$(nproc) $BUILD_RELEASE_DIR
 
       - name: Setup debugger build
-        run: meson setup -Ddefault_library=static -Db_lto=true -Db_lto_threads=$(nproc) -Denable_debugger=normal $BUILD_DEBUGGER_DIR
+        run: meson setup -Db_lto=true -Db_lto_threads=$(nproc) -Denable_debugger=normal $BUILD_DEBUGGER_DIR
 
       - name: Build release
         run: |

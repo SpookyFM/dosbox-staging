@@ -226,6 +226,8 @@ struct FILE_closer {
 };
 using FILE_unique_ptr = std::unique_ptr<FILE, FILE_closer>;
 
+FILE* open_file(const char* filename, const char* mode);
+
 // Opens and returns a std::unique_ptr to a FILE, which automatically closes
 // itself when it goes out of scope
 FILE_unique_ptr make_fopen(const char *fname, const char *mode);
@@ -293,6 +295,16 @@ void remove_duplicates(container_t &c)
 	};
 	const auto end = std::remove_if(c.begin(), c.end(), val_is_duplicate);
 	c.erase(end, c.end());
+}
+
+// remove empty() values from a container using std::remove_if (C++17)
+template <typename container_t>
+void remove_empties(container_t& c)
+{
+	auto is_empty = [](const auto& item) { return item.empty(); };
+
+	auto new_c_end = std::remove_if(c.begin(), c.end(), is_empty);
+	c.erase(std::move(new_c_end), c.end());
 }
 
 // Convenience function to cast to the underlying type of an enum class

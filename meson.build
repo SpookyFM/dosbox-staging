@@ -25,7 +25,6 @@ project(
         'gtest:warning_level=0',
         'libjpeg-turbo:b_staticpic=true',
         'libpng:b_staticpic=true',
-        'sdl2_image:b_staticpic=true',
     ],
 )
 
@@ -85,6 +84,32 @@ extra_flags = [
     '-fpch-preprocess',
 ]
 
+warnings = []
+
+foreach flag : [
+    '-Walloca',
+    '-Wctor-dtor-privacy',
+    '-Wdate-time',
+    '-Wdisabled-optimization',
+    '-Wduplicated-branches',
+    '-Weffc++',
+    '-Wextra-semi',
+    '-Wfloat-conversion',
+    '-Wlogical-op',
+    '-Wlogical-not-parentheses',
+    '-Wredundant-decls',
+    '-Wmismatched-tags',
+    '-Wsizeof-pointer-div',
+    '-Wstack-protector',
+    '-Wstrict-null-sentinel',
+    '-Wsuggest-override',
+    '-Wzero-as-null-pointer-constant',
+]
+    if cxx.has_argument(flag)
+       warnings += flag
+    endif
+endforeach
+
 # generate linker map file
 extra_link_flags = [
     '-Wl,-map,dosbox.map',
@@ -126,6 +151,31 @@ if get_option('buildtype') in ['release', 'minsize']
         '-fdata-sections',
     ]
     extra_link_flags += ['-Wl,--gc-sections']
+endif
+
+# Let sanitizer builds recover and continue
+if get_option('b_sanitize') != 'none'
+    extra_flags += [
+        '-fsanitize-recover=all'
+    ]
+endif
+
+# Add Debug-specific flags here
+if get_option('buildtype').startswith('debug')
+
+    # Use GCC's and Clang's maximum check flags except
+    # for macOS and Windows, where Xcode and MSYS2 both
+    # fails with undefined symbols.
+    if os_family_name not in ['MACOSX', 'WIN32']
+        extra_flags += [
+            '--enable-concept-checks',
+            '-D_GLIBCXX_ASSERTIONS=1',
+            '-D_GLIBCXX_DEBUG=1',
+            '-D_GLIBCXX_DEBUG_PEDANTIC=1',
+            '-D_GLIBCXX_SANITIZE_VECTOR=1',
+            '-D_LIBCPP_DEBUG=1',
+        ]
+    endif
 endif
 
 if get_option('asm')
@@ -213,8 +263,6 @@ conf_data.set10('C_SLIRP', get_option('use_slirp'))
 conf_data.set10('C_NE2000', get_option('use_slirp'))
 conf_data.set10('C_FLUIDSYNTH', get_option('use_fluidsynth'))
 conf_data.set10('C_MT32EMU', get_option('use_mt32emu'))
-conf_data.set10('C_SSHOT', get_option('use_png'))
-conf_data.set10('C_SDL_IMAGE', get_option('use_sdl2_image'))
 conf_data.set10('C_TRACY', get_option('tracy'))
 conf_data.set10('C_FPU', true)
 conf_data.set10('C_FPU_X86', host_machine.cpu_family() in ['x86', 'x86_64'])
@@ -418,18 +466,28 @@ libiir_dep = dependency(
     version: ['>= 1.9.3', '< 2'],
     default_options: default_wrap_options + ['tests=' + wants_tests.to_string()],
     static: ('iir' in static_libs_list or prefers_static_libs),
+    include_type: 'system',
 )
 
 opus_dep = dependency(
     'opusfile',
     version: ['>= 0.8', '< 1'],
     static: ('opusfile' in static_libs_list or prefers_static_libs),
+    include_type: 'system',
+)
+
+png_dep = dependency(
+    'libpng',
+    version: ['>= 1.2', '< 2'],
+    static: ('png' in static_libs_list or prefers_static_libs),
+    include_type: 'system',
 )
 
 sdl2_dep = dependency(
     'sdl2',
     version: ['>= 2.0.5', '< 3'],
     static: ('sdl2' in static_libs_list),
+    include_type: 'system',
 )
 
 zlib_dep = dependency(
@@ -437,6 +495,7 @@ zlib_dep = dependency(
     version: ['>= 1.2.11', '< 2'],
     default_options: default_wrap_options,
     static: ('zlib' in static_libs_list or prefers_static_libs),
+    include_type: 'system',
 )
 
 # SpeexDSP
@@ -448,6 +507,7 @@ speexdsp_dep = dependency(
     required: false,
     fallback: [],
     static: ('speexdsp' in static_libs_list or prefers_static_libs),
+    include_type: 'system',
 )
 
 # The library needs to be available and testable to be trusted
@@ -500,6 +560,7 @@ if get_option('use_sdl2_net')
         version: ['>= 2.0.0', '< 3'],
         static: ('sdl2_net' in static_libs_list),
         not_found_message: msg.format('use_sdl2_net'),
+        include_type: 'system',
     )
     sdl2_net_summary_msg = sdl2_net_dep.found()
 
@@ -521,6 +582,7 @@ if get_option('use_slirp')
         default_options: default_wrap_options,
         static: ('slirp' in static_libs_list or prefers_static_libs),
         not_found_message: msg.format('use_slirp'),
+        include_type: 'system',
     )
 
     libslirp_summary_msg = libslirp_dep.found()
@@ -534,44 +596,12 @@ endif
 summary('slirp support', libslirp_summary_msg)
 
 
-# SDL Image
-sdl2_image_dep = optional_dep
-if get_option('use_sdl2_image')
-    sdl2_image_dep = dependency(
-        'SDL2_image',
-        version: ['>= 2.0.0', '< 3'],
-        default_options: default_wrap_options + ['test=false'],
-        static: ('sdl2_image' in static_libs_list or prefers_static_libs),
-        not_found_message: msg.format('use_sdl2_image'),
-    )
-endif
-summary('SDL_image 2.0 support', sdl2_image_dep.found())
-
 # OpenGL
 opengl_dep = optional_dep
-opengl_summary_msg = 'Disabled'
-if get_option('use_opengl') != 'false'
+if get_option('use_opengl')
     opengl_dep = dependency('gl', not_found_message: msg.format('use_opengl'))
 endif
-if (
-    opengl_dep.found()
-    and host_machine.system() == 'linux'
-    and get_option('use_opengl') == 'auto'
-    and get_option('enable_debugger') != 'none'
-)
-
-    warning(
-        '''OpenGL is disabled because it's not compatible with the debugger.
-            To use OpenGL with the debugger, force it with "-Duse_opengl=true"''',
-    )
-
-    conf_data.set10('C_OPENGL', false)
-    opengl_summary_msg = 'Found, but disabled due to conflict with debugger'
-else
-    conf_data.set10('C_OPENGL', opengl_dep.found())
-    opengl_summary_msg = opengl_dep.found()
-endif
-summary('OpenGL support', opengl_summary_msg)
+conf_data.set10('C_OPENGL', opengl_dep.found())
 
 # FluidSynth (depends on glib)
 fluid_dep = optional_dep
@@ -591,6 +621,7 @@ if get_option('use_fluidsynth')
             'tests=' + wants_tests.to_string(),
             'warning_level=0',
         ],
+        include_type: 'system',
     )
 endif
 summary('FluidSynth support', fluid_dep.found())
@@ -604,21 +635,10 @@ if get_option('use_mt32emu')
         default_options: default_wrap_options,
         static: ('mt32emu' in static_libs_list or prefers_static_libs),
         not_found_message: msg.format('use_mt32emu'),
+        include_type: 'system',
     )
 endif
 summary('mt32emu support', mt32emu_dep.found())
-
-# PNG
-png_dep = optional_dep
-if get_option('use_png')
-    png_dep = dependency(
-        'libpng',
-        version: ['>= 1.2', '< 2'],
-        static: ('png' in static_libs_list or prefers_static_libs),
-        not_found_message: msg.format('use_png'),
-    )
-endif
-summary('PNG support', png_dep.found())
 
 # Tracy
 tracy_dep = optional_dep
@@ -629,6 +649,7 @@ if get_option('tracy')
         default_options: default_wrap_options,
         static: ('tracy' in static_libs_list or prefers_static_libs),
         not_found_message: msg.format('tracy'),
+        include_type: 'system',
     )
     add_project_arguments('-g', language: ['c', 'cpp'])
     add_project_arguments('-fno-omit-frame-pointer', language: ['c', 'cpp'])
@@ -651,6 +672,7 @@ if host_machine.system() == 'darwin'
         'appleframeworks',
         modules: ['CoreAudio', 'AudioUnit', 'AudioToolbox'],
         required: false,
+        include_type: 'system',
     )
     if coreaudio_dep.found()
         if cxx.check_header('AudioToolbox/AUGraph.h')
@@ -669,6 +691,7 @@ if host_machine.system() == 'darwin'
         'appleframeworks',
         modules: ['CoreMIDI', 'CoreFoundation'],
         required: false,
+        include_type: 'system',
     )
     if coremidi_dep.found()
         if cxx.check_header('CoreMIDI/MIDIServices.h')
@@ -687,6 +710,7 @@ if host_machine.system() == 'darwin'
         'appleframeworks',
         modules: ['IOKit'],
         required: false,
+        include_type: 'system',
     )
     if iokit_dep.found()
         if cxx.check_header('IOKit/IOKitLib.h')
@@ -720,6 +744,7 @@ if host_machine.system() == 'darwin'
         'appleframeworks',
         modules: ['CoreFoundation'],
         required: false,
+        include_type: 'system',
     )
     if corefoundation_dep.found()
         if cxx.check_header('CoreFoundation/CoreFoundation.h')
@@ -738,6 +763,7 @@ if host_machine.system() == 'darwin'
         'appleframeworks',
         modules: ['CoreServices'],
         required: false,
+        include_type: 'system',
     )
     if coreservices_dep.found()
         if cxx.check_header('CoreServices/CoreServices.h')
@@ -775,6 +801,7 @@ if xinput2_required or (get_option('use_xinput2') == 'auto')
         'xi',
         version: ['>= 1.4', '< 2'],
         required: xinput2_required,
+        include_type: 'system',
     )
 endif
 conf_data.set10('SUPPORT_XINPUT2', xinput2_dep.found())
@@ -799,7 +826,11 @@ alsa_dep = optional_dep
 using_linux = (host_machine.system() == 'linux')
 force_alsa = (get_option('use_alsa') == 'true')
 if force_alsa or (using_linux and get_option('use_alsa') == 'auto')
-    alsa_dep = dependency('alsa', version: ['>= 1', '< 2'])
+    alsa_dep = dependency(
+        'alsa',
+        version: ['>= 1', '< 2'],
+        include_type: 'system',
+    )
     conf_data.set10('C_ALSA', true)
     summary('ALSA support', alsa_dep.found())
 endif
@@ -816,7 +847,11 @@ if host_machine.system() in ['windows', 'cygwin']
 endif
 
 # Setup include directories
-incdir = include_directories('include', '.')
+incdir = [
+    include_directories('include', '.'),
+    include_directories('src/libs', is_system: true)
+]
+
 
 # A list of DOSBox's internal libraries populated
 # by each of the src/ subdir imports below.
@@ -828,7 +863,6 @@ subdir('src/libs/ghc')
 subdir('src/libs/loguru')
 subdir('src/libs/decoders')
 subdir('src/libs/nuked')
-subdir('src/libs/ppscale')
 subdir('src/libs/residfp')
 subdir('src/libs/sdlcd')
 subdir('src/libs/whereami')
@@ -849,7 +883,6 @@ third_party_deps = [
     atomic_dep,
     stdcppfs_dep,
     sdl2_dep,
-    sdl2_image_dep,
     threads_dep,
     ghc_dep,
     libiir_dep,
@@ -909,6 +942,7 @@ executable(
     dependencies: internal_deps + third_party_deps,
     include_directories: incdir,
     install: true,
+    cpp_args: warnings,
 )
 
 # create a library so we can test things inside DOSBOX dep path

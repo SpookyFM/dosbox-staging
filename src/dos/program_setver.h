@@ -35,7 +35,7 @@ public:
 		               HELP_CmdType::Program,
 		               "SETVER"};
 	}
-	void Run();
+	void Run() override;
 
 	static void LoadTableFromFile();
 	static void SaveTableToFile();
@@ -67,7 +67,7 @@ private:
 	                                          const NameVersionTable& table);
 	static bool IsTableEmpty();
 
-	static std::string GetTableFilePath();
+	static std_fs::path GetTableFilePath();
 
 	void AddMessages();
 };

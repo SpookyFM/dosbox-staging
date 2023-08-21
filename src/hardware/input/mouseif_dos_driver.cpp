@@ -28,6 +28,7 @@
 #include "byteorder.h"
 #include "callback.h"
 #include "checks.h"
+#include "config.h"
 #include "cpu.h"
 #include "dos_inc.h"
 #include "math_utils.h"
@@ -48,6 +49,12 @@ CHECK_NARROWING();
 // - WHEELAPI.TXT, INT10.LST, and INT33.LST from CuteMouse driver
 // - https://www.stanislavs.org/helppc/int_33.html
 // - http://www2.ift.ulaval.ca/~marchand/ift17583/dosints.pdf
+// - https://github.com/FDOS/mouse/blob/master/int33.lst
+// - https://www.fysnet.net/faq.htm
+
+// Versions are stored in BCD code - 0x09 = version 9, 0x10 = version 10, etc.
+static constexpr uint8_t driver_version_major = 0x08;
+static constexpr uint8_t driver_version_minor = 0x05;
 
 static constexpr uint8_t  cursor_size_x  = 16;
 static constexpr uint8_t  cursor_size_y  = 16;
@@ -164,7 +171,7 @@ static struct { // DOS driver state
 	int16_t update_region_y[2] = {0};
 
 	uint16_t language = 0; // language for driver messages, unused
-	uint8_t mode      = 0;
+	uint8_t bios_screen_mode = 0;
 
 	// sensitivity
 	uint8_t sensitivity_x = 0;
@@ -216,6 +223,12 @@ static struct { // DOS driver state
 	uint16_t user_callback_offset  = 0;
 
 } state;
+
+// Guest-side pointers to various driver information
+static uint16_t info_segment          = 0;
+static uint16_t info_offset_ini_file  = 0;
+static uint16_t info_offset_version   = 0;
+static uint16_t info_offset_copyright = 0;
 
 static RealPt user_callback;
 
@@ -372,13 +385,15 @@ static void draw_cursor_text()
 	// Save Background
 	state.background.pos_x = static_cast<uint16_t>(x / 8);
 	state.background.pos_y = static_cast<uint16_t>(y / 8);
-	if (state.mode < 2)
+	if (state.bios_screen_mode < 2) {
 		state.background.pos_x = state.background.pos_x / 2;
+	}
 
 	// use current page (CV program)
 	const uint8_t page = real_readb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
 
-	if (state.cursor_type == MouseCursor::Software) {
+	if (state.cursor_type == MouseCursor::Software ||
+	    state.cursor_type == MouseCursor::Text) { // needed by MS Word 5.5
 		uint16_t result = 0;
 		ReadCharAttr(state.background.pos_x,
 		             state.background.pos_y,
@@ -498,8 +513,9 @@ static void clip_cursor_area(int16_t &x1, int16_t &x2, int16_t &y1, int16_t &y2,
 
 static void restore_cursor_background()
 {
-	if (state.hidden || state.inhibit_draw || !state.background.enabled)
+	if (state.hidden || state.inhibit_draw || !state.background.enabled) {
 		return;
+	}
 
 	save_vga_registers();
 
@@ -531,11 +547,14 @@ static void restore_cursor_background()
 
 static void draw_cursor()
 {
-	if (state.hidden || state.inhibit_draw)
+	if (state.hidden || state.inhibit_draw) {
 		return;
+	}
+
 	INT10_SetCurMode();
+
 	// In Textmode ?
-	if (CurMode->type == M_TEXT) {
+	if (CurMode->type & M_TEXT_MODES) {
 		draw_cursor_text();
 		return;
 	}
@@ -764,10 +783,10 @@ static void set_interrupt_rate(const uint16_t rate_id)
 	uint16_t val_hz;
 
 	switch (rate_id) {
-	case 0: val_hz = 0; break; // no events, TODO: this should be simulated
-	case 1: val_hz = 30; break;
-	case 2: val_hz = 50; break;
-	case 3: val_hz = 100; break;
+	case 0:  val_hz = 0;   break; // no events, TODO: this should be simulated
+	case 1:  val_hz = 30;  break;
+	case 2:  val_hz = 50;  break;
+	case 3:  val_hz = 100; break;
 	default: val_hz = 200; break; // above 4 is not suported, set max
 	}
 
@@ -776,6 +795,30 @@ static void set_interrupt_rate(const uint16_t rate_id)
 		rate_hz     = val_hz;
 		notify_interface_rate();
 	}
+}
+
+static uint8_t get_interrupt_rate()
+{
+	uint16_t rate_to_report = 0;
+	if (rate_is_set) {
+		// Rate was set by the application - report what was requested
+		rate_to_report = rate_hz;
+	} else {
+		// Raate wasn't set - report the value closest to the real rate
+		rate_to_report = MouseInterface::GetDOS()->GetRate();
+	}
+
+	if (rate_to_report == 0) {
+		return 0;
+	} else if (rate_to_report < (30 + 50) / 2) {
+		return 1; // report 30 Hz
+	} else if (rate_to_report < (50 + 100) / 2) {
+		return 2; // report 50 Hz
+	} else if (rate_to_report < (100 + 200) / 2) {
+		return 3; // report 100 Hz
+	}
+
+	return 4; // report 200 Hz
 }
 
 static void reset_hardware()
@@ -798,79 +841,46 @@ void MOUSEDOS_NotifyMinRate(const uint16_t value_hz)
 	min_rate_hz = value_hz;
 
 	// If rate was set by a DOS application, don't change it
-	if (rate_is_set)
+	if (rate_is_set) {
 		return;
+	}
 
 	notify_interface_rate();
 }
 
 void MOUSEDOS_BeforeNewVideoMode()
 {
-	if (CurMode->type != M_TEXT)
-		restore_cursor_background();
-	else
+	if (CurMode->type & M_TEXT_MODES) {
 		restore_cursor_background_text();
+	} else {
+		restore_cursor_background();
+	}
 
 	state.hidden             = 1;
 	state.oldhidden          = 1;
 	state.background.enabled = false;
 }
 
-// TODO: Does way to much. Many things should be moved to mouse reset one day
-void MOUSEDOS_AfterNewVideoMode(const bool setmode)
+void MOUSEDOS_AfterNewVideoMode(const bool is_mode_changing)
 {
-	state.inhibit_draw = false;
-	// Get the correct resolution from the current video mode
-	const uint8_t mode = mem_readb(BIOS_VIDEO_MODE);
-	if (setmode && mode == state.mode)
-		LOG(LOG_MOUSE, LOG_NORMAL)
-		("New video mode is the same as the old");
-	state.granularity_x = 0xffff;
-	state.granularity_y = 0xffff;
-	switch (mode) {
-	case 0x00:
-	case 0x01:
-	case 0x02:
-	case 0x03:
-	case 0x07: {
-		state.granularity_x = (mode < 2) ? 0xfff0 : 0xfff8;
-		state.granularity_y = 0xfff8;
-		Bitu rows           = IS_EGAVGA_ARCH
-		                            ? real_readb(BIOSMEM_SEG, BIOSMEM_NB_ROWS)
-		                            : 24;
-		if ((rows == 0) || (rows > 250))
-			rows = 24;
-		state.maxpos_y = static_cast<int16_t>(8 * (rows + 1) - 1);
-		break;
-	}
-	case 0x04:
-	case 0x05:
-	case 0x06:
-	case 0x08:
-	case 0x09:
-	case 0x0a:
-	case 0x0d:
-	case 0x0e:
-	case 0x13: // 320x200 VGA
-		if (mode == 0x0d || mode == 0x13)
-			state.granularity_x = 0xfffe;
-		state.maxpos_y = 199;
-		break;
-	case 0x0f:
-	case 0x10: state.maxpos_y = 349; break;
-	case 0x11:
-	case 0x12: state.maxpos_y = 479; break;
-	default:
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Unhandled videomode %X on reset", mode);
-		state.inhibit_draw = true;
-		return;
-	}
+	// Gather screen mode information
 
-	state.mode               = mode;
-	state.maxpos_x           = 639;
-	state.minpos_x           = 0;
-	state.minpos_y           = 0;
+	INT10_SetCurMode();
+	const uint8_t bios_screen_mode = mem_readb(BIOS_VIDEO_MODE);
+
+	constexpr uint8_t last_non_svga_mode = 0x13;
+
+	const bool is_svga_mode = IS_VGA_ARCH &&
+	                          (bios_screen_mode > last_non_svga_mode);
+	const bool is_svga_text = is_svga_mode && (CurMode->type & M_TEXT_MODES);
+
+	// Perform common actions - clear pending mouse events, etc.
+
+	clear_pending_events();
+
+	state.bios_screen_mode   = bios_screen_mode;
+	state.granularity_x      = 0xffff;
+	state.granularity_y      = 0xffff;
 	state.hot_x              = 0;
 	state.hot_y              = 0;
 	state.user_screen_mask   = false;
@@ -881,8 +891,113 @@ void MOUSEDOS_AfterNewVideoMode(const bool setmode)
 	state.update_region_y[1] = -1; // offscreen
 	state.cursor_type        = MouseCursor::Software;
 	state.enabled            = true;
+	state.inhibit_draw       = false;
 
-	clear_pending_events();
+	// Some software (like 'Down by the Laituri' game) is known to first set
+	// the min/max mouse cursor position and then set VESA mode, therefore
+	// (unless this is a driver reset) skip setting min/max position and
+	// granularity for SVGA graphic modes
+
+	if (is_mode_changing && is_svga_mode && !is_svga_text) {
+		return;
+	}
+
+	// Helper lambda for setting text mode max position x/y
+
+	auto set_maxpos_text = [&]() {
+		constexpr uint16_t threshold_lo = 1;
+		constexpr uint16_t threshold_hi = 250;
+
+		constexpr uint16_t default_rows    = 25;
+		constexpr uint16_t default_columns = 80;
+
+		uint16_t columns = INT10_GetTextColumns();
+		uint16_t rows    = INT10_GetTextRows();
+
+		if (rows < threshold_lo || rows > threshold_hi) {
+			rows = default_rows;
+		}
+		if (columns < threshold_lo || columns > threshold_hi) {
+			columns = default_columns;
+		}
+
+		state.maxpos_x = static_cast<int16_t>(8 * columns - 1);
+		state.maxpos_y = static_cast<int16_t>(8 * rows - 1);
+	};
+
+	// Set min/max position - same for all the video modes
+
+	state.minpos_x = 0;
+	state.minpos_y = 0;
+
+	// Apply settings depending on video mode
+
+	switch (bios_screen_mode) {
+	case 0x00: // text, 40x25, black/white        (CGA, EGA, MCGA, VGA)
+	case 0x01: // text, 40x25, 16 colors          (CGA, EGA, MCGA, VGA)
+		state.granularity_x = 0xfff0;
+		state.granularity_y = 0xfff8;
+		set_maxpos_text();
+		// Apply correction due to different x axis granularity
+		state.maxpos_x = static_cast<int16_t>(state.maxpos_x * 2 + 1);
+		break;
+	case 0x02: // text, 80x25, 16 shades of gray  (CGA, EGA, MCGA, VGA)
+	case 0x03: // text, 80x25, 16 colors          (CGA, EGA, MCGA, VGA)
+	case 0x07: // text, 80x25, monochrome         (MDA, HERC, EGA, VGA)
+		state.granularity_x = 0xfff8;
+		state.granularity_y = 0xfff8;
+		set_maxpos_text();
+		break;
+	case 0x0d: // 320x200, 16 colors    (EGA, VGA)
+	case 0x13: // 320x200, 256 colors   (MCGA, VGA)
+		state.granularity_x = 0xfffe;
+		state.maxpos_x = 639;
+		state.maxpos_y = 199;
+		break;
+	case 0x04: // 320x200, 4 colors     (CGA, EGA, MCGA, VGA)
+	case 0x05: // 320x200, 4 colors     (CGA, EGA, MCGA, VGA)
+	case 0x06: // 640x200, black/white  (CGA, EGA, MCGA, VGA)
+	case 0x08: // 160x200, 16 colors    (PCjr)
+	case 0x09: // 320x200, 16 colors    (PCjr)
+	case 0x0a: // 640x200, 4 colors     (PCjr)
+	case 0x0e: // 640x200, 16 colors    (EGA, VGA)
+		// Note: Setting true horixontal resolution for <640 modes
+		// can break some games, like 'Life & Death' - be careful here!
+		state.maxpos_x = 639;
+		state.maxpos_y = 199;
+		break;
+	case 0x0f: // 640x350, monochrome   (EGA, VGA)
+	case 0x10: // 640x350, 16 colors    (EGA 128K, VGA)
+	           // 640x350, 4 colors     (EGA 64K)
+		state.maxpos_x = 639;
+		state.maxpos_y = 349;
+		break;
+	case 0x11: // 640x480, black/white  (MCGA, VGA)
+	case 0x12: // 640x480, 16 colors    (VGA)
+		state.maxpos_x = 639;
+		state.maxpos_y = 479;
+		break;
+	default: // other modes, most likely SVGA
+		if (!is_svga_mode) {
+			// Unsupported mode, this should probably never happen
+			LOG_WARNING("MOUSE (DOS): Unknown video mode 0x%02x",
+			            bios_screen_mode);
+			// Try to set some sane parameters, do not draw cursor
+			state.inhibit_draw = true;
+			state.maxpos_x = 639;
+			state.maxpos_y = 479;
+		} else if (is_svga_text) {
+			// SVGA text mode
+			state.granularity_x = 0xfff8;
+			state.granularity_y = 0xfff8;
+			set_maxpos_text();
+		} else {
+			// SVGA graphic mode
+			state.maxpos_x = static_cast<int16_t>(CurMode->swidth - 1);
+			state.maxpos_y = static_cast<int16_t>(CurMode->sheight - 1);
+		}
+		break;
+	}
 }
 
 static void reset()
@@ -893,7 +1008,8 @@ static void reset()
 	pending.Reset();
 
 	MOUSEDOS_BeforeNewVideoMode();
-	MOUSEDOS_AfterNewVideoMode(false);
+	constexpr bool is_mode_changing = false;
+	MOUSEDOS_AfterNewVideoMode(is_mode_changing);
 
 	set_mickey_pixel_rate(8, 16);
 	set_double_speed_threshold(0); // set default value
@@ -1009,14 +1125,11 @@ static void move_cursor_seamless(const float x_rel, const float y_rel,
 
 	// TODO: this is probably overcomplicated, especially
 	// the usage of relative movement - to be investigated
-	if (CurMode->type == M_TEXT) {
+	if (CurMode->type & M_TEXT_MODES) {
 		pos_x = x * 8;
-		pos_x *= real_readw(BIOSMEM_SEG, BIOSMEM_NB_COLS);
+		pos_x *= INT10_GetTextColumns();
 		pos_y = y * 8;
-		pos_y *= IS_EGAVGA_ARCH
-		               ? static_cast<float>(
-		                         real_readb(BIOSMEM_SEG, BIOSMEM_NB_ROWS) + 1)
-		               : 25.0f;
+		pos_y *= INT10_GetTextRows();
 	} else if ((state.maxpos_x < 2048) || (state.maxpos_y < 2048) ||
 	           (state.maxpos_x != state.maxpos_y)) {
 		if ((state.maxpos_x > 0) && (state.maxpos_y > 0)) {
@@ -1235,16 +1348,18 @@ static Bitu int33_handler()
 		reset();
 		break;
 	case 0x01: // MS MOUSE v1.0+ - show mouse cursor
-		if (state.hidden)
+		if (state.hidden) {
 			--state.hidden;
+		}
 		state.update_region_y[1] = -1; // offscreen
 		draw_cursor();
 		break;
 	case 0x02: // MS MOUSE v1.0+ - hide mouse cursor
-		if (CurMode->type != M_TEXT)
-			restore_cursor_background();
-		else
+		if (CurMode->type & M_TEXT_MODES) {
 			restore_cursor_background_text();
+		} else {
+			restore_cursor_background();
+		}
 		++state.hidden;
 		break;
 	case 0x03: // MS MOUSE v1.0+ / WheelAPI v1.0+ - get position and button
@@ -1260,10 +1375,12 @@ static Bitu int33_handler()
 		// If position isn't different from current position, don't
 		// change it. (position is rounded so numbers get lost when the
 		// rounded number is set) (arena/simulation Wolf)
-		if (reg_to_signed16(reg_cx) != get_pos_x())
+		if (reg_to_signed16(reg_cx) != get_pos_x()) {
 			pos_x = static_cast<float>(reg_cx);
-		if (reg_to_signed16(reg_dx) != get_pos_y())
+		}
+		if (reg_to_signed16(reg_dx) != get_pos_y()) {
 			pos_y = static_cast<float>(reg_dx);
+		}
 		limit_coordinates();
 		draw_cursor();
 		break;
@@ -1330,8 +1447,6 @@ static Bitu int33_handler()
 		                   static_cast<float>(state.maxpos_x));
 		// Or alternatively this:
 		// pos_x = (state.maxpos_x - state.minpos_x + 1) / 2;
-		LOG(LOG_MOUSE, LOG_NORMAL)
-		("Define Hortizontal range min:%d max:%d", state.minpos_x, state.maxpos_x);
 		break;
 	case 0x08: // MS MOUSE v1.0+ - define vertical cursor range
 		// not sure what to take instead of the CurMode (see case 0x07
@@ -1348,8 +1463,6 @@ static Bitu int33_handler()
 		                   static_cast<float>(state.maxpos_y));
 		// Or alternatively this:
 		// pos_y = (state.maxpos_y - state.minpos_y + 1) / 2;
-		LOG(LOG_MOUSE, LOG_NORMAL)
-		("Define Vertical range min:%d max:%d", state.minpos_y, state.maxpos_y);
 		break;
 	case 0x09: // MS MOUSE v3.0+ - define GFX cursor
 	{
@@ -1380,8 +1493,6 @@ static Bitu int33_handler()
 		state.text_xor_mask = reg_dx;
 		if (reg_bx) {
 			INT10_SetCursorShape(reg_cl, reg_dl);
-			LOG(LOG_MOUSE, LOG_NORMAL)
-			("Hardware Text cursor selected");
 		}
 		draw_cursor();
 		break;
@@ -1402,12 +1513,15 @@ static Bitu int33_handler()
 		update_driver_active();
 		break;
 	case 0x0d: // MS MOUSE v1.0+ - light pen emulation on
-	case 0x0e: // MS MOUSE v1.0+ - light pen emulation off
 		// Both buttons down = pen pressed, otherwise pen considered
 		// off-screen
 		// TODO: maybe implement light pen using SDL touch events?
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Mouse light pen emulation not implemented");
+		LOG_WARNING("MOUSE (DOS): Light pen emulation not implemented");
+		break;
+	case 0x0e: // MS MOUSE v1.0+ - light pen emulation off
+		// Although light pen emulation is not implemented, it is OK for
+		// the application to only disable it (like 'The Settlers' game
+		// is doing during initialization)
 		break;
 	case 0x0f: // MS MOUSE v1.0+ - define mickey/pixel rate
 		set_mickey_pixel_rate(reg_to_signed16(reg_cx),
@@ -1433,8 +1547,7 @@ static Bitu int33_handler()
 		// suppose the WheelAPI extensions are more useful
 		break;
 	case 0x12: // MS MOUSE - set large graphics cursor block
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Large graphics cursor block not implemented");
+		LOG_WARNING("MOUSE (DOS): Large graphics cursor block not implemented");
 		break;
 	case 0x13: // MS MOUSE v5.0+ - set double-speed threshold
 		set_double_speed_threshold(reg_bx);
@@ -1459,11 +1572,9 @@ static Bitu int33_handler()
 		reg_bx = sizeof(state);
 		break;
 	case 0x16: // MS MOUSE v6.0+ - save driver state
-		LOG(LOG_MOUSE, LOG_WARN)("Saving driver state...");
 		MEM_BlockWrite(SegPhys(es) + reg_dx, &state, sizeof(state));
 		break;
 	case 0x17: // MS MOUSE v6.0+ - load driver state
-		LOG(LOG_MOUSE, LOG_WARN)("Loading driver state...");
 		MEM_BlockRead(SegPhys(es) + reg_dx, &state, sizeof(state));
 		pending.Reset();
 		update_driver_active();
@@ -1475,8 +1586,7 @@ static Bitu int33_handler()
 		break;
 	case 0x18: // MS MOUSE v6.0+ - set alternate mouse user handler
 	case 0x19: // MS MOUSE v6.0+ - set alternate mouse user handler
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Alternate mouse user handler not implemented");
+		LOG_WARNING("MOUSE (DOS): Alternate mouse user handler not implemented");
 		break;
 	case 0x1a: // MS MOUSE v6.0+ - set mouse sensitivity
 		// NOTE: Ralf Brown Interrupt List (and some other sources)
@@ -1526,26 +1636,33 @@ static Bitu int33_handler()
 		break;
 	case 0x24: // MS MOUSE v6.26+ - get Software version, mouse type, and
 	           // IRQ number
-		reg_bx = 0x805; // version 8.05 woohoo
-		reg_ch = 0x04;  // PS/2 type
+		reg_bh = driver_version_major;
+		reg_bl = driver_version_minor;
+		// 1 = bus, 2 = serial, 3 = inport, 4 = PS/2, 5 = HP
+		reg_ch = 0x04; // PS/2
 		reg_cl = 0; // PS/2 mouse; for others it would be an IRQ number
 		break;
 	case 0x25: // MS MOUSE v6.26+ - get general driver information
-		// TODO: According to PC sourcebook reference
-		//       Returns:
-		//       AH = status
-		//         bit 7 driver type: 1=sys 0=com
-		//         bit 6: 0=non-integrated 1=integrated mouse driver
-		//         bits 4-5: cursor type  00=software text cursor
-		//         01=hardware text cursor 1X=graphics cursor bits 0-3:
-		//         Function 28 mouse interrupt rate
-		//       AL = Number of MDDS (?)
-		//       BX = fCursor lock
-		//       CX = FinMouse code
-		//       DX = fMouse busy
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("General driver information not implemented");
+	{
+		// See https://github.com/FDOS/mouse/blob/master/int33.lst
+		// AL = count of currently-active Mouse Display Drivers (MDDs)
+		reg_al = 1;
+		// AH - bits 0-3: interrupt rate
+		//    - bits 4-5: current cursor type
+		//    - bit 6: 1 = driver is newer integrated type
+		//    - bit 7: 1 = loaded as device driver rather than TSR
+		constexpr auto integrated_driver = (1 << 6);
+		const auto cursor_type = static_cast<uint8_t>(state.cursor_type) << 4;
+		reg_ah = static_cast<uint8_t>(integrated_driver | cursor_type |
+		                              get_interrupt_rate());
+		// BX - cursor lock flag for OS/2 to prevent reentrancy problems
+		// CX - mouse code active flag (for OS/2)
+		// DX - mouse driver busy flag (for OS/2)
+		reg_bx = 0;
+		reg_cx = 0;
+		reg_dx = 0;
 		break;
+	}
 	case 0x26: // MS MOUSE v6.26+ - get maximum virtual coordinates
 		reg_bx = (state.enabled ? 0x0000 : 0xffff);
 		reg_cx = signed_to_reg16(state.maxpos_x);
@@ -1558,7 +1675,8 @@ static Bitu int33_handler()
 		//       DX = Font size, 0 for default
 		//       Returns:
 		//       DX = 0 on success, nonzero (requested video mode) if not
-		LOG(LOG_MOUSE, LOG_ERROR)("Set video mode not implemented");
+		LOG_WARNING("MOUSE (DOS): Set video mode not implemented");
+		// TODO: once implemented, update function 0x32
 		break;
 	case 0x29: // MS MOUSE v7.0+ - enumerate video modes
 		// TODO: According to PC sourcebook
@@ -1567,8 +1685,8 @@ static Bitu int33_handler()
 		//       Exit:
 		//       BX:DX = named string far ptr
 		//       CX = video mode number
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Enumerate video modes not implemented");
+		LOG_WARNING("MOUSE (DOS): Enumerate video modes not implemented");
+		// TODO: once implemented, update function 0x32
 		break;
 	case 0x2a: // MS MOUSE v7.01+ - get cursor hot spot
 		// Microsoft uses a negative byte counter
@@ -1583,16 +1701,34 @@ static Bitu int33_handler()
 	case 0x2d: // MS MOUSE v7.0+ - select acceleration profile
 	case 0x2e: // MS MOUSE v8.10+ - set acceleration profile names
 	case 0x33: // MS MOUSE v7.05+ - get/switch accelleration profile
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Custom acceleration profiles not implemented");
+		// Input: CX = buffer length, ES:DX = buffer address
+		// Output: CX = bytes in buffer; buffer content:
+		//     offset 0x00 - mouse type and port
+		//     offset 0x01 - language
+		//     offset 0x02 - horizontal sensitivity
+		//     offset 0x03 - vertical sensitivity
+		//     offset 0x04 - double speed threshold
+		//     offset 0x05 - ballistic curve
+		//     offset 0x06 - interrupt rate
+		//     offset 0x07 - cursor mask
+		//     offset 0x08 - laptop adjustment
+		//     offset 0x09 - memory type
+		//     offset 0x0a - super VGA flag
+		//     offset 0x0b - rotation angle (2 bytes)
+		//     offset 0x0d - primary button
+		//     offset 0x0e - secondary button
+		//     offset 0x0f - click lock enabled
+		//     offset 0x10 - acceleration curves tables (324 bytes)
+		LOG_WARNING("MOUSE (DOS): Custom acceleration profiles not implemented");
+		// TODO: once implemented, update function 0x32
 		break;
 	case 0x2f: // MS MOUSE v7.02+ - mouse hardware reset
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("INT 33 AX=2F mouse hardware reset not implemented");
+		LOG_WARNING("MOUSE (DOS): Hardware reset not implemented");
+		// TODO: once implemented, update function 0x32
 		break;
 	case 0x30: // MS MOUSE v7.04+ - get/set BallPoint information
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Get/set BallPoint information not implemented");
+		LOG_WARNING("MOUSE (DOS): Get/set BallPoint information not implemented");
+		// TODO: once implemented, update function 0x32
 		break;
 	case 0x31: // MS MOUSE v7.05+ - get current min/max virtual coordinates
 		reg_ax = signed_to_reg16(state.minpos_x);
@@ -1601,37 +1737,54 @@ static Bitu int33_handler()
 		reg_dx = signed_to_reg16(state.maxpos_y);
 		break;
 	case 0x32: // MS MOUSE v7.05+ - get active advanced functions
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Get active advanced functions not implemented");
+		reg_ax = 0;
+		reg_bx = 0; // unused
+		reg_cx = 0; // unused
+		reg_dx = 0; // unused
+		// AL bit 0 - false; although function 0x34 is implemented, the
+		//            actual MOUSE.INI file does not exists; so we
+		//            should discourage calling it by the guest software
+		// AL bit 1 - false, function 0x33 not supported
+		bit::set(reg_al, b2); // function 0x32 supported (this one!)
+		bit::set(reg_al, b3); // function 0x31 supported
+		// AL bit 4 - false, function 0x30 not supported
+		// AL bit 5 - false, function 0x2f not supported
+		// AL bit 6 - false, function 0x2e not supported
+		// AL bit 7 - false, function 0x2d not supported
+		// AH bit 0 - false, function 0x2c not supported
+		// AH bit 1 - false, function 0x2b not supported
+		bit::set(reg_ah, b2); // function 0x2a supported
+		// AH bit 3 - false, function 0x29 not supported
+		// AH bit 4 - false, function 0x28 not supported
+		bit::set(reg_ah, b5); // function 0x27 supported
+		bit::set(reg_ah, b6); // function 0x26 supported
+		bit::set(reg_ah, b7); // function 0x25 supported
 		break;
 	case 0x34: // MS MOUSE v8.0+ - get initialization file
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Get initialization file not implemented");
+		SegSet16(es, info_segment);
+		reg_dx = info_offset_ini_file;
 		break;
 	case 0x35: // MS MOUSE v8.10+ - LCD screen large pointer support
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("LCD screen large pointer support not implemented");
+		LOG_WARNING("MOUSE (DOS): LCD screen large pointer support not implemented");
 		break;
 	case 0x4d: // MS MOUSE - return pointer to copyright string
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Return pointer to copyright string not implemented");
+		SegSet16(es, info_segment);
+		reg_di = info_offset_copyright;
 		break;
 	case 0x6d: // MS MOUSE - get version string
-		LOG(LOG_MOUSE, LOG_ERROR)("Get version string not implemented");
+		SegSet16(es, info_segment);
+		reg_di = info_offset_version;
 		break;
 	case 0x70: // Mouse Systems - installation check
 	case 0x72: // Mouse Systems 7.01+, Genius Mouse 9.06+ - unknown
 	case 0x73: // Mouse Systems 7.01+ - get button assignments
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Mouse Sytems mouse extensions not implemented");
+		LOG_WARNING("MOUSE (DOS): Mouse Sytems extensions not implemented");
 		break;
 	case 0x53C1: // Logitech CyberMan
-		LOG(LOG_MOUSE, LOG_NORMAL)
-		("Mouse function 53C1 for Logitech CyberMan called. Ignored by regular mouse driver.");
+		LOG_WARNING("MOUSE (DOS): Logitech CyberMan function 0x53c1 not implemented");
 		break;
 	default:
-		LOG(LOG_MOUSE, LOG_ERROR)
-		("Mouse function %04X not implemented", reg_ax);
+		LOG_WARNING("MOUSE (DOS): Function 0x%04x not implemented", reg_ax);
 		break;
 	}
 	return CBRET_NONE;
@@ -1699,6 +1852,67 @@ static Bitu user_callback_handler()
 {
 	mouse_shared.dos_cb_running = false;
 	return CBRET_NONE;
+}
+
+static void prepare_driver_info()
+{
+	// Prepare information to be returned by DOS mouse driver functions
+	// 0x34, 0x4d, and 0x6f
+
+	if (info_segment) {
+		assert(false);
+		return;
+	}
+
+	const std::string str_copyright = DOSBOX_COPYRIGHT;
+
+	auto read_low_nibble_str = [&](const uint8_t byte) {
+		return std::to_string(static_cast<int>(read_low_nibble(byte)));
+	};
+	auto read_high_nibble_str = [&](const uint8_t byte) {
+		return std::to_string(static_cast<int>(read_high_nibble(byte)));
+	};
+
+	static_assert(read_low_nibble(driver_version_minor) <= 9);
+	static_assert(read_low_nibble(driver_version_major) <= 9);
+	static_assert(read_high_nibble(driver_version_minor) <= 9);
+	static_assert(read_high_nibble(driver_version_major) <= 9);
+
+	std::string str_version = "version ";
+	if (read_high_nibble(driver_version_major) > 0) {
+		str_version = str_version + read_high_nibble_str(driver_version_major);
+	}
+
+	str_version = str_version +
+	              read_low_nibble_str(driver_version_major) + std::string(".") +
+	              read_high_nibble_str(driver_version_minor) +
+	              read_low_nibble_str(driver_version_minor);
+
+	const size_t length_bytes = (str_version.length() + 1) +
+	                            (str_copyright.length() + 1);
+	assert(length_bytes <= UINT8_MAX);
+
+	constexpr uint8_t bytes_per_block = 0x10;
+	auto length_blocks = static_cast<uint16_t>(length_bytes / bytes_per_block);
+	if (length_bytes % bytes_per_block) {
+		length_blocks = static_cast<uint16_t>(length_blocks + 1);
+	}
+
+	info_segment = DOS_GetMemory(length_blocks);
+
+	// TODO: if 'MOUSE.INI' file gets implemented, INT 33 function 0x32
+	// should be updated to indicate function 0x34 is supported
+	std::string str_combined = str_version + '\0' + str_copyright + '\0';
+	const size_t size = static_cast<size_t>(length_blocks) * bytes_per_block;
+	str_combined.resize(size, '\0');
+
+	info_offset_ini_file  = check_cast<uint16_t>(str_version.length());
+	info_offset_version   = 0;
+	info_offset_copyright = check_cast<uint16_t>(str_version.length() + 1);
+
+	MEM_BlockWrite(PhysicalMake(info_segment, 0),
+	               str_combined.c_str(),
+	               str_combined.size());
 }
 
 uint8_t MOUSEDOS_DoInterrupt()
@@ -1806,6 +2020,8 @@ void MOUSEDOS_SetDelay(const uint8_t new_delay_ms)
 
 void MOUSEDOS_Init()
 {
+	prepare_driver_info();
+
 	// Callback for mouse interrupt 0x33
 	const auto call_int33 = CALLBACK_Allocate();
 	const auto tmp_pt = static_cast<uint16_t>(DOS_GetMemory(0x1) - 1);
@@ -1840,7 +2056,7 @@ void MOUSEDOS_Init()
 
 	state.user_callback_segment = 0x6362;    // magic value
 	state.hidden                = 1;         // hide cursor on startup
-	state.mode                  = UINT8_MAX; // non-existing mode
+	state.bios_screen_mode      = UINT8_MAX; // non-existing mode
 
 	set_sensitivity(50, 50, 50);
 	reset_hardware();

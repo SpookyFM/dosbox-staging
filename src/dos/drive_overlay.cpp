@@ -19,6 +19,7 @@
 #include "drives.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <vector>
 #include <string>
 #include <stdio.h>
@@ -204,7 +205,7 @@ public:
 			LOG_MSG("constructing OverlayFile: %s", name);
 	}
 
-	bool Write(uint8_t * data,uint16_t * size) {
+	bool Write(uint8_t * data,uint16_t * size) override {
 		uint32_t f = flags&0xf;
 		if (!overlay_active && (f == OPEN_READWRITE || f == OPEN_WRITE)) {
 			if (logoverlay) LOG_MSG("write detected, switching file for %s",GetName());
@@ -214,8 +215,9 @@ public:
 			const auto a = logoverlay ? GetTicks() : 0;
 			bool r = create_copy();
 			const auto b = logoverlay ? GetTicksSince(a) : 0;
-			if (b > 2)
-				LOG_MSG("OPTIMISE: switching took %d", b);
+			if (b > 2) {
+				LOG_MSG("OPTIMISE: switching took %" PRId64, b);
+			}
 			if (!r) return false;
 			overlay_active = true;
 			
@@ -295,7 +297,7 @@ bool OverlayFile::create_copy() {
 		return false;
 	}
 
-	FILE* newhandle = NULL;
+	FILE* newhandle = nullptr;
 	uint8_t drive_set = GetDrive();
 	if (drive_set != 0xff && drive_set < DOS_DRIVES && Drives[drive_set]){
 		const auto od = dynamic_cast<Overlay_Drive*>(Drives[drive_set]);
@@ -556,7 +558,7 @@ bool Overlay_Drive::Sync_leading_dirs(const char* dos_filename){
 	if (!lastdir) return true; 
 	
 	const char* leaddir = dos_filename;
-	while ( (leaddir=strchr(leaddir,'\\')) != 0) {
+	while ( (leaddir=strchr(leaddir,'\\')) != nullptr) {
 		char dirname[CROSS_LEN] = {0};
 
 		assert(leaddir >= dos_filename);
@@ -633,7 +635,7 @@ void Overlay_Drive::update_cache(bool read_directory_contents) {
 	std::string::size_type const prefix_lengh = special_prefix.length();
 	if (read_directory_contents) {
 		dir_information* dirp = open_directory(overlaydir);
-		if (dirp == NULL) return;
+		if (dirp == nullptr) return;
 		// Read complete directory
 		char dir_name[CROSS_LEN];
 		bool is_directory;
@@ -677,7 +679,7 @@ void Overlay_Drive::update_cache(bool read_directory_contents) {
 
 			assert(dirp == nullptr);
 			dirp = open_directory(dir);
-			if (dirp == NULL) continue;
+			if (dirp == nullptr) continue;
 
 #if OVERLAY_DIR
 			//Good directory, add to DOSdirs_cache if not existing in localDrive. tested earlier to prevent problems with opendir
@@ -787,8 +789,9 @@ void Overlay_Drive::update_cache(bool read_directory_contents) {
 
 		}
 	}
-	if (logoverlay)
-		LOG_MSG("OPTIMISE: update cache took %d", GetTicksSince(a));
+	if (logoverlay) {
+		LOG_MSG("OPTIMISE: update cache took %" PRId64, GetTicksSince(a));
+	}
 }
 
 bool Overlay_Drive::FindNext(DOS_DTA & dta) {
@@ -981,8 +984,9 @@ bool Overlay_Drive::FileUnlink(char * name) {
 		dirCache.DeleteEntry(basename);
 
 		update_cache(false);
-		if (logoverlay)
-			LOG_MSG("OPTIMISE: unlink took %d", GetTicksSince(a));
+		if (logoverlay) {
+			LOG_MSG("OPTIMISE: unlink took %" PRId64, GetTicksSince(a));
+		}
 		return true;
 	}
 }
@@ -1152,7 +1156,7 @@ void Overlay_Drive::remove_deleted_path(const char* name, bool create_on_disk) {
 }
 bool Overlay_Drive::check_if_leading_is_deleted(const char* name){
 	const char* dname = strrchr(name,'\\');
-	if (dname != NULL) {
+	if (dname != nullptr) {
 		char dirname[CROSS_LEN];
 
 		assert(dname >= name);
@@ -1244,9 +1248,10 @@ bool Overlay_Drive::Rename(char * oldname,char * newname) {
 		//Mark old file as deleted
 		add_deleted_file(oldname,true);
 		result = true; //success
-		if (logoverlay)
-			LOG_MSG("OPTIMISE: update rename with copy took %d",
+		if (logoverlay) {
+			LOG_MSG("OPTIMISE: update rename with copy took %" PRId64,
 			        GetTicksSince(aa));
+		}
 	}
 	if (result) {
 		//handle the drive_cache (a bit better)
@@ -1254,8 +1259,9 @@ bool Overlay_Drive::Rename(char * oldname,char * newname) {
 		if (is_deleted_file(newname)) remove_deleted_file(newname,true);
 		dirCache.EmptyCache();
 		update_cache(true);
-		if (logoverlay)
-			LOG_MSG("OPTIMISE: rename took %d", GetTicksSince(a));
+		if (logoverlay) {
+			LOG_MSG("OPTIMISE: rename took %" PRId64, GetTicksSince(a));
+		}
 	}
 	return result;
 

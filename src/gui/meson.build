@@ -11,14 +11,13 @@ libgui = static_library(
     include_directories: incdir,
     dependencies: [
         sdl2_dep,
-        sdl2_image_dep,
         opengl_dep,
         ghc_dep,
         libiir_dep,
         libloguru_dep,
         tracy_dep,
-        libppscale_dep,
     ],
+    cpp_args: warnings,
 )
 
 libgui_dep = declare_dependency(link_with: libgui)

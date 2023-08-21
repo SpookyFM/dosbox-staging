@@ -72,12 +72,6 @@ void MOUNT::Move_Z(char new_z)
 		tempenv += "COMMAND.COM";
 		first_shell->SetEnv("COMSPEC",tempenv.c_str());
 
-		/* Update batch file if running from Z: (very likely: autoexec) */
-		if (first_shell->bf) {
-			std::string &name = first_shell->bf->filename;
-			if (starts_with("Z:", name))
-				name[0] = new_drive_z;
-		}
 		/* Change the active drive */
 		if (DOS_GetDefaultDrive() == 25)
 			DOS_SetDrive(new_idx);
@@ -290,8 +284,7 @@ void MOUNT::Run(void) {
 		if (real_path.empty()) {
 			LOG_MSG("MOUNT: Path '%s' not found", temp_line.c_str());
 		} else {
-			std::string home_resolve = temp_line;
-			Cross::ResolveHomedir(home_resolve);
+			const auto home_resolve = resolve_home(temp_line).string();
 			if (home_resolve == real_path) {
 				LOG_MSG("MOUNT: Path '%s' found",
 						temp_line.c_str());
@@ -469,20 +462,23 @@ void MOUNT::AddMessages() {
 	        "\n"
 	        "Notes:\n"
 	        "  - '-t overlay' redirects writes for mounted drive to another directory.\n"
+	        "  - '-usecd ID' gives direct access to a CD-ROM drive.\n"
+	        "    This is needed for CD audio (only supported on Windows and Linux).\n"
+	        "    Run 'mount -cd' to find out the list of valid IDs.\n"
 	        "  - Additional options are described in the manual (README file, chapter 4).\n"
 	        "\n"
 	        "Examples:\n"
 #if defined(WIN32)
 	        "  [color=green]mount[reset] [color=white]C[reset] [color=cyan]C:\\dosgames[reset]\n"
-	        "  [color=green]mount[reset] [color=white]D[reset] [color=cyan]D:\\[reset] -t cdrom\n"
+	        "  [color=green]mount[reset] [color=white]D[reset] [color=cyan]D:\\[reset] -t cdrom -usecd 0\n"
 	        "  [color=green]mount[reset] [color=white]C[reset] [color=cyan]my_savegame_files[reset] -t overlay\n"
 #elif defined(MACOSX)
 	        "  [color=green]mount[reset] [color=white]C[reset] [color=cyan]~/dosgames[reset]\n"
-	        "  [color=green]mount[reset] [color=white]D[reset] [color=cyan]\"/Volumes/Game CD\"[reset] -t cdrom\n"
+	        "  [color=green]mount[reset] [color=white]D[reset] [color=cyan]\"/Volumes/Game CD\"[reset] -t cdrom -usecd 0\n"
 	        "  [color=green]mount[reset] [color=white]C[reset] [color=cyan]my_savegame_files[reset] -t overlay\n"
 #else
 	        "  [color=green]mount[reset] [color=white]C[reset] [color=cyan]~/dosgames[reset]\n"
-	        "  [color=green]mount[reset] [color=white]D[reset] [color=cyan]\"/media/USERNAME/Game CD\"[reset] -t cdrom\n"
+	        "  [color=green]mount[reset] [color=white]D[reset] [color=cyan]\"/media/USERNAME/Game CD\"[reset] -t cdrom -usecd 0\n"
 	        "  [color=green]mount[reset] [color=white]C[reset] [color=cyan]my_savegame_files[reset] -t overlay\n"
 #endif
 	);

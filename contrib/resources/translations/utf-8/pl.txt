@@ -146,11 +146,32 @@ tłumaczeń dla poszczególnych języków znajdują się w dostarczonym katalogu
 'resources/translations'.
 .
 :CONFIG_MACHINE
-Typ komputera, który DOSBox próbuje emulować.
+Typ emulowanej karty graficznej lub komputera:
+  hercules:       Hercules Graphics Card (HGC) (patrz 'monochrome_palette').
+  cga_mono:       Karta CGA podłączona do monitora czarno-białego (patrz
+                  'monochrome_palette').
+  cga:            IBM Color Graphics Adapter (CGA). Również włącza obraz
+                  w trybie kompozytowym (patrz sekcja [composite]).
+  pcjr:           IBM PCjr. Również włącza urządzenie dźwiękowe PCjr oraz
+                  obraz w trybie kompozytowym (patrz sekcja [composite]).
+  tandy:          Tandy 1000 z kartą graficzną TGA. Również włącza urządzenie
+                  dźwiękowe Tandy oraz obraz w trybie kompozytowym (patrz
+                  sekcja [composite]).
+  ega:            IBM Enhanced Graphics Adapter (EGA).
+  svga_paradise:  Paradise PVGA1A SVGA (bez VESA VBE; domyślnie 512K pamięci,
+                  można zmienić na 256K lub 1MB opcją 'vmemsize'). Ta karta
+                  jest najbliższa oryginalnej karcie IBM VGA.
+  svga_et3000:    Tseng Labs ET3000 SVGA (bez VESA VBE; 512K pamięci).
+  svga_et4000:    Tseng Labs ET4000 SVGA (bez VESA VBE; domyślnie 1MB pamięci,
+                  można zmienić na 256K lub 1MB opcją 'vmemsize')).
+  svga_s3:        S3 Trio64 (VESA VBE 2.0; domyślnie 4MB pamięci,
+                  ustawić 512K, 1MB, 2MB lub 8MB opcją 'vmemsize') (domyślne).
+  vesa_oldvbe:    Jak 'svga_s3', ale karta ograniczona do VESA VBE 1.2.
+  vesa_nolfb:     Jak 'svga_s3' (VESA VBE 2.0), ale bez liniowego bufora ramki
+                  (wymagane przez niektóre gry).
 .
 :CONFIG_CAPTURES
-Katalog do zapisywania przechwyconego dźwięku, muzyki w formacie MIDI, zrzutów
-ekranu, itd. (domyślnie 'capture').
+Przeniesione do sekcji [capture], nazwa zmieniona na 'capture_dir'.
 .
 :CONFIG_MEMSIZE
 Rozmiar pamięci emulowanej maszyny w megabajtach (domyślnie 16).
@@ -160,16 +181,20 @@ Zwiększenie rozmiaru zazwyczaj nie poprawia wydajności.
 .
 :CONFIG_MCB_FAULT_STRATEGY
 Obsługa uszkodzonych bloków MCB (Memory Control Blocks):
-  deny:    Wyświetla błąd i kończy pracę (domyślne).
-  repair:  Naprawia (i raportuje) używając sąsiednich bloków.
-  report:  Tylko raportuje.
+  repair:  Naprawia (i raportuje) używając sąsiednich bloków (domyślne).
+  report:  Tylko raportuje błędy.
   allow:   Ignoruje problem, jak na rzeczywistym sprzęcie.
-Ustawienie domyślne ('deny') jest zalecane, chyba że gra zgłasza problemy z
-uszkodzonym MCB.
+  deny:    Wyświetla błąd i kończy pracę.
 .
 :CONFIG_VMEMSIZE
 Rozmiar pamięci graficznej w megabajtach (1-8) lub kilobajtach (256-8192).
 Ustawienie 'auto' (domyślne) wybiera typową dla danej karty graficznej.
+Dozwolone wartości dla poszczególnych kart graficznych opisane przy opcji
+'machine',
+.
+:CONFIG_FORCE_VGA_SINGLE_SCAN
+Używa pojedynczych linii dla obrazu VGA o rozdzielczości pionowej poniżej 350
+(domyślnie wyłączone).
 .
 :CONFIG_DOS_RATE
 Częstotliwość odświeżania emulowanego obrazu:
@@ -188,6 +213,9 @@ Dostępne tryby graficzne VESA 1.2 oraz 2.0:
               Niektóre gry mogą jednak niewłaściwie je obsługiwać (migotanie),
               albo mogą wymagać do ich obsługi więcej pamięci.
 Domyślnie 'compatible'.
+.
+:CONFIG_VGA_8DOT_FONT
+Zawsze używa czcionki 8 pikseli dla obrazu VGA (domyślnie wyłączone).
 .
 :CONFIG_SPEED_MODS
 Zezwala na zachowania emulatora, które poprawiają wydajność (domyślnie
@@ -233,11 +261,23 @@ lub sieciowego systemu plików, to ustawienie pozwala pominąć operację zapisu
 Użyj ustawienia 'host_rate' z sekcji [sdl].
 .
 :CONFIG_ASPECT
-Skaluje obraz tak, żeby uzyskać proporcje 4:3, stosowane w oryginalnych
-monitorach, dla której napisano znaczącą większość gier DOSowych.
+Koryguje proporcje obrazu dla współczesnych płaskich monitorów o kwadratowych
+pikselach, żeby obraz wyglądał tak jak na monitorze CRT o proporcjach 4:3, dla
+których napisano znaczącą większość gier DOSowych (domyślnie włączone).
 Dotyczy tylko trybów graficznych z prostokątnymi pikselami (np. 320x200,
 640x400); nie ma wpływu na tryby graficzne z kwadratowymi pikselami
-(np. 640x480, 800x600). Domyślnie włączone.
+(np. 640x480, 800x600).
+.
+:CONFIG_INTEGER_SCALING
+Ogranicza współczynnik poziomego lub pionowego skalowania obrazu do wartości
+całkowitych. Zawsze zachowuje właściwe proporcje obrazu, co może wymusić
+niecałkowity współczynnik skalowania w drugim wymiarze. Ograniczenie jest
+automatycznie wyłączane, jeśli rozdzielczość wyświetlanego obrazu jest
+mniejsza od wielkości obszaru wyświetlania (jak dla 'off').
+  off:         Brak ograniczeń we współczynniku skalowania obrazu, obraz
+               wypełnia cały obszar wyświetlania (domyślne).
+  horizontal:  Ogranicza skalowanie obrazu w poziomie do wartości całkowitych.
+  vertical:    Ogranicza skalowanie obrazu w pionie do wartości całkowitych.
 .
 :CONFIG_MONOCHROME_PALETTE
 Barwa obrazu monochromatycznego (domyślnie 'white'). Działa tylko z systemami
@@ -288,12 +328,12 @@ Wartość domyślna wybiera shader 'interpolation/sharp.glsl'.
 Rozszerzenie '.glsl' można pominąć.
 .
 :CONFIG_COMPOSITE
-Włącza trybu sygnału 'composite' (domyślnie 'auto').
+Włącza trybu sygnału kompozytowego (domyślnie 'auto').
 Porada: dopasuj ustawienia poniżej przy pomocy skrótów klawiszowych, następnie
 odczytaj ustawienia z konsoli tekstowej i wpisz je do pliku konfiguracyjnego.
 .
 :CONFIG_ERA
-Epoka sygnału 'composite'. Wartość 'auto' (domyślne) wybiera 'new' dla PCjr,
+Epoka sygnału kompozytowego. Wartość 'auto' (domyślne) wybiera 'new' dla PCjr,
 a 'old' dla maszyn CGA oraz Tandy.
 .
 :CONFIG_HUE
@@ -339,6 +379,36 @@ Ilość cykli na milisekundę, która zostanie odjęta po naciśnięciu skrótu
 klawiszowego. Ustawienie mniejsze niż 100 jest traktowane jak wartość w
 procentach (domyślnie 20).
 .
+:CONFIG_VOODOO
+Wielkość pamięci emulowanej karty 3dfx Vodooo.
+.
+:CONFIG_VOODOO_PERF
+Włącza poszczególne optymalizacje wydajności emulacji karty 3dfx Vodooo
+(0 = brak, 1 = wielowątkowość, 2 = bez filtrowania bilinearnego, 3 = obydwa).
+.
+:CONFIG_CAPTURE_DIR
+Katalog do zapisywania przechwyconego dźwięku, muzyki w formacie MIDI, zrzutów
+ekranu, itd. (domyślnie 'capture').
+.
+:CONFIG_DEFAULT_IMAGE_CAPTURE_FORMATS
+Format zapisywanych zrzutów ekranu (domyślnie 'upscaled'):
+  raw:       Zapisuje nieprzetworzoną zawartość bufora ramki (stare
+             zachowanie; rezultatem są kwadratowe piksele).
+             Nazwy plików kończą się na '_raw' (np. 'image0001_raw.png').
+  upscaled:  Obraz jest skalowany tak, aby wysokość zrzutu ekranu była około
+             1200 pikseli, a prawidłowe proporcje obrazu zostały zachowane (w
+             zależności od opcji 'aspect'). Współczynnik skalowania pionowego
+             zawsze jest liczbą całkowitą. Np. obraz 320x200 jest
+             przeskalowywany do rozdzielczości 1600x1200 (skalowanie 5:6,
+             640x480 do rozdzielczości 1920x1440 (skalowanie 3:3), a 640x350
+             do rozdzielczości 1867x1400 (skalowanie 2.9165:4, tylko
+             rozdzielczość pionowa jest skalowana współczynnikiem całkowitym).
+  rendered:  Zapisuje obraz po renderingu i zastosowaniu shaderów, w takie
+             formie, w jakiej jest wyświetlany na ekranie. Nazwy plików kończą
+             się na '_rendered' (np. 'image0001_rendered.png').
+Można podać więcej wartości, rozdzielonych spacjami, spowoduje to zapisanie
+zrzutu ekranu we wszystkich wybranych formatach.
+.
 :CONFIG_MOUSE_CAPTURE
 Sposób przejmowania kursora myszy:
   onclick:   Po kliknięciu w obrębie okna emulatora (domyślne).
@@ -379,7 +449,7 @@ przyspieszenia myszy (domyślnie włączone). Działa albo na pełnym ekranie, a
 kiedy kursor myszy jest przejęty w trybie okienkowym.
 .
 :CONFIG_DOS_MOUSE_DRIVER
-Włącza wbudowany sterownik myszy dla aplikacji DOS (domyślnie włączone).
+Włącza wbudowany sterownik myszy dla programów DOS (domyślnie włączone).
 Uwagi: Wyłącz, jeśli zamierzasz używać oryginalnego sterownika MOUSE.COM.
        Podczas bootowania systemu operacyjnego z obrazu dysku wbudowany
        sterownik jest automatycznie wyłączany.
@@ -511,7 +581,7 @@ zawieszających się lub brakujących dźwięków.
 DOSBox domyślnie koryguje wyjście MIDI takich gier. Nie zmienia to dźwięku
 w słyszalny sposób, wpływa jedynie na reprezentację danych MIDI.
 Włącz jedynie, jeśli potrzebujesz surowych, nieprzetworzonych danych MIDI, np.
-do pracy z aplikacjami muzycznymi, lub aby debugować problemy związane z MIDI.
+do pracy z programami muzycznymi, lub aby debugować problemy związane z MIDI.
 .
 :CONFIG_SOUNDFONT
 Ścieżka do pliku SoundFont w formacie SF2. Może być względna lub bezwzględna,
@@ -754,8 +824,14 @@ Filtrowanie dźwięku urządzenia PC Speaker:
 'DC offset' jest obecnie eliminowany globalnie.
 .
 :CONFIG_TANDY
-Włącza emulację urządzenia dźwiękowego Tandy Sound System.
-Dla 'auto' (domyślne), emulacja działa tylko przy typie maszyny 'tandy'.
+Emulacja urządzenia dźwiękowego Tandy/PCjr 3 Voice:
+  auto:  Włącza automatycznie dla maszy 'tandy' oraz 'pcjr' (domyślne).
+  on:    Włącza urządzenie z obsługą DAC, jesli tylko jest to możliwe.
+         Większość gier wymaga również opcji 'machine' ustawionej na
+         'tandy' lub 'pcjr'.
+  psg:   Włącza jedynie 3-kanałowy generator, bez obsługi DAC, aby uniknąć
+         konfliktów z innymi urządzeniami wykorzystujący kanał DMA numer 1.
+  off:   Wyłącza urządzenie dźwiękowe Tandy/PCjr.
 .
 :CONFIG_TANDY_FILTER
 Filtrowanie dźwięku syntetyzowanego urządzenia Tandy:
@@ -911,7 +987,7 @@ Włącza emulację pamięci rozszerzonej, XMS (domyślnie włączone).
 .
 :CONFIG_EMS
 Włącza emulacją pamięci stronicowanej, EMS. Domyślne ustawienie (włączone)
-oferuje największą kompatybilność, ale niektóre aplikacje mogą działać lepiej
+oferuje największą kompatybilność, ale niektóre programy mogą działać lepiej
 z innymi wartościami lub wymagać wyłączenia pamięci EMS żeby w ogóle działać.
 .
 :CONFIG_UMB
@@ -928,14 +1004,23 @@ Zostanie użyty do określenia formatu daty, czasu, liczb dziesiętnych, itp.
 Wartość domyślna 0 spowoduje ustawienie kraju odpowiadającemu wybranemu
 układowi klawiatury.
 .
+:CONFIG_KEYBOARDLAYOUT
+Kod języka klawiatury (domyślnie 'auto') - np. 'pl' (polski układ
+programisty), 'pl214' (polski układ maszynistki).
+.
 :CONFIG_EXPAND_SHELL_VARIABLE
 Rozwija zmienne środowiskowe, np. %PATH%, w wierszu poleceń.
 Domyślnie 'auto', włączone jeśli wersja systemu DOS to 7.0 lub wyższa.
 Obsługiwane przez COMMAND.COM z systemów MS-DOS 7/8 oraz FreeDOS.
 .
-:CONFIG_KEYBOARDLAYOUT
-Kod języka klawiatury (domyślnie 'auto') - np. 'pl' (polski układ
-programisty), 'pl214' (polski układ maszynistki).
+:CONFIG_SHELL_HISTORY_FILE
+Nazwa pliku przechowującego historię wiersza poleceń pomiędzy sesjami
+(domyślnie 'shell_history.txt').
+.
+:CONFIG_SETVER_TABLE_FILE
+Plik z tabelą programów i przypisanych do nich wersji systemu DOS, w formacie
+wartości rozdzielonych tabulatorami, używany przez polecenie SETVER.EXE do
+trwałego zapamiętania ustawień (domyślnie wartość pusta).
 .
 :CONFIG_IPX
 Włącza emulację protokołu IPX po UDP/IP (domyślnie włączone).
@@ -1000,6 +1085,9 @@ Jest to dobre miejsce na umieszczenie poleceń MOUNT.
 .
 :CONFIG_VALID_VALUES
 Możliwe wartości
+.
+:CONFIG_DEPRECATED_VALUES
+Przestarzałe wartości
 .
 :PROGRAM_CONFIG_PROPERTY_ERROR
 Brak sekcji lub parametru: '%s'
@@ -1146,7 +1234,7 @@ enumeracja nieobsługiwana
 urządzenie nie zostało skonfigurowane
 .
 :PROGRAM_FMPDRV_HELP_LONG
-Ładuje lub usuwa wbudowany sterownik karty ReelMagic Full Motion Player.
+Ładuje lub usuwa wbudowany sterownik karty ReelMagic.
 
 Składnia:
   [color=green]fmpdrv[reset]    (ładuje sterownik)
@@ -2170,6 +2258,76 @@ Typ musi być jednym z:
   %s
 
 .
+:PROGRAM_SETVER_HELP_LONG
+Wyświetla lub ustawia wersję DOS raportowaną programom.
+
+Składnia:
+  [color=green]setver[reset] \[/b] [/p]
+  [color=green]setver[reset] [color=cyan]PLIK[reset] [color=cyan]WERSJA[reset] [/q]
+  [color=green]setver[reset] [color=cyan]PLIK[reset] /d [/q]
+  [color=green]setver[reset] [color=cyan]WERSJA[reset] /g [/q]
+  [color=green]setver[reset] /d /g [/q]
+  [color=green]setver[reset] /d /all [/q]
+
+Gdzie:
+  [color=cyan]PLIK[reset]     nazwa pliku programu (opcjonalnie ze ścieżką), do którego
+           odnosi się ustawienie.
+  [color=cyan]WERSJA[reset]   wersja systemu DOS w formacie [color=white]n[reset].[color=white]nn[reset], [color=white]n[reset].[color=white]n[reset] lub [color=white]n[reset]
+  /g       ustawienie globalne, odnoszące się do wszystkich programów.
+  /d       usuwa wpis z tabeli wersji.
+  /all     razem z /d czyści całą tabelę wersji.
+  /b       wyświetla tabelę wersji w formie pliku wsadowego.
+  /p       wyświetla tabelę wersji po jednej stronie.
+  /q       nie wyświetla potwierdzenia.
+  /delete oraz /quiet oznaczają to samo, co /d oraz /q, odpowiednio.
+
+Uwagi:
+  Aby zapamiętać ustawienia na stałe, podaj nazwę pliku do przechowywania
+  tabeli wersji w sekcji [dos] pliku konfiguracyjnego - dodaj wpis
+  'setver_table_file = [color=cyan]PLIK_Z_TABELĄ_WERSJI[reset]'.
+
+Przykłady:
+  [color=green]setver[reset] /b              ; wyświetla ustawienia w formie pliku wsadowego
+  [color=green]setver[reset] [color=cyan]RETRO.COM[reset] [color=white]6[reset].[color=white]22[reset]  ; raportuje wersję 6.22 dla każdego pliku RETRO.COM
+  [color=green]setver[reset] [color=cyan]RETRO.COM[reset] /d    ; zaprzestaje raportowania w/w wersji DOS
+
+.
+:PROGRAM_SETVER_WRONG_TABLE
+Jedynie tabela wersji na dysku Z:\ jest obsługiwana.
+.
+:PROGRAM_SETVER_INVALID_VERSION
+Nieprawidłowa wersja systemu DOS.
+.
+:PROGRAM_SETVER_TABLE_UPDATED
+Tabela wersji zaktualizowana.
+.
+:PROGRAM_SETVER_TABLE_CLEARED
+Tabela wersji wyczyszczona.
+.
+:PROGRAM_SETVER_TABLE_ALREADY_EMPTY
+Tabela wersji już jest pusta.
+.
+:PROGRAM_SETVER_TABLE_ENTRY_REMOVED
+Wpis usunięty z tabeli wersji.
+.
+:PROGRAM_SETVER_TABLE_ENTRY_NOT_FOUND
+Wpis w tabeli wersji nieznaleziony.
+.
+:PROGRAM_SETVER_TABLE_EMPTY
+Tabela wersji jest pusta.
+.
+:PROGRAM_SETVER_GLOBAL
+Wersja raportowana globalnie
+.
+:PROGRAM_SETVER_BATCH_GLOBAL
+reguła dla wszystkich programów
+.
+:PROGRAM_SETVER_BATCH_BY_FILE_NAME
+reguły dla pasujących nazw plików
+.
+:PROGRAM_SETVER_BATCH_BY_FILE_PATH
+reguły dla pasujących nazw plików ze ścieżkami
+.
 :PROGRAM_TREE_HELP_LONG
 Wyświetla drzewo katalogów w formie graficznej.
 
@@ -2216,12 +2374,26 @@ Brak plików lub podkatalogów do wyświetlenia.
 Zbyt wiele plików lub podkatalogów.
 
 .
+:AUTOEXEC_BAT_GENERATED
+wygenerowane na podstawie pliku konfiguracyjnego i wiersza poleceń
+.
+:AUTOEXEC_BAT_CONFIG_SECTION
+z sekcji [autoexec]
+.
 :SHELL_ILLEGAL_PATH
 Nieprawidłowa ścieżka.
 
 .
+:SHELL_ILLEGAL_FILE_NAME
+Nieprawidłowa nazwa pliku.
+
+.
 :SHELL_ILLEGAL_SWITCH
 Nieprawidłowy przełącznik: %s.
+
+.
+:SHELL_ILLEGAL_SWITCH_COMBO
+Nieprawidłowa kombinacja przełączników.
 
 .
 :SHELL_MISSING_PARAMETER
@@ -2230,6 +2402,10 @@ Brak wymaganego parametru.
 .
 :SHELL_TOO_MANY_PARAMETERS
 Zbyt wiele parametrów.
+
+.
+:SHELL_EXPECTED_FILE_NOT_DIR
+Wymagany plik, nie katalog.
 
 .
 :SHELL_SYNTAX_ERROR
@@ -2510,8 +2686,8 @@ Polecenia SUBST można użyć jedynie na lokalnych dyskach
 
 .
 :SHELL_STARTUP_CGA
-║ DOSBox wspiera tryb Composite CGA.                                 ║
-║ Wciśnij [color=red]F12[color=white], aby włączyć lub wyłączyć tryb composite.              ║
+║ DOSBox wspiera tryb obrazu kompozytowego CGA.                      ║
+║ Wciśnij [color=red]F12[color=white], aby włączyć lub wyłączyć tryb kompozytowy obrazu.     ║
 ║ [color=red]%s+F11[color=white] zmienia barwę; [color=red]%s+%s+F11[color=white] zmienia model CGA.%s             ║
 ║                                                                    ║
 
@@ -3091,26 +3267,21 @@ Przykłady:
   [color=green]path[reset] [color=cyan]Z:\;C:\DOS[reset]
 .
 :SHELL_CMD_VER_HELP
-Wyświetla lub zmienia raportowaną wersję systemu DOS.
+Wyświetla wersję systemu DOS.
 
 .
 :SHELL_CMD_VER_HELP_LONG
 Składnia:
   [color=green]ver[reset]
-  [color=green]ver[reset] [color=white]set[reset] [color=cyan]WERSJA[reset]
-
-Gdzie:
-  [color=cyan]WERSJA[reset]  może być numerem, np. [color=cyan]5[reset] lub liczbą z dwoma cyframi po kropce,
-          np. [color=cyan]6.22[reset], [color=cyan]7.01[reset] lub [color=cyan]7.10[reset]. Alternatywnie można oddzielić
-          część ułamkową za pomocą spacji: [color=cyan]6 22[reset], [color=cyan]7 01[reset] lub [color=cyan]7 10[reset].
 
 Uwagi:
   Raportowaną wersję DOSu można ustawić w pliku konfiguracyjnym, w sekcji
   [dos], wpisując 'ver = [color=cyan]WERSJA[reset]'.
+  Wersję systemu DOS raportowaną programom można zmienić poleceniem [color=green]setver[reset].
+  Składnia '[color=green]ver[reset] [color=white]set[reset] [color=cyan]WERSJA[reset]' jest przestarzała.
 
 Przykłady:
-  [color=green]ver[reset] [color=white]set[reset] [color=cyan]6.22[reset]
-  [color=green]ver[reset] [color=white]set[reset] [color=cyan]7 10[reset]
+  [color=green]ver[reset]
 .
 :SHELL_CMD_VER_VER
 DOSBox Staging, wersja %s
@@ -3119,6 +3290,32 @@ DOS, wersja %d.%02d
 .
 :SHELL_CMD_VER_INVALID
 Podana wersja DOSa jest nieprawidłowa.
+
+.
+:SHELL_CMD_VOL_HELP
+Wyświetla etykietę i numer seryjny dysku, jeśli istnieją.
+
+.
+:SHELL_CMD_VOL_HELP_LONG
+Składnia:
+  [color=green]vol[reset] [color=cyan][DYSK:][reset]
+
+Gdzie:
+  [color=cyan]DYSK:[reset] jest literą dysku z dwukropkiem.
+
+Uwagi:
+  Uruchomienie [color=green]vol[reset] bez parametrów wyświetli informacje o aktualnym dysku.
+
+Przykłady:
+  [color=green]vol[reset]
+  [color=green]vol[reset] [color=cyan]c:[reset]
+
+.
+:SHELL_CMD_VOL_OUTPUT
+
+ Dysk %c ma etykietę %s
+ Numer seryjny to %04X-%04X
+
 
 .
 :HELP_UTIL_CATEGORY_DOSBOX

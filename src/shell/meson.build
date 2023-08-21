@@ -1,5 +1,7 @@
 libshell_sources = files(
     'autoexec.cpp',
+    'command_line.cpp',
+    'file_reader.cpp',
     'shell.cpp',
     'shell_batch.cpp',
     'shell_cmds.cpp',
@@ -15,6 +17,7 @@ libshell = static_library(
         ghc_dep,
         libloguru_dep,
     ],
+    cpp_args: warnings,
 )
 
 libshell_dep = declare_dependency(link_with: libshell)

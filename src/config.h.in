@@ -115,12 +115,6 @@
 // Define to 1 to enable Novell NE 2000 NIC emulation
 #mesondefine C_NE2000
 
-// Define to 1 to enable rendered screenshots in .png format (using SDL2_image)
-#mesondefine C_SDL_IMAGE
-
-// Define to 1 to enable surface screenshots in .png format
-#mesondefine C_SSHOT
-
 // Define to 1 to enable the Tracy profiling server
 #mesondefine C_TRACY
 
@@ -251,14 +245,5 @@
 // be used as a fallback if the user hasn't populated their
 // XDG_DATA_HOME or XDG_DATA_DIRS to include the --datadir.
 #mesondefine CUSTOM_DATADIR
-
-/* Loguru-related defines
- */
-
-// Prevent loguru from parsing command-line arguments with
-// with the hosts's locale-applied, because this can foul up
-// ncurses. (DOSBox also doesn't have foreign-language arguments).
-//
-#define LOGURU_USE_LOCALE 0
 
 #endif

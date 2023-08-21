@@ -1,7 +1,7 @@
 /*
  *  SPDX-License-Identifier: GPL-2.0-or-later
  *
- *  Copyright (C) 2021-2022  The DOSBox Staging Team
+ *  Copyright (C) 2023-2023  The DOSBox Staging Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,46 +18,23 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifndef DOSBOX_RGB24_H
-#define DOSBOX_RGB24_H
+#ifndef DOSBOX_PROGRAM_MOVE_H
+#define DOSBOX_PROGRAM_MOVE_H
 
-#include <cstdint>
+#include "programs.h"
 
-#include "rgb16.h"
+#include <string>
 
-class rgb24 {
+class MOVE final : public Program {
 public:
-	uint8_t red   = 0;
-	uint8_t green = 0;
-	uint8_t blue  = 0;
-
-	constexpr rgb24() = default;
-	constexpr rgb24(const uint8_t r, const uint8_t g, const uint8_t b)
-	        : red(r),
-	          green(g),
-	          blue(b)
-	{}
-
-	constexpr rgb24(const uint16_t val)
-	        : red(Rgb16::Red5To8(val)),
-	          green(Rgb16::Green6To8(val)),
-	          blue(Rgb16::Blue5To8(val))
-	{}
-
-	constexpr operator int() const
+	MOVE()
 	{
-		return (blue << 16) | (green << 8) | (red << 0);
+		help_detail = {HELP_Filter::All,
+		               HELP_Category::File,
+		               HELP_CmdType::Program,
+		               "MOVE"};
 	}
-
-	constexpr static rgb24 byteswap(const rgb24& in)
-	{
-		return rgb24(in.blue, in.green, in.red);
-	}
+	void Run() override;
 };
-
-constexpr rgb24 host_to_le(const rgb24& in) noexcept
-{
-	return rgb24::byteswap(in);
-}
 
 #endif

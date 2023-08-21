@@ -155,8 +155,8 @@ struct RMException : ::std::exception {
 		va_end(vl);
 		LOG(LOG_REELMAGIC, LOG_ERROR)("%s", _msg.c_str());
 	}
-	virtual ~RMException() throw() {}
-	virtual const char* what() const throw()
+	~RMException() noexcept override = default;
+	const char* what() const noexcept override
 	{
 		return _msg.c_str();
 	}
@@ -202,12 +202,12 @@ class ReelMagic_MediaPlayerDOSFile : public ReelMagic_MediaPlayerFile {
 	}
 
 protected:
-	const char* GetFileName() const
+	const char* GetFileName() const override
 	{
 		return _fileName.c_str();
 	}
 
-	uint32_t GetFileSize() const
+	uint32_t GetFileSize() const override
 	{
 		uint32_t currentPos = 0;
 		if (!DOS_SeekFile(_pspEntry, &currentPos, DOS_SEEK_CUR))
@@ -220,7 +220,7 @@ protected:
 		return result;
 	}
 
-	uint32_t Read(uint8_t* data, uint32_t amount)
+	uint32_t Read(uint8_t* data, uint32_t amount) override
 	{
 		uint32_t bytesRead = 0;
 		uint16_t transactionAmount;
@@ -237,7 +237,7 @@ protected:
 		return bytesRead;
 	}
 
-	void Seek(uint32_t pos, uint32_t type)
+	void Seek(uint32_t pos, uint32_t type) override
 	{
 		if (!DOS_SeekFile(_pspEntry, &pos, type))
 			throw RMException("DOS File: Seek failed.");
@@ -254,7 +254,7 @@ public:
 	                    strcpyFromDos(filenameStrSeg, filenameStrPtr, firstByteIsLen)),
 	          _pspEntry(OpenDosFileEntry(_fileName))
 	{}
-	virtual ~ReelMagic_MediaPlayerDOSFile()
+	~ReelMagic_MediaPlayerDOSFile() override
 	{
 		DOS_CloseFile(_pspEntry);
 	}
@@ -280,17 +280,17 @@ class ReelMagic_MediaPlayerHostFile : public ReelMagic_MediaPlayerFile {
 	}
 
 protected:
-	const char* GetFileName() const
+	const char* GetFileName() const override
 	{
 		return _fileName.c_str();
 	}
 
-	uint32_t GetFileSize() const
+	uint32_t GetFileSize() const override
 	{
 		return _fileSize;
 	}
 
-	uint32_t Read(uint8_t* data, uint32_t amount)
+	uint32_t Read(uint8_t* data, uint32_t amount) override
 	{
 		const size_t fread_result = fread(data, 1, amount, _fp);
 		if ((fread_result == 0) && ferror(_fp))
@@ -298,7 +298,7 @@ protected:
 		return (uint32_t)fread_result;
 	}
 
-	void Seek(uint32_t pos, uint32_t type)
+	void Seek(uint32_t pos, uint32_t type) override
 	{
 		if (fseek(_fp, (long)pos, (type == DOS_SEEK_SET) ? SEEK_SET : SEEK_CUR) == -1)
 			throw RMException("Host File: fseek() failed: %s", strerror(errno));
@@ -325,7 +325,7 @@ public:
 		// Only get the size if we've got a valid file pointer
 		_fileSize = GetFileSize(_fp);
 	}
-	virtual ~ReelMagic_MediaPlayerHostFile()
+	~ReelMagic_MediaPlayerHostFile() override
 	{
 		fclose(_fp);
 	}
@@ -1038,7 +1038,7 @@ public:
 		               HELP_CmdType::Program,
 		               "FMPDRV"};
 	}
-	void Run()
+	void Run() override
 	{
 		if (HelpRequested()) {
 			MoreOutputStrings output(*this);
@@ -1085,7 +1085,7 @@ public:
 			return;
 
 		MSG_Add("PROGRAM_FMPDRV_HELP_LONG",
-		        "Load or unload the built-in ReelMagic Full Motion Player driver.\n"
+		        "Loads or unloads the built-in ReelMagic Full Motion Player driver.\n"
 		        "\n"
 		        "Usage:\n"
 		        "  [color=green]fmpdrv[reset]    (loads the driver)\n"
@@ -1396,11 +1396,18 @@ void ReelMagic_Init(Section* sec)
 	const auto section = static_cast<Section_prop*>(sec);
 
 	// Does the user want ReelMagic emulation?
-	const auto reelmagic_choice = std::string_view(section->Get_string("reelmagic"));
-	const auto wants_reelmagic  = (reelmagic_choice == "on" || reelmagic_choice == "cardonly");
+	const auto reelmagic_choice = std::string_view(
+	        section->Get_string("reelmagic"));
 
-	if (!wants_reelmagic) {
-		if (reelmagic_choice != "off") {
+	const auto wants_card_only = (reelmagic_choice == "cardonly");
+
+	const auto reelmagic_choice_has_bool = parse_bool_setting(reelmagic_choice);
+
+	const auto wants_card_and_driver = (reelmagic_choice_has_bool &&
+	                                    *reelmagic_choice_has_bool == true);
+
+	if (!wants_card_only && !wants_card_and_driver) {
+		if (!reelmagic_choice_has_bool) {
 			LOG_WARNING("REELMAGIC: Invalid 'reelmagic' value: '%s', shutting down.",
 			            reelmagic_choice.data());
 		}
@@ -1431,8 +1438,7 @@ void ReelMagic_Init(Section* sec)
 
 	REELMAGIC_MaybeCreateFmpdrvExecutable();
 
-	// User wants the hardware and the driver
-	if (reelmagic_choice == "on") {
+	if (wants_card_and_driver) {
 		_unloadAllowed = false;
 		FMPDRV_InstallINTHandler();
 	}
@@ -1442,9 +1448,9 @@ void ReelMagic_Init(Section* sec)
 	const bool driver_initialized = _installedInterruptNumber != 0;
 
 	if (card_initialized && driver_initialized)
-		LOG_MSG("REELMAGIC: Initialized ReelMagic MPEG playback card and driver");
+		LOG_MSG("REELMAGIC: Initialised ReelMagic MPEG playback card and driver");
 	else if (card_initialized)
-		LOG_MSG("REELMAGIC: Initialized ReelMagic MPEG playback card");
+		LOG_MSG("REELMAGIC: Initialised ReelMagic MPEG playback card");
 	else {
 		// Should be impossible to initialize the driver without the card
 		assert(driver_initialized == false);

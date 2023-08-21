@@ -46,7 +46,7 @@ public:
 	MidiHandler_win32(const MidiHandler_win32&) = delete;
 	MidiHandler_win32& operator=(const MidiHandler_win32&) = delete;
 
-	const char* GetName() const override
+	std::string_view GetName() const override
 	{
 		return "win32";
 	}
@@ -59,7 +59,7 @@ public:
 	bool Open(const char *conf) override
 	{
 		if (isOpen) return false;
-		m_event = CreateEvent (NULL, true, true, NULL);
+		m_event = CreateEvent (nullptr, true, true, nullptr);
 		MMRESULT res = MMSYSERR_NOERROR;
 		if(conf && *conf) {
 			std::string strconf(conf);

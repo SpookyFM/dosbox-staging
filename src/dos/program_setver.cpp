@@ -545,7 +545,7 @@ void SETVER::OverrideVersion(const char* name, DOS_PSP& psp)
 	try_override(name_str, setver_table.by_file_name);
 }
 
-std::string SETVER::GetTableFilePath()
+std_fs::path SETVER::GetTableFilePath()
 {
 	// Original SETVER.EXE stores the version table in its own executable;
 	// this is not feasible in DOSBox, therefore we are using external file
@@ -616,7 +616,7 @@ void SETVER::LoadTableFromFile()
 		already_warned_name = true;
 	};
 
-	// If the file does not exists, save default settings there
+	// If the file does not exist, save default settings there
 	if (!std_fs::exists(file_path)) {
 		SaveTableToFile();
 		return;
@@ -682,6 +682,16 @@ void SETVER::SaveTableToFile()
 		return;
 	}
 
+	// Do not store modifed table if we are in secure mode
+	if (control->SecureMode()) {
+		static bool already_warned = false;
+		if (!already_warned) {
+			LOG_WARNING("DOS: SETVER - secure mode, storing table skipped");
+			already_warned = true;
+		}
+		return;
+	}
+
 	// Write table into the file
 	std::ofstream file(file_path.c_str(), std::ios::trunc);
 	if (setver_table.is_global_version_set) {
@@ -702,7 +712,7 @@ void SETVER::SaveTableToFile()
 void SETVER::AddMessages()
 {
 	MSG_Add("PROGRAM_SETVER_HELP_LONG",
-	        "View or set the DOS version reported to applications.\n"
+	        "Displays or sets the DOS version reported to applications.\n"
 	        "\n"
 	        "Usage:\n"
 	        "  [color=green]setver[reset] \\[/b] [/p]\n"

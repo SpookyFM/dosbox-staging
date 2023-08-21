@@ -71,12 +71,12 @@ private:
 public:
 	MidiHandler_coreaudio()
 	        : MidiHandler(),
-	          m_auGraph(0),
-	          m_synth(0),
+	          m_auGraph(nullptr),
+	          m_synth(nullptr),
 	          soundfont(nullptr)
 	{}
 
-	const char* GetName() const override
+	std::string_view GetName() const override
 	{
 		return "coreaudio";
 	}
@@ -194,7 +194,7 @@ public:
 		if (m_auGraph) {
 			AUGraphStop(m_auGraph);
 			DisposeAUGraph(m_auGraph);
-			m_auGraph = 0;
+			m_auGraph = nullptr;
 		}
 		return false;
 	}
@@ -205,7 +205,7 @@ public:
 			Reset();
 			AUGraphStop(m_auGraph);
 			DisposeAUGraph(m_auGraph);
-			m_auGraph = 0;
+			m_auGraph = nullptr;
 		}
 	}
 

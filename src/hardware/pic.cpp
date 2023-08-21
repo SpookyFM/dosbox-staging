@@ -418,8 +418,8 @@ void PIC_SetIRQMask(uint32_t irq, bool masked)
 
 static void AddEntry(PICEntry * entry) {
 	PICEntry * find_entry=pic_queue.next_entry;
-	if (GCC_UNLIKELY(find_entry ==0)) {
-		entry->next=0;
+	if (GCC_UNLIKELY(find_entry ==nullptr)) {
+		entry->next=nullptr;
 		pic_queue.next_entry=entry;
 	} else if (find_entry->index>entry->index) {
 		pic_queue.next_entry=entry;
@@ -469,7 +469,7 @@ void PIC_RemoveSpecificEvents(PIC_EventHandler handler, uint32_t val)
 {
 	PICEntry *entry = pic_queue.next_entry;
 	PICEntry *prev_entry;
-	prev_entry = 0;
+	prev_entry = nullptr;
 	while (entry) {
 		if (GCC_UNLIKELY((entry->pic_event == handler)) && (entry->value == val)) {
 			if (prev_entry) {
@@ -494,7 +494,7 @@ void PIC_RemoveSpecificEvents(PIC_EventHandler handler, uint32_t val)
 void PIC_RemoveEvents(PIC_EventHandler handler) {
 	PICEntry * entry=pic_queue.next_entry;
 	PICEntry * prev_entry;
-	prev_entry=0;
+	prev_entry=nullptr;
 	while (entry) {
 		if (GCC_UNLIKELY(entry->pic_event==handler)) {
 			if (prev_entry) {
@@ -567,7 +567,7 @@ struct TickerBlock {
 	TickerBlock * next;
 };
 
-static TickerBlock * firstticker=0;
+static TickerBlock * firstticker=nullptr;
 
 
 void TIMER_DelTickHandler(TIMER_TickHandler handler) {
@@ -642,7 +642,16 @@ public:
 		PIC_SetIRQMask(2,false);					/* Enable second pic */
 		PIC_SetIRQMask(8,false);					/* Enable RTC IRQ */
 
-		if (machine==MCH_PCJR) {
+		// On AT systems, Both IRQ 2 and 9 were available.
+		// Ref: https://dosdays.co.uk/topics/io_addresses_irq_dma.php
+		// If present, the MPU-401 activates and uses IRQ 9.
+		//
+		if (IS_EGAVGA_ARCH) {
+			PIC_SetIRQMask(9, false);
+			PIC_DeActivateIRQ(9);
+		}
+
+		if (machine == MCH_PCJR) {
 			/* Enable IRQ6 (replacement for the NMI for PCJr) */
 			PIC_SetIRQMask(6,false);
 		}
@@ -658,9 +667,9 @@ public:
 		for (i=0;i<PIC_QUEUESIZE-1;i++) {
 			pic_queue.entries[i].next=&pic_queue.entries[i+1];
 		}
-		pic_queue.entries[PIC_QUEUESIZE-1].next=0;
+		pic_queue.entries[PIC_QUEUESIZE-1].next=nullptr;
 		pic_queue.free_entry=&pic_queue.entries[0];
-		pic_queue.next_entry=0;
+		pic_queue.next_entry=nullptr;
 	}
 
 	~PIC_8259A(){

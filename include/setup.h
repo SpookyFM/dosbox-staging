@@ -29,6 +29,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -38,6 +39,11 @@
 using parse_environ_result_t = std::list<std::tuple<std::string, std::string>>;
 
 parse_environ_result_t parse_environ(const char* const* envp) noexcept;
+
+// Helpers to test if a string setting is boolean
+std::optional<bool> parse_bool_setting(const std::string_view setting);
+bool has_true(const std::string_view setting);
+bool has_false(const std::string_view setting);
 
 class Hex {
 private:
@@ -181,9 +187,15 @@ protected:
 	Value value                                            = {};
 	std::vector<Value> valid_values                        = {};
 	std::map<Value, Value> deprecated_and_alternate_values = {};
+	bool is_positive_bool_valid                            = false;
+	bool is_negative_bool_valid                            = false;
+
 	Value default_value                                    = {};
 	const Changeable::Value change                         = {};
 	typedef std::vector<Value>::const_iterator const_iter;
+
+private:
+	void MaybeSetBoolValid(const std::string_view value);
 };
 
 class Prop_int final : public Property {
@@ -232,8 +244,8 @@ public:
 	{
 		default_value = value = _value;
 	}
-	bool SetValue(const std::string& input);
-	~Prop_double() {}
+	bool SetValue(const std::string& input) override;
+	~Prop_double() override = default;
 };
 
 class Prop_bool final : public Property {
@@ -243,8 +255,8 @@ public:
 	{
 		default_value = value = _value;
 	}
-	bool SetValue(const std::string& in);
-	~Prop_bool() {}
+	bool SetValue(const std::string& in) override;
+	~Prop_bool() override = default;
 };
 
 class Prop_string : public Property {
@@ -265,15 +277,16 @@ public:
 class Prop_path final : public Prop_string {
 public:
 	Prop_path(const std::string& name, Changeable::Value when, const char* val)
-	        : Prop_string(name, when, val),
-	          realpath(val)
-	{}
+	        : Prop_string(name, when, val)
+	{
+		SetValue(val);
+	}
 
 	~Prop_path() override = default;
 
 	bool SetValue(const std::string& in) override;
 
-	std::string realpath;
+	std_fs::path realpath = {};
 };
 
 class Prop_hex final : public Property {
@@ -283,8 +296,8 @@ public:
 	{
 		default_value = value = _value;
 	}
-	bool SetValue(const std::string& in);
-	~Prop_hex() {}
+	bool SetValue(const std::string& in) override;
+	~Prop_hex() override = default;
 };
 
 #define NO_SUCH_PROPERTY "PROP_NOT_EXIST"
@@ -307,7 +320,7 @@ private:
 	};
 
 	std::deque<Function_wrapper> early_init_functions = {};
-	std::deque<Function_wrapper> initfunctions        = {};
+	std::deque<Function_wrapper> init_functions       = {};
 	std::deque<Function_wrapper> destroyfunctions     = {};
 	std::string sectionname                           = {};
 
@@ -453,7 +466,7 @@ public:
 	        : PropMultiVal(_propname, when, sep)
 	{}
 
-	virtual bool SetValue(const std::string& input);
+	bool SetValue(const std::string& input) override;
 };
 
 class Section_line final : public Section {

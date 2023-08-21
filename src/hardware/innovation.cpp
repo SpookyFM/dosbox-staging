@@ -28,18 +28,21 @@
 
 CHECK_NARROWING();
 
-void Innovation::Open(const std::string &model_choice,
-                      const std::string &clock_choice, const int filter_strength_6581,
+void Innovation::Open(const std::string_view model_choice,
+                      const std::string_view clock_choice,
+                      const int filter_strength_6581,
                       const int filter_strength_8580, const int port_choice,
-                      const std::string &channel_filter_choice)
+                      const std::string_view channel_filter_choice)
 {
 	Close();
 
 	// Sentinel
-	if (model_choice == "none")
+	const auto model_choice_has_bool = parse_bool_setting(model_choice);
+	if (model_choice_has_bool && *model_choice_has_bool == false) {
 		return;
+	}
 
-	std::string model_name;
+	std::string_view model_name = "";
 	int filter_strength = 0;
 	auto sid_service    = std::make_unique<reSIDfp::SID>();
 
@@ -87,9 +90,13 @@ void Innovation::Open(const std::string &model_choice,
 	                                       ChannelFeature::Synthesizer});
 
 	if (!mixer_channel->TryParseAndSetCustomFilter(channel_filter_choice)) {
-		if (channel_filter_choice != "off")
+		const auto filter_choice_has_bool = parse_bool_setting(
+		        channel_filter_choice);
+
+		if (!filter_choice_has_bool) {
 			LOG_WARNING("INNOVATION: Invalid 'innovation_filter' value: '%s', using 'off'",
-			            channel_filter_choice.c_str());
+			            channel_filter_choice.data());
+		}
 
 		mixer_channel->SetHighPassFilter(FilterState::Off);
 		mixer_channel->SetLowPassFilter(FilterState::Off);
@@ -124,12 +131,12 @@ void Innovation::Open(const std::string &model_choice,
 	if (filter_strength == 0)
 		LOG_MSG("INNOVATION: Running on port %xh with a SID %s at %0.3f MHz",
 		        base_port,
-		        model_name.c_str(),
+		        model_name.data(),
 		        chip_clock / us_per_s);
 	else
 		LOG_MSG("INNOVATION: Running on port %xh with a SID %s at %0.3f MHz filtering at %d%%",
 		        base_port,
-		        model_name.c_str(),
+		        model_name.data(),
 		        chip_clock / us_per_s,
 		        filter_strength);
 
@@ -270,7 +277,7 @@ static void init_innovation_dosbox_settings(Section_prop& sec_prop)
 
 	// Chip type
 	auto* str_prop = sec_prop.Add_string("sidmodel", when_idle, "none");
-	const char* sid_models[] = {"auto", "6581", "8580", "none", 0};
+	const char* sid_models[] = {"auto", "6581", "8580", "none", nullptr};
 	str_prop->Set_values(sid_models);
 	str_prop->Set_help(
 	        "Model of chip to emulate in the Innovation SSI-2001 card:\n"
@@ -283,7 +290,7 @@ static void init_innovation_dosbox_settings(Section_prop& sec_prop)
 
 	// Chip clock frequency
 	str_prop = sec_prop.Add_string("sidclock", when_idle, "default");
-	const char* sid_clocks[] = {"default", "c64ntsc", "c64pal", "hardsid", 0};
+	const char* sid_clocks[] = {"default", "c64ntsc", "c64pal", "hardsid", nullptr};
 	str_prop->Set_values(sid_clocks);
 	str_prop->Set_help(
 	        "The SID chip's clock frequency, which is jumperable on reproduction cards.\n"
@@ -294,7 +301,7 @@ static void init_innovation_dosbox_settings(Section_prop& sec_prop)
 
 	// IO Address
 	auto* hex_prop          = sec_prop.Add_hex("sidport", when_idle, 0x280);
-	const char* sid_ports[] = {"240", "260", "280", "2a0", "2c0", 0};
+	const char* sid_ports[] = {"240", "260", "280", "2a0", "2c0", nullptr};
 	hex_prop->Set_values(sid_ports);
 	hex_prop->Set_help(
 	        "The IO port address of the Innovation SSI-2001 (280 by default).");

@@ -111,16 +111,35 @@ public:
 		GEMMIS_seg = 0;
 	}
 
-	bool Read(uint8_t * /*data*/,uint16_t * /*size*/) { return false;}
-	bool Write(uint8_t * /*data*/,uint16_t * /*size*/){
-		LOG(LOG_IOCTL,LOG_NORMAL)("EMS:Write to device");
+	bool Read(uint8_t* /*data*/, uint16_t* /*size*/) override
+	{
 		return false;
 	}
-	bool Seek(uint32_t * /*pos*/,uint32_t /*type*/){return false;}
-	bool Close(){return false;}
-	uint16_t GetInformation(void){return 0xc0c0;}
-	bool ReadFromControlChannel(PhysPt bufptr,uint16_t size,uint16_t * retcode);
-	bool WriteToControlChannel(PhysPt /*bufptr*/,uint16_t /*size*/,uint16_t * /*retcode*/){return true;}
+	bool Write(uint8_t* /*data*/, uint16_t* /*size*/) override
+	{
+		LOG(LOG_IOCTL, LOG_NORMAL)("EMS:Write to device");
+		return false;
+	}
+	bool Seek(uint32_t* /*pos*/, uint32_t /*type*/) override
+	{
+		return false;
+	}
+	bool Close() override
+	{
+		return false;
+	}
+	uint16_t GetInformation(void) override
+	{
+		return 0xc0c0;
+	}
+	bool ReadFromControlChannel(PhysPt bufptr, uint16_t size,
+	                            uint16_t* retcode) override;
+	bool WriteToControlChannel(PhysPt /*bufptr*/, uint16_t /*size*/,
+	                           uint16_t* /*retcode*/) override
+	{
+		return true;
+	}
+
 private:
 	bool is_emm386;
 };
@@ -1355,12 +1374,15 @@ static Bitu INT4B_Handler() {
 
 Bitu GetEMSType(Section_prop * section) {
 	Bitu rtype = 0;
-	std::string emstypestr(section->Get_string("ems"));
-	if (emstypestr=="true") {
-		rtype = 1;	// mixed mode
-	} else if (emstypestr=="emsboard") {
+	const std::string_view ems_pref = section->Get_string("ems");
+
+	const auto ems_pref_has_bool = parse_bool_setting(ems_pref);
+
+	if (ems_pref_has_bool && *ems_pref_has_bool == true) {
+		rtype = 1; // mixed mode
+	} else if (ems_pref == "emsboard") {
 		rtype = 2;
-	} else if (emstypestr=="emm386") {
+	} else if (ems_pref == "emm386") {
 		rtype = 3;
 	} else {
 		rtype = 0;
@@ -1499,9 +1521,9 @@ public:
 		BIOS_ZeroExtendedSize(false);
 
 		/* Remove ems device */
-		if (emm_device!=NULL) {
+		if (emm_device!=nullptr) {
 			DOS_DelDevice(emm_device);
-			emm_device=NULL;
+			emm_device=nullptr;
 		}
 		GEMMIS_seg=0;
 

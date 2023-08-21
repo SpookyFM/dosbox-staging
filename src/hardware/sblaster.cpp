@@ -587,7 +587,8 @@ static void DSP_FlushData()
 
 static double last_dma_callback = 0.0;
 
-static void DSP_DMA_CallBack(DmaChannel * chan, DMAEvent event) {
+static void DSP_DMA_CallBack(const DmaChannel* chan, DMAEvent event)
+{
 	if (chan!=sb.dma.chan || event==DMA_REACHED_TC) return;
 	else if (event==DMA_MASKED) {
 		if (sb.mode==MODE_DMA) {
@@ -614,7 +615,7 @@ static void DSP_DMA_CallBack(DmaChannel * chan, DMAEvent event) {
 			}
 			sb.mode = MODE_DMA_MASKED;
 //			DSP_ChangeMode(MODE_DMA_MASKED);
-			LOG(LOG_SB,LOG_NORMAL)("DMA masked,stopping output, left %d",chan->currcnt);
+			LOG(LOG_SB,LOG_NORMAL)("DMA masked,stopping output, left %d",chan->curr_count);
 		}
 	} else if (event==DMA_UNMASKED) {
 		if (sb.mode==MODE_DMA_MASKED && sb.dma.mode!=DSP_DMA_NONE) {
@@ -623,8 +624,8 @@ static void DSP_DMA_CallBack(DmaChannel * chan, DMAEvent event) {
 			FlushRemainingDMATransfer();
 			LOG(LOG_SB, LOG_NORMAL)
 			("DMA unmasked,starting output, auto %d block %d",
-			 static_cast<int>(chan->autoinit),
-			 chan->basecnt);
+			 static_cast<int>(chan->is_autoiniting),
+			 chan->base_count);
 		}
 	}
 	else {
@@ -1019,18 +1020,28 @@ static void FlushRemainingDMATransfer()
 
 static void set_channel_rate_hz(const uint32_t requested_rate_hz)
 {
-	// Valid output rates range from 5000 to 45 000 Hz, inclusive.
+	// The official guide states the following:
+	// "Valid output rates range from 5000 to 45 000 Hz, inclusive."
+	//
+	// However, this statement is wrong as in actual reality the maximum
+	// achievable sample rate is the native SB DAC rate of 45454 Hz, and
+	// many programs use this highest rate. Limiting the max rate to 45000
+	// Hz would result in a slightly out-of-tune, detuned pitch in such
+	// programs.
+	//
+	// More details:
+	// https://www.vogons.org/viewtopic.php?p=621717#p621717
+	//
 	// Ref:
 	//   Sound Blaster Series Hardware Programming Guide,
 	//   41h Set digitized sound output sampling rate, DSP Commands 6-15
 	//   https://pdos.csail.mit.edu/6.828/2018/readings/hardware/SoundBlaster.pdf
 	//
 	constexpr int min_rate_hz = 5000;
-	constexpr int max_rate_hz = 45000;
 
 	const auto rate_hz = std::clamp(static_cast<int>(requested_rate_hz),
 	                                min_rate_hz,
-	                                max_rate_hz);
+	                                native_dac_rate_hz);
 
 	assert(sb.chan);
 	if (sb.chan->GetSampleRate() != rate_hz) {
@@ -1116,7 +1127,7 @@ static void DSP_DoDMATransfer(const DMA_MODES mode, uint32_t freq, bool autoinit
 	PIC_RemoveEvents(ProcessDMATransfer);
 	//Set to be masked, the dma call can change this again.
 	sb.mode = MODE_DMA_MASKED;
-	sb.dma.chan->Register_Callback(DSP_DMA_CallBack);
+	sb.dma.chan->RegisterCallback(DSP_DMA_CallBack);
 
 #if (C_DEBUG)
 	LOG(LOG_SB, LOG_NORMAL)
@@ -1130,7 +1141,7 @@ static void DSP_PrepareDMA_Old(DMA_MODES mode,bool autoinit,bool sign) {
 	sb.dma.sign=sign;
 	if (!autoinit)
 		sb.dma.singlesize=1+sb.dsp.in.data[0]+(sb.dsp.in.data[1] << 8);
-	sb.dma.chan=GetDMAChannel(sb.hw.dma8);
+	sb.dma.chan=DMA_GetChannel(sb.hw.dma8);
 	DSP_DoDMATransfer(mode,sb.freq / (sb.mixer.stereo ? 2 : 1), autoinit, sb.mixer.stereo);
 }
 
@@ -1141,21 +1152,21 @@ static void DSP_PrepareDMA_New(DMA_MODES mode, uint32_t length, bool autoinit, b
 	//equal length if data format and dma channel are both 16-bit or 8-bit
 	if (mode==DSP_DMA_16) {
 		if (sb.hw.dma16!=0xff) {
-			sb.dma.chan=GetDMAChannel(sb.hw.dma16);
-			if (sb.dma.chan==NULL) {
-				sb.dma.chan=GetDMAChannel(sb.hw.dma8);
+			sb.dma.chan=DMA_GetChannel(sb.hw.dma16);
+			if (sb.dma.chan==nullptr) {
+				sb.dma.chan=DMA_GetChannel(sb.hw.dma8);
 				mode=DSP_DMA_16_ALIASED;
 				length *= 2;
 			}
 		} else {
-			sb.dma.chan=GetDMAChannel(sb.hw.dma8);
+			sb.dma.chan=DMA_GetChannel(sb.hw.dma8);
 			mode=DSP_DMA_16_ALIASED;
 			//UNDOCUMENTED:
 			//In aliased mode sample length is written to DSP as number of
 			//16-bit samples so we need double 8-bit DMA buffer length
 			length *= 2;
 		}
-	} else sb.dma.chan=GetDMAChannel(sb.hw.dma8);
+	} else sb.dma.chan=DMA_GetChannel(sb.hw.dma8);
 	//Set the length to the correct register depending on mode
 	if (autoinit) {
 		sb.dma.autosize = length;
@@ -1205,7 +1216,7 @@ static void DSP_Reset() {
 	sb.dma.autoinit=false;
 	sb.dma.mode=DSP_DMA_NONE;
 	sb.dma.remain_size=0;
-	if (sb.dma.chan) sb.dma.chan->Clear_Request();
+	if (sb.dma.chan) sb.dma.chan->ClearRequest();
 
 	sb.adpcm = {};
 	sb.freq = default_playback_rate_hz;
@@ -1238,24 +1249,26 @@ static void DSP_DoReset(uint8_t val) {
 	}
 }
 
-static void DSP_E2_DMA_CallBack(DmaChannel * /*chan*/, DMAEvent event) {
+static void DSP_E2_DMA_CallBack(const DmaChannel* /*chan*/, DMAEvent event)
+{
 	if (event==DMA_UNMASKED) {
 		uint8_t val=(uint8_t)(sb.e2.value&0xff);
-		DmaChannel * chan=GetDMAChannel(sb.hw.dma8);
-		chan->Register_Callback(0);
+		DmaChannel * chan=DMA_GetChannel(sb.hw.dma8);
+		chan->RegisterCallback(nullptr);
 		chan->Write(1,&val);
 	}
 }
 
-static void DSP_ADC_CallBack(DmaChannel * /*chan*/, DMAEvent event) {
+static void DSP_ADC_CallBack(const DmaChannel* /*chan*/, DMAEvent event)
+{
 	if (event!=DMA_UNMASKED) return;
 	uint8_t val=128;
-	DmaChannel * ch=GetDMAChannel(sb.hw.dma8);
+	DmaChannel * ch=DMA_GetChannel(sb.hw.dma8);
 	while (sb.dma.left--) {
 		ch->Write(1,&val);
 	}
 	SB_RaiseIRQ(SB_IRQ_8);
-	ch->Register_Callback(0);
+	ch->RegisterCallback(nullptr);
 }
 
 static void DSP_ChangeRate(uint32_t freq)
@@ -1339,7 +1352,7 @@ static void DSP_DoCommand() {
 		sb.dma.left = 1 + sb.dsp.in.data[0] + (sb.dsp.in.data[1] << 8);
 		sb.dma.sign=false;
 		LOG(LOG_SB,LOG_ERROR)("DSP:Faked ADC for %u bytes",sb.dma.left);
-		GetDMAChannel(sb.hw.dma8)->Register_Callback(DSP_ADC_CallBack);
+		DMA_GetChannel(sb.hw.dma8)->RegisterCallback(DSP_ADC_CallBack);
 		break;
 	case 0x14:	/* Singe Cycle 8-Bit DMA DAC */
 	case 0x15:	/* Wari hack. Waru uses this one instead of 0x14, but some weird stuff going on there anyway */
@@ -1449,7 +1462,7 @@ static void DSP_DoCommand() {
 		LOG(LOG_SB, LOG_NORMAL)("Continue DMA command");
 		if (sb.mode==MODE_DMA_PAUSE) {
 			sb.mode=MODE_DMA_MASKED;
-			if (sb.dma.chan!=NULL) sb.dma.chan->Register_Callback(DSP_DMA_CallBack);
+			if (sb.dma.chan!=nullptr) sb.dma.chan->RegisterCallback(DSP_DMA_CallBack);
 		}
 		break;
 	case 0xd9:  /* Exit Autoinitialize 16-bit */
@@ -1489,7 +1502,7 @@ static void DSP_DoCommand() {
 				        sb.e2.value += E2_incr_table[sb.e2.count % 4][i];
 		        sb.e2.value += E2_incr_table[sb.e2.count % 4][8];
 		        sb.e2.count++;
-		        GetDMAChannel(sb.hw.dma8)->Register_Callback(DSP_E2_DMA_CallBack);
+		        DMA_GetChannel(sb.hw.dma8)->RegisterCallback(DSP_E2_DMA_CallBack);
 		}
 		break;
 	case 0xe3: /* DSP Copyright */
@@ -2041,30 +2054,24 @@ SB_TYPES find_sbtype()
 	const auto sect = static_cast<Section_prop *>(control->GetSection("sblaster"));
 	assert(sect);
 
-	const std::string pref = sect->Get_string("sbtype");
+	const std::string_view pref = sect->Get_string("sbtype");
 
-	SB_TYPES sbtype = SBT_NONE;
+	// Default
+	auto sbtype = SB_TYPES::SBT_NONE;
 
-	if (pref == "sb1")
-		sbtype = SBT_1;
-	else if (pref == "sb2")
-		sbtype = SBT_2;
-	else if (pref == "sbpro1")
-		sbtype = SBT_PRO1;
-	else if (pref == "sbpro2")
+	// Newest to oldest
+	if (pref == "sb16") {
+		sbtype = SBT_16;
+	} else if (pref == "sbpro2") {
 		sbtype = SBT_PRO2;
-	else if (pref == "sb16")
-		sbtype = SBT_16;
-	else if (pref == "gb")
+	} else if (pref == "sbpro1") {
+		sbtype = SBT_PRO1;
+	} else if (pref == "sb2") {
+		sbtype = SBT_2;
+	} else if (pref == "sb1") {
+		sbtype = SBT_1;
+	} else if (pref == "gb") {
 		sbtype = SBT_GB;
-	else if (pref == "none")
-		sbtype = SBT_NONE;
-	else
-		sbtype = SBT_16;
-
-	if (sbtype == SBT_16) {
-		if ((!IS_EGAVGA_ARCH) || !SecondDMAControllerAvailable())
-			sbtype = SBT_PRO2;
 	}
 	return sbtype;
 }
@@ -2074,37 +2081,40 @@ OplMode find_oplmode()
 	const auto sect = static_cast<Section_prop *>(control->GetSection("sblaster"));
 	assert(sect);
 
-	const std::string pref = sect->Get_string("oplmode");
+	const std::string_view pref = sect->Get_string("oplmode");
 
-	OplMode opl_mode = OplMode::None;
+	// Default
+	auto opl_mode = OplMode::None;
 
-	if (pref == "none")
-		opl_mode = OplMode::None;
-	else if (pref == "cms")
-		opl_mode = OplMode::Cms;
-	else if (pref == "opl2")
-		opl_mode = OplMode::Opl2;
-	else if (pref == "dualopl2")
-		opl_mode = OplMode::DualOpl2;
-	else if (pref == "opl3")
-		opl_mode = OplMode::Opl3;
-	else if (pref == "opl3gold")
+	// Newest to oldest
+	if (pref == "opl3gold") {
 		opl_mode = OplMode::Opl3Gold;
+	} else if (pref == "opl3") {
+		opl_mode = OplMode::Opl3;
+	} else if (pref == "dualopl2") {
+		opl_mode = OplMode::DualOpl2;
+	} else if (pref == "opl2") {
+		opl_mode = OplMode::Opl2;
+	} else if (pref == "cms") {
+		opl_mode = OplMode::Cms;
+	}
 
 	// Else assume auto
 	else {
 		switch (find_sbtype()) {
-		case SBT_NONE: opl_mode = OplMode::None; break;
-		case SBT_GB: opl_mode = OplMode::Cms; break;
-		case SBT_1:
-		case SBT_2: opl_mode = OplMode::Opl2; break;
+		case SBT_16:
+		case SBT_PRO2: opl_mode = OplMode::Opl3; break;
 		case SBT_PRO1: opl_mode = OplMode::DualOpl2; break;
-		case SBT_PRO2:
-		case SBT_16: opl_mode = OplMode::Opl3; break;
+		case SBT_2:
+		case SBT_1: opl_mode = OplMode::Opl2; break;
+		case SBT_GB: opl_mode = OplMode::Cms; break;
+		case SBT_NONE: opl_mode = OplMode::None; break;
 		}
 	}
 	return opl_mode;
 }
+
+void SBLASTER_ShutDown(Section*);
 
 class SBLASTER final {
 private:
@@ -2145,7 +2155,7 @@ private:
 		}
 
 		// Update AUTOEXEC.BAT line
-		LOG_MSG("%s: %s=%s", CardType(), blaster_env_name, blaster_env_val);
+		LOG_MSG("%s: Setting '%s' environment variable to '%s'", CardType(), blaster_env_name, blaster_env_val);
 		AUTOEXEC_SetVariable(blaster_env_name, blaster_env_val);
 	}
 
@@ -2164,9 +2174,6 @@ public:
 		sb.hw.base=section->Get_hex("sbbase");
 
 		sb.hw.irq = static_cast<uint8_t>(section->Get_int("irq"));
-		sb.hw.dma8 = static_cast<uint8_t>(section->Get_int("dma"));
-		sb.hw.dma16 = static_cast<uint8_t>(section->Get_int("hdma"));
-		sb.dsp.cold_warmup_ms = check_cast<uint8_t>(section->Get_int("sbwarmup"));
 		sb.dsp.hot_warmup_ms = sb.dsp.cold_warmup_ms >> 5;
 
 		sb.mixer.enabled=section->Get_bool("sbmixer");
@@ -2209,6 +2216,24 @@ public:
 		if (sb.type == SBT_NONE || sb.type == SBT_GB)
 			return;
 
+		sb.hw.dma8 = static_cast<uint8_t>(section->Get_int("dma"));
+		auto dma_channel = DMA_GetChannel(sb.hw.dma8);
+		assert(dma_channel);
+		dma_channel->ReserveFor(CardType(), SBLASTER_ShutDown);
+
+		// Only Sound Blaster 16 uses a 16-bit DMA channel.
+		if (sb.type == SB_TYPES::SBT_16) {
+			sb.hw.dma16 = static_cast<uint8_t>(section->Get_int("hdma"));
+
+			// Reserve the second DMA channel only if it's unique.
+			if (sb.hw.dma16 != sb.hw.dma8) {
+				dma_channel = DMA_GetChannel(sb.hw.dma16);
+				assert(dma_channel);
+				dma_channel->ReserveFor(CardType(),
+										SBLASTER_ShutDown);
+			}
+		}
+
 		std::set channel_features = {ChannelFeature::ReverbSend,
 		                             ChannelFeature::ChorusSend,
 		                             ChannelFeature::DigitalAudio};
@@ -2232,7 +2257,7 @@ public:
 
 		sb.dsp.state=DSP_S_NORMAL;
 		sb.dsp.out.lastval=0xaa;
-		sb.dma.chan=NULL;
+		sb.dma.chan=nullptr;
 
 		for (uint8_t i = 4; i <= 0xf; ++i) {
 			if (i == 8 || i == 9)
@@ -2267,12 +2292,20 @@ public:
 			sb.midi = true;
 		}
 
-		LOG_MSG("%s: Running on port %xh, IRQ %d, DMA %d, and high DMA %d",
-		        CardType(),
-		        sb.hw.base,
-		        sb.hw.irq,
-		        sb.hw.dma8,
-		        sb.hw.dma16);
+		if (sb.type == SB_TYPES::SBT_16) {
+			LOG_MSG("%s: Running on port %xh, IRQ %d, DMA %d, and high DMA %d",
+			        CardType(),
+			        sb.hw.base,
+			        sb.hw.irq,
+			        sb.hw.dma8,
+			        sb.hw.dma16);
+		} else {
+			LOG_MSG("%s: Running on port %xh, IRQ %d, and DMA %d",
+			        CardType(),
+			        sb.hw.base,
+			        sb.hw.irq,
+			        sb.hw.dma8);
+		}
 	}
 
 	~SBLASTER()
@@ -2313,8 +2346,17 @@ public:
 		assert(sb.chan);
 		MIXER_DeregisterChannel(sb.chan);
 		sb.chan.reset();
+
+		// Reset the DMA channels as the mixer is no longer reading samples
+		DMA_ResetChannel(sb.hw.dma8);
+		if (sb.type == SB_TYPES::SBT_16) {
+			DMA_ResetChannel(sb.hw.dma16);
+		}
+
+		sb = {};
 	}
-}; //End of SBLASTER class
+
+}; // End of SBLASTER class
 
 static std::unique_ptr<SBLASTER> sblaster = {};
 

@@ -29,13 +29,15 @@
 
 #include "mixer.h"
 #include "inout.h"
-#include "../libs/residfp/SID.h"
+
+#include "residfp/SID.h"
 
 class Innovation {
 public:
-	void Open(const std::string &model_choice, const std::string &clock_choice,
-	          int filter_strength_6581, int filter_strength_8580,
-	          int port_choice, const std::string &channel_filter_choice);
+	void Open(const std::string_view model_choice,
+	          const std::string_view clock_choice, int filter_strength_6581,
+	          int filter_strength_8580, int port_choice,
+	          const std::string_view channel_filter_choice);
 
 	void Close();
 	~Innovation()
