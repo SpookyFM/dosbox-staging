@@ -562,8 +562,10 @@
 		break;
 	CASE_W(0x9a)												/* CALL Ap */
 		{ 
+			// return debugCallback;
 			FillFlags();
 			uint16_t newip=Fetchw();uint16_t newcs=Fetchw();
+	        DEBUG_PushStackFrame(SegValue(cs), reg_eip, newcs, newip);
 			CPU_CALL(false,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
 			if (GETFLAG(TF)) {	
@@ -681,12 +683,24 @@
 		GRP2B(Fetchb());break;
 	CASE_W(0xc1)												/* GRP2 Ew,Ib */
 		GRP2W(Fetchb());break;
-	CASE_W(0xc2)												/* RETN Iw */
-		reg_eip=Pop_16();
-		reg_esp+=Fetchw();
+                CASE_W(0xc2) /* RETN Iw */
+                {
+	                uint32_t old_eip;
+	                old_eip = reg_eip;
+	                reg_eip = Pop_16();
+	                reg_esp += Fetchw();
+	                DEBUG_PopStackFrame(SegValue(cs), old_eip, SegValue(cs), reg_eip);
+                }
 		continue;
-	CASE_W(0xc3)												/* RETN */
-		reg_eip=Pop_16();
+                CASE_W(0xc3) /* RETN */
+                {	
+	                uint32_t old_eip = reg_eip;
+	                reg_eip           = Pop_16();
+	                /*  if (old_eip == 0x16db) {
+		                return debugCallback;
+	                } */
+	                DEBUG_PopStackFrame(SegValue(cs), old_eip, SegValue(cs), reg_eip);
+                }
 		continue;
 	CASE_W(0xc4)												/* LES */
 		{	
@@ -736,12 +750,32 @@
 		{
 			Bitu words=Fetchw();
 			FillFlags();
-			CPU_RET(false,words,GETIP);
+	        if (DEBUG_ReturnBreakpoint()) {
+		        return debugCallback;
+	        }
+	        static bool hitOnce = false; // Set to false to hit the breakpoint again
+	        if (SegValue(cs) == 0x0217 && reg_eip == 0x01b3) {
+		                if (!hitOnce) {
+			                hitOnce = true;
+			                return debugCallback;
+						}
+			}
+			bool r = CPU_RET(false,words,GETIP);
+	        if (!r) {
+		        return debugCallback;
+			}
 			continue;
 		}
 	CASE_W(0xcb)												/* RETF */			
 		FillFlags();
+        // DEBUG_PopStackFrame();
+        if (DEBUG_ReturnBreakpoint()) {
+	        return debugCallback;
+        }
 		CPU_RET(false,0,GETIP);
+        if (SegValue(cs) == 0x01b0 && GETIP == 0x0901) {
+	        return debugCallback;        
+		}
 		continue;
 	CASE_B(0xcc)												/* INT3 */
 #if C_DEBUG	
@@ -901,9 +935,14 @@
 		}
 	CASE_W(0xe8)												/* CALL Jw */
 		{ 
+			// return debugCallback;
 			uint16_t addip=Fetchws();
 			SAVEIP;
 			Push_16(reg_eip);
+	        DEBUG_PushStackFrame(SegValue(cs),
+	                                     reg_eip,
+	                                     SegValue(cs),
+	                                     reg_eip + addip);
 			reg_eip=(uint16_t)(reg_eip+addip);
 			continue;
 		}
@@ -1121,17 +1160,36 @@
 				RMEw(DECW);
 				break;		
 			case 0x02:										/* CALL Ev */
+		        // return debugCallback;
 				if (rm >= 0xc0 ) {GetEArw;reg_eip=*earw;}
 				else {GetEAa;reg_eip=LoadMw(eaa);}
 				Push_16(GETIP);
+		        // TODO: Not sure how this call would be used - set a breakpoint on one to look at the opcode details
 				continue;
 			case 0x03:										/* CALL Ep */
 				{
+		            static bool hitOnce = false; // Set to false to
+		                                        // hit the
+		                                        // breakpoint again
+		                /* if (SegValue(cs) == 0x0217 && reg_eip == 0x070a) {
+			            if (!hitOnce) {
+				            hitOnce = true;
+				            return debugCallback;
+			            } else {
+							// Implement a simple alternating pattern to be able to jump over the breakpoint
+				            hitOnce = false;
+						} 
+		            } */
+				
 					if (rm >= 0xc0) goto illegal_opcode;
 					GetEAa;
 					uint16_t newip=LoadMw(eaa);
 					uint16_t newcs=LoadMw(eaa+2);
 					FillFlags();
+		                        DEBUG_PushStackFrame(SegValue(cs),
+		                                             reg_eip,
+		                                             newcs,
+		                                             newip);
 					CPU_CALL(false,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
 					if (GETFLAG(TF)) {	

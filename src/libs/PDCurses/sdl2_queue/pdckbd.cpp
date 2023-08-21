@@ -301,7 +301,8 @@ static int _process_key_event(void)
     }
 
     /* SDL with TextInput ignores keys with CTRL */
-    if (key && SP->key_modifiers & PDC_KEY_MODIFIER_CONTROL)
+    // TODO: Florian: If this works, figure out why
+    if (key && SP->key_modifiers & (PDC_KEY_MODIFIER_CONTROL | PDC_KEY_MODIFIER_ALT))
         return _handle_alt_keys(key);
     return -1;
 }

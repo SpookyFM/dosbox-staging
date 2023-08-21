@@ -147,6 +147,8 @@ void DOS_PSP::MakeNew(uint16_t mem_size)
 		mem_writeb(pt + i, 0);
 	// Set size
 	SSET_WORD(sPSP, next_seg, static_cast<uint16_t>(seg + mem_size));
+
+	uint16_t next_seg = SGET_WORD(sPSP, next_seg);
 	/* far call opcode */
 	SSET_BYTE(sPSP, far_call, uint8_t(0xea));
 	// far call to interrupt 0x21 - faked for bill & ted

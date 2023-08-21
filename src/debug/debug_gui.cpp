@@ -44,6 +44,7 @@ struct _LogGroup {
 };
 #include <list>
 #include <string>
+#include <SDL2/SDL_video.h>
 using namespace std;
 
 #define MAX_LOG_BUFFER 500
@@ -54,7 +55,7 @@ static _LogGroup loggrp[LOG_MAX]={{"",true},{0,false}};
 static FILE *debuglog = nullptr;
 
 extern int old_cursor_state;
-
+extern SDL_Window* pdc_window;
 
 
 void DEBUG_ShowMsg(char const* format,...) {
@@ -119,6 +120,91 @@ void DEBUG_RefreshPage(int scroll) {
 	}
 	mvwprintw(dbg.win_out,maxy-1, 0, "");
 	wrefresh(dbg.win_out);
+}
+
+bool useCallstack = false;
+bool filterCallstack = false;
+
+static bool isInGameCode(uint16_t seg) {
+	return seg == 0x01F7 || seg == 0x01E7 || seg == 0x01D7 || seg == 0x0217;
+}
+
+void DEBUG_PushStackFrame(uint16_t callerSeg, uint32_t callerOff,
+	uint16_t calleeSeg, uint32_t calleeOff)
+{
+	callstack_entry entry;
+	entry.is_call    = true;
+	entry.caller_seg = callerSeg;
+	entry.caller_off = callerOff;
+	entry.callee_seg = calleeSeg;
+	entry.callee_off = calleeOff;
+
+	// TODO: We're ignoring adding to the stack until we have a call from the start function
+	// Segment 0020 does not seem to belong to the game executable
+	// TODO: Consider if this makes sense like this
+	bool isGame = isInGameCode(callerSeg) || isInGameCode(calleeSeg);
+
+	bool wasHit = false;
+	if (callerOff == 0x070d) {
+		wasHit = true;
+	}
+	/*
+	* if ((callstack.size() != 0 || entry.caller_seg == 0x01D7) && isInGameCode) {
+		if (useCallstack) {
+		//	callstack.push_front(entry);
+			
+			callstack_started = true;		
+		}
+	}
+	*/
+	if (!filterCallstack || isGame) {
+		calltrace.push_back(entry);
+	}
+}
+void DEBUG_PopStackFrame(uint16_t curSeg, uint32_t curOff, uint16_t retSeg,
+                         uint32_t retOff)
+{
+	// Ignore segments we know to be outside of the game code
+	if (curSeg != 0x1F7 && curSeg != 0x1E7 && curSeg != 0x01D7 && curSeg != 0x0217) {
+		return;
+	}
+
+	callstack_entry entry;
+	entry.is_call    = false;
+	entry.caller_seg = curSeg;
+	entry.caller_off = curOff;
+	entry.callee_seg = retSeg;
+	entry.callee_off = retOff;
+
+
+	bool isGame = isInGameCode(curSeg) || isInGameCode(retSeg);
+
+	if (!filterCallstack || isGame) {
+		calltrace.push_back(entry);
+	}
+	
+	
+	// TODO: Let's try ignoring the case where we pop before push	
+	// if (callstack.size() > 0) {
+	bool isEmpty     = callstack.size() == 0;
+	if (isEmpty) {
+		return;
+	}
+	auto& front      = callstack.front();
+	bool isPlausible = !callstack_started ||
+	                   (!isEmpty && front.caller_seg == retSeg &&
+	                    retOff - front.caller_off <
+	                            10); // TODO: Probably can get it to be more
+	                                 // precise
+	// TODO: Maybe this is some special case during startup
+	if (callstack_started) {
+		if (!isPlausible) {
+			sprintf("Implausible", "");
+		}
+		if (useCallstack) {
+		//	callstack.pop_front();
+		}
+	}
 }
 
 void LOG::operator() (char const* format, ...){
@@ -295,6 +381,9 @@ void LOG_StartUp(void) {
 void DBGUI_StartUp(void) {
 	/* Start the main window */
 	dbg.win_main = initscr();
+	// Florian: Move the window to a more sensible position
+	SDL_SetWindowPosition(pdc_window, 0, 0);
+	
 	cbreak();       /* take input chars one at a time, no wait for \n */
 	noecho();       /* don't echo input */
 	nodelay(dbg.win_main, true);

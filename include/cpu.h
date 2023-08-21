@@ -54,6 +54,7 @@ enum class ArchitectureType {
 
 /* CPU Cycle Timing */
 extern int32_t CPU_Cycles;
+extern bool StringForceSingleCycle;
 extern int32_t CPU_CycleLeft;
 extern int32_t CPU_CycleMax;
 extern int32_t CPU_OldCycleMax;
@@ -134,7 +135,7 @@ void CPU_VERW(Bitu selector);
 
 void CPU_JMP(bool use32,Bitu selector,Bitu offset,Bitu oldeip);
 void CPU_CALL(bool use32,Bitu selector,Bitu offset,Bitu oldeip);
-void CPU_RET(bool use32,Bitu bytes,Bitu oldeip);
+bool CPU_RET(bool use32,Bitu bytes,Bitu oldeip);
 void CPU_IRET(bool use32,Bitu oldeip);
 void CPU_HLT(Bitu oldeip);
 

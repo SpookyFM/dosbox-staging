@@ -33,6 +33,7 @@
 #include "render.h"
 #include "vga.h"
 #include "video.h"
+#include "paging.h"
 
 //#undef C_DEBUG
 //#define C_DEBUG 1
@@ -366,15 +367,43 @@ static uint8_t* draw_linear_line_from_dac_palette(Bitu vidstart, Bitu)
 
 	// Ensure the size of the palettized VGA line will fit
 	assert(templine_buffer.size() >= line_bytes);
+	uint8_t myarray[] = {255, 255, 255, 255};
 
+	// We get the handler for the page where the off-scren buffer is located on
+	PageHandler* offscreen_mem_handler = MEM_GetPageHandler(0x25F00 / 4096);
+	HostPt mem_start = offscreen_mem_handler->GetHostReadPt(0x25F00 / 4096);
+	
+
+	/* const auto copy_palette = [&](auto pos, auto len) {
+		auto line_addr      = mem_start + pos;
+		const auto line_end = line_addr + len;
+		while (target_addr < target_end && line_addr < line_end) {
+			// Note (Florian): We are copying palette values in here, based on the byte value at the pixel!
+			uint8_t offset = offscreen_mem_handler->readb(
+			        (0x2670 << 4) + line_addr -
+			                             (mem_start + pos));
+			line_addr++;
+			memcpy(target_addr, palette_map + offset, bytes_per_pixel);
+			// memcpy(target_addr, &myarray, bytes_per_pixel);
+			target_addr += bytes_per_pixel;
+		}
+	}; */
+
+	
 	const auto copy_palette = [&](auto pos, auto len) {
 		auto line_addr      = vga.draw.linear_base + pos;
 		const auto line_end = line_addr + len;
 		while (target_addr < target_end && line_addr < line_end) {
+			// Note (Florian): We are copying palette values in here, based on the byte value at the pixel!
+			// And palette map is an array of pointers
 			memcpy(target_addr, palette_map + *line_addr++, bytes_per_pixel);
+			// memcpy(target_addr, &myarray, bytes_per_pixel);
 			target_addr += bytes_per_pixel;
 		}
 	};
+	
+	
+	
 
 	const auto start_pos = vidstart & max_pos;
 	const auto end_pos   = start_pos + line_bytes;

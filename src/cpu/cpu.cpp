@@ -52,6 +52,8 @@ Segments Segs = {};
 int32_t CPU_Cycles = 0;
 int32_t CPU_CycleLeft = 3000;
 int32_t CPU_CycleMax = 3000;
+// Forces string operations to be handled single-cycle to make sure that memory breakpoints are hit exactly
+bool StringForceSingleCycle = false;
 int32_t CPU_OldCycleMax = 3000;
 int32_t CPU_CyclePercUsed = 100;
 int32_t CPU_CycleLimit = -1;
@@ -1314,8 +1316,11 @@ call_code:
 	assert(1);
 }
 
-
-void CPU_RET(bool use32,Bitu bytes, [[maybe_unused]] Bitu oldeip) {
+// Returns false if we should hit a breakpoint instead
+// TODO: Make a copy and remove any writes for this purpose
+bool CPU_RET(bool use32,Bitu bytes, [[maybe_unused]] Bitu oldeip) {
+	uint16_t current_cs = SegValue(cs);
+	uint32_t current_ip = reg_eip;
 	if (!cpu.pmode || (reg_flags & FLAG_VM)) {
 		Bitu new_ip,new_cs;
 		if (!use32) {
@@ -1329,7 +1334,8 @@ void CPU_RET(bool use32,Bitu bytes, [[maybe_unused]] Bitu oldeip) {
 		SegSet16(cs,new_cs);
 		reg_eip=new_ip;
 		cpu.code.big=false;
-		return;
+		DEBUG_PopStackFrame(current_cs, current_ip, new_cs, new_ip);
+		return true;
 	} else {
 		Bitu offset,selector;
 		if (!use32) selector	= mem_readw(SegPhys(ss) + (reg_esp & cpu.stack.mask) + 2);
@@ -1340,7 +1346,7 @@ void CPU_RET(bool use32,Bitu bytes, [[maybe_unused]] Bitu oldeip) {
 		if(rpl < cpu.cpl) {
 			// win setup
 			CPU_Exception(EXCEPTION_GP,selector & 0xfffc);
-			return;
+			return true;
 		}
 
 		CPU_CHECK_COND((selector & 0xfffc)==0,
@@ -1373,8 +1379,11 @@ RET_same_level:
 			if (!desc.saved.seg.p) {
 				// borland extender (RTM)
 				CPU_Exception(EXCEPTION_NP,selector & 0xfffc);
-				return;
+				return true;
 			}
+
+			uint16_t current_cs = SegValue(cs);
+			uint32_t current_ip = reg_eip;
 
 			// commit point
 			if (!use32) {
@@ -1395,7 +1404,8 @@ RET_same_level:
 				reg_sp+=bytes;
 			}
 			LOG(LOG_CPU,LOG_NORMAL)("RET - Same level to %X:%X RPL %X DPL %X",selector,offset,rpl,desc.DPL());
-			return;
+			DEBUG_PopStackFrame(current_cs, current_ip, selector, offset);
+			return true;
 		} else {
 			/* Return to outer level */
 			switch (desc.Type()) {
@@ -1419,6 +1429,9 @@ RET_same_level:
 			CPU_CHECK_COND(!desc.saved.seg.p,
 				"RET:Outer level:CS not present",
 				EXCEPTION_NP,selector & 0xfffc)
+
+			uint16_t current_cs = SegValue(cs);
+			uint32_t current_ip = reg_eip;
 
 			// commit point
 			Bitu n_esp,n_ss;
@@ -1482,11 +1495,13 @@ RET_same_level:
 			CPU_CheckSegments();
 
 //			LOG(LOG_MISC,LOG_ERROR)("RET - Higher level to %X:%X RPL %X DPL %X",selector,offset,rpl,desc.DPL());
-			return;
+			DEBUG_PopStackFrame(current_cs, current_ip, selector, offset);
+			return true;
 		}
 		LOG(LOG_CPU,LOG_NORMAL)("Prot ret %X:%X",selector,offset);
-		return;
+		return true;
 	}
+	return true;
 }
 
 
@@ -2111,6 +2126,11 @@ void CPU_ENTER(bool use32,Bitu bytes,Bitu level) {
 	reg_esp=(reg_esp&cpu.stack.notmask)|((sp_index)&cpu.stack.mask);
 }
 
+static void CPU_StringSingleCycle(bool pressed) {
+	if (!pressed) return;
+	StringForceSingleCycle = !StringForceSingleCycle;
+}
+
 static void CPU_CycleIncrease(bool pressed) {
 	if (!pressed) return;
 	if (CPU_CycleAutoAdjust) {
@@ -2248,6 +2268,11 @@ public:
 		                  PRIMARY_MOD, "cycledown", "Dec Cycles");
 		MAPPER_AddHandler(CPU_CycleIncrease, SDL_SCANCODE_F12,
 		                  PRIMARY_MOD, "cycleup", "Inc Cycles");
+		MAPPER_AddHandler(CPU_StringSingleCycle,
+		                  SDL_SCANCODE_F11,
+		                  MMOD3,
+		                  "singlecycle",
+		                  "Switch String Single Cycle");
 		Change_Config(configuration);
 		CPU_JMP(false,0,0,0);					//Setup the first cpu core
 	}

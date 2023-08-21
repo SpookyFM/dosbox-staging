@@ -38,6 +38,15 @@
 
 PagingBlock paging;
 
+bool mouseBreakpoint;
+bool mouseBreakpointHit;
+bool outsideStackWriteBreakpoint;
+bool outsideStackWriteBreakpointHit;
+PhysPt memReadWatch1;
+PhysPt memReadWatch2;
+std::vector<memwrite_entry> memwrites;
+
+
 uint8_t PageHandler::readb(PhysPt addr)
 {
 	E_Exit("No byte handler for read from %d",addr);	

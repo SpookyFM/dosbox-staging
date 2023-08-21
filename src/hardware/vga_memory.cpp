@@ -1002,9 +1002,12 @@ void VGA_SetupHandlers(void) {
 		newHandler = &vgaph.map;
 		break;
 	}
+	#define VGA_PAGE_CUSTOM VGA_PAGE_A0
+	// #define VGA_PAGE_CUSTOM (0x02670 / 4096)
+	//#define VGA_PAGE_CUSTOM (0x025F0 / 4096)
 	switch ((vga.gfx.miscellaneous >> 2) & 3) {
 	case 0:
-		vgapages.base = VGA_PAGE_A0;
+		vgapages.base = VGA_PAGE_CUSTOM;
 		switch (svgaCard) {
 		case SVGA_TsengET3K:
 		case SVGA_TsengET4K:
@@ -1015,12 +1018,14 @@ void VGA_SetupHandlers(void) {
 			vgapages.mask = 0x1ffff;
 			break;
 		}
-		MEM_SetPageHandler(VGA_PAGE_A0, 32, newHandler );
+		MEM_SetPageHandler(VGA_PAGE_CUSTOM, 32, newHandler );
 		break;
 	case 1:
-		vgapages.base = VGA_PAGE_A0;
+		
+		vgapages.base = VGA_PAGE_CUSTOM;
 		vgapages.mask = 0xffff;
-		MEM_SetPageHandler( VGA_PAGE_A0, 16, newHandler );
+		
+		MEM_SetPageHandler( VGA_PAGE_CUSTOM, 16, newHandler );
 		MEM_SetPageHandler( VGA_PAGE_B0, 16, &vgaph.empty );
 		break;
 	case 2:

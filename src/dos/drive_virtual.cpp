@@ -348,6 +348,11 @@ Virtual_File::Virtual_File(const vfile_data_t& in_data)
 
 bool Virtual_File::Read(uint8_t * data,uint16_t * size) {
 	uint32_t left = file_data->size() - file_pos;
+	if (left == 0 && *size > 0) {
+		// We have nothing left to read
+		*size = 0;
+		return false;
+	}
 	if (left <= *size) {
 		memcpy(data, &((*file_data)[file_pos]), left);
 		*size = (uint16_t)left;

@@ -37,6 +37,9 @@ static void DoString(STRING_OP type) {
 	} else {
 		CPU_Cycles++;
 		/* Calculate amount of ops to do before cycles run out */
+		if (StringForceSingleCycle) {
+			CPU_Cycles  = 1;
+		} 
 		if ((count>(Bitu)CPU_Cycles) && (type<R_SCASB)) {
 			count_left=count-CPU_Cycles;
 			count=CPU_Cycles;

@@ -21,17 +21,43 @@
 
 #include "dosbox.h"
 
+#include <deque>
+
+#include "paging.h"
+
 void DEBUG_DrawScreen(void);
 bool DEBUG_Breakpoint(void);
+bool DEBUG_ReturnBreakpoint(void);
 bool DEBUG_IntBreakpoint(uint8_t intNum);
 void DEBUG_Enable(bool pressed);
 void DEBUG_CheckExecuteBreakpoint(uint16_t seg, uint32_t off);
 bool DEBUG_ExitLoop(void);
 void DEBUG_RefreshPage(int scroll);
+void DEBUG_PushStackFrame(uint16_t callerSeg, uint32_t callerOff, uint16_t calleeSeg, uint32_t calleeOff);
+void DEBUG_PopStackFrame(uint16_t curSeg, uint32_t curOff, uint16_t retSeg, uint32_t retOff);
+
 Bitu DEBUG_EnableDebugger(void);
 
 extern Bitu cycle_count;
 extern Bitu debugCallback;
+
+extern bool useCallstack;
+extern bool filterCallstack;
+
+struct callstack_entry {
+	bool is_call; // True if this is a call, false if this is a return
+	uint16_t caller_seg;
+	uint32_t caller_off;
+	uint16_t callee_seg;
+	uint16_t callee_off;
+};
+
+
+
+
+extern std::deque<callstack_entry> callstack;
+extern std::deque<callstack_entry> calltrace;
+extern bool callstack_started;
 
 #ifdef C_HEAVY_DEBUG
 bool DEBUG_HeavyIsBreakpoint(void);

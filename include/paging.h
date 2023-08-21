@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "mem.h"
+#include "regs.h"
 
 // disable this to reduce the size of the TLB
 // NOTE: does not work with the dynamic core (dynrec is fine)
@@ -297,13 +298,45 @@ static inline uint8_t mem_readb_inline(PhysPt address) {
 		return (get_tlb_readhandler(address))->readb(address);
 }
 
+extern bool mouseBreakpoint;
+extern bool mouseBreakpointHit;
+
+extern bool outsideStackWriteBreakpoint;
+extern bool outsideStackWriteBreakpointHit;
+
+extern PhysPt memReadWatch1;
+extern PhysPt memReadWatch2;
+
+
 static inline uint16_t mem_readw_inline(PhysPt address) {
-	if ((address & 0xfff)<0xfff) {
+
+
+	uint16_t result;
+	/*  if ((address & 0xfff) < 0xfff) {
 		HostPt tlb_addr=get_tlb_read(address);
 		if (tlb_addr) return host_readw(tlb_addr+address);
 		else
 			return (get_tlb_readhandler(address))->readw(address);
-	} else return mem_unalignedreadw(address);
+	} else return mem_unalignedreadw(address); */
+	if ((address & 0xfff) < 0xfff) {
+	        HostPt tlb_addr=get_tlb_read(address);
+	        if (tlb_addr) result =  host_readw(tlb_addr+address);
+	        else
+	                result =  (get_tlb_readhandler(address))->readw(address);
+	} else result =  mem_unalignedreadw(address);
+	if (address == 0x001966E4 && result == 1 && mouseBreakpoint && !mouseBreakpointHit) {
+		mouseBreakpointHit = true;
+	}
+	PhysPt xAddress = 0x00196A18;
+	bool wasHit;
+	// if (address == 0x00196C64) {
+	if (address == memReadWatch1 || address == memReadWatch2) {
+		uint16_t seg = SegValue(cs);
+		uint32_t off = reg_eip;
+
+		wasHit = true;
+	}
+	return result;
 }
 
 static inline uint32_t mem_readd_inline(PhysPt address)
@@ -319,13 +352,75 @@ static inline uint32_t mem_readd_inline(PhysPt address)
 	}
 }
 
+// Dirty hack: Copying the helper functions over for ease of access
+// #include "cpu.h"
+
+struct memwrite_entry {
+	uint16_t caller_seg;
+	uint32_t caller_off;
+	PhysPt address;
+	uint16_t size;
+	uint32_t value;
+};
+
+extern std::vector<memwrite_entry> memwrites;
+
+uint32_t PhysMakeProt(uint16_t selector, uint32_t offset);
+
+uint32_t GetAddress(uint16_t seg, uint32_t offset);
+
+static void handleWriteBreakpoint(PhysPt address, uint16_t size, uint32_t value)
+{
+	// Check if we are tracking writes at the moment
+	if (!outsideStackWriteBreakpoint) {
+		return;
+	}
+
+	// Check if we are writing outside of the stack (between SP and BP)
+	uint16_t ss_value = SegValue(ss);
+	uint32_t sp       = reg_sp;
+	uint32_t bp       = reg_bp;
+
+	uint32_t topAddress    = GetAddress(ss_value, sp);
+	uint32_t bottomAddress = GetAddress(ss_value, bp);
+
+	// Account for pushes - a push will decrease SP after the write. The most we might write is a word, so we ignore the 2 bytes below SP
+	bool isOnStack = topAddress - 2 <= address && address <= bottomAddress;
+
+	if (!isOnStack) {
+		outsideStackWriteBreakpointHit = true;
+	}
+
+	memwrite_entry entry;
+	entry.caller_seg = SegValue(cs);
+	entry.caller_off = reg_eip;
+	entry.size       = size;
+	entry.value      = value;
+	entry.address    = address;
+	memwrites.push_back(entry);
+
+
+	// TODO: Could be that some code plays around with BP, need to watch out
+	// for these cases
+	// TODO: Could also define a list of known globals
+
+	// Maybe: Check if we are in game code at the moment
+
+	// return false;
+}
+
 static inline void mem_writeb_inline(PhysPt address,uint8_t val) {
+	handleWriteBreakpoint(address, 1, val);
 	HostPt tlb_addr=get_tlb_write(address);
 	if (tlb_addr) host_writeb(tlb_addr+address,val);
 	else (get_tlb_writehandler(address))->writeb(address,val);
 }
 
+
+
+
 static inline void mem_writew_inline(PhysPt address,uint16_t val) {
+	handleWriteBreakpoint(address, 2, val);
 	if ((address & 0xfff)<0xfff) {
 		HostPt tlb_addr=get_tlb_write(address);
 		if (tlb_addr) host_writew(tlb_addr+address,val);
@@ -351,6 +446,7 @@ static inline bool mem_readb_checked(PhysPt address, uint8_t * val) {
 }
 
 static inline bool mem_readw_checked(PhysPt address, uint16_t * val) {
+
 	if ((address & 0xfff)<0xfff) {
 		HostPt tlb_addr=get_tlb_read(address);
 		if (tlb_addr) {

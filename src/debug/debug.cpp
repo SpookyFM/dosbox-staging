@@ -51,6 +51,8 @@ using namespace std;
 #include "../cpu/lazyflags.h"
 #include "keyboard.h"
 #include "setup.h"
+// Added for writing out a PPM of an off-screen buffer
+#include "vga.h"
 
 SDL_Window *GFX_GetSDLWindow(void);
 
@@ -61,6 +63,7 @@ static void DrawCode(void);
 static void DEBUG_RaiseTimerIrq(void);
 static void SaveMemory(uint16_t seg, uint32_t ofs1, uint32_t num);
 static void SaveMemoryBin(uint16_t seg, uint32_t ofs1, uint32_t num);
+static void SavePPM(uint16_t seg, uint32_t ofs1);
 static void LogMCBS(void);
 static void LogGDT(void);
 static void LogLDT(void);
@@ -69,6 +72,8 @@ static void LogPages(char* selname);
 static void LogCPUInfo(void);
 static void OutputVecTable(char* filename);
 static void DrawVariables(void);
+static void SaveCalltrace(char* filename);
+static void SaveMemWrites(char* filename);
 
 char* AnalyzeInstruction(char* inst, bool saveSelector);
 uint32_t GetHexValue(char* str, char*& hex);
@@ -129,6 +134,11 @@ static auto oldcpucpl = cpu.cpl;
 
 DBGBlock dbg = {};
 Bitu cycle_count = 0;
+
+deque<callstack_entry> callstack;
+deque<callstack_entry> calltrace;
+bool callstack_started = false;
+
 static bool debugging = false;
 
 static void SetColor(Bitu test) {
@@ -177,7 +187,6 @@ static auto histBuffPos = histBuff.end();
 /***********/
 /* Helpers */
 /***********/
-
 uint32_t PhysMakeProt(uint16_t selector, uint32_t offset)
 {
 	Descriptor desc;
@@ -289,7 +298,7 @@ static std::vector<CDebugVar *> varList = {};
 
 bool skipFirstInstruction = false;
 
-enum EBreakpoint { BKPNT_UNKNOWN, BKPNT_PHYSICAL, BKPNT_INTERRUPT, BKPNT_MEMORY, BKPNT_MEMORY_PROT, BKPNT_MEMORY_LINEAR };
+enum EBreakpoint { BKPNT_UNKNOWN, BKPNT_PHYSICAL, BKPNT_INTERRUPT, BKPNT_MEMORY, BKPNT_MEMORY_PROT, BKPNT_MEMORY_LINEAR, BKPNT_REG, BKPNT_RETURN };
 
 #define BPINT_ALL 0x100
 
@@ -305,6 +314,12 @@ public:
 	void					SetType			(EBreakpoint _type)			{ type = _type; }
 	void					SetValue		(uint8_t value)				{ ahValue = value; }
 	void					SetOther		(uint8_t other)				{ alValue = other; }
+	void					SetRegister		(uint8_t _reg)				{ reg = _reg; type = BKPNT_REG; }
+	void SetCondition(uint8_t _targetValue)
+	{
+		targetValue  = _targetValue;
+		hasCondition = true;
+	}
 
 	bool					IsActive		(void)						{ return active; }
 	void					Activate		(bool _active);
@@ -317,17 +332,30 @@ public:
 	uint8_t GetIntNr() const noexcept { return intNr; }
 	uint16_t GetValue() const noexcept { return ahValue; }
 	uint16_t GetOther() const noexcept { return alValue; }
+	uint8_t GetReg() const noexcept
+	{
+		return reg;
+	}
+	// TODO: Should be const
+	bool IsConditionFulfilled(uint8_t value)  noexcept;
 
 	// statics
 	static CBreakpoint*		AddBreakpoint		(uint16_t seg, uint32_t off, bool once);
 	static CBreakpoint*		AddIntBreakpoint	(uint8_t intNum, uint16_t ah, uint16_t al, bool once);
 	static CBreakpoint*		AddMemBreakpoint	(uint16_t seg, uint32_t off);
+	static CBreakpoint* AddConditionalMemBreakpoint(uint16_t seg, uint32_t off,
+	                                                uint8_t targetValue);
+	static CBreakpoint* AddReturnBreakpoint();
+	static CBreakpoint*		AddRegBreakpoint	(uint8_t reg);
+	static CBreakpoint* AddPixelBreakpoint(uint16_t x, uint16_t y);
 	static void				DeactivateBreakpoints();
 	static void				ActivateBreakpoints	();
 	static void				ActivateBreakpointsExceptAt(PhysPt adr);
 	static bool				CheckBreakpoint		(PhysPt adr);
 	static bool				CheckBreakpoint		(Bitu seg, Bitu off);
 	static bool				CheckIntBreakpoint	(PhysPt adr, uint8_t intNr, uint16_t ahValue, uint16_t alValue);
+	static bool CheckReturnBreakpoint();
+	static bool CheckRegBreakpoint();
 	static CBreakpoint*		FindPhysBreakpoint	(uint16_t seg, uint32_t off, bool once);
 	static CBreakpoint*		FindOtherActiveBreakpoint(PhysPt adr, CBreakpoint* skip);
 	static bool				IsBreakpoint		(uint16_t seg, uint32_t off);
@@ -344,10 +372,15 @@ private:
 	uint8_t oldData  = 0;
 	uint16_t segment = 0;
 	uint32_t offset  = 0;
+	// Conditional memoryF
+	uint8_t targetValue = 0;
+	bool hasCondition    = 0;
 	// Int
 	uint8_t intNr    = 0;
 	uint16_t ahValue = 0;
 	uint16_t alValue = 0;
+	// Register
+	uint8_t reg		 = 0;
 	// Shared
 	bool active = 0;
 	bool once   = 0;
@@ -403,8 +436,25 @@ void CBreakpoint::Activate(bool _active)
 	active = _active;
 }
 
+bool CBreakpoint::IsConditionFulfilled(uint8_t _value) noexcept
+{
+	const uint16_t oldValue = GetValue();
+	bool valuesDiffer = oldValue != _value;
+	if (hasCondition) {
+		return valuesDiffer && (_value == targetValue);
+	} else {
+		return valuesDiffer;
+	}
+	return true;
+}
+
 // Statics
 static std::list<CBreakpoint *> BPoints = {};
+
+// TODO: Why does it work like this (reminder about declaring/defining static variables)
+static bool breakOnReturn = true;
+
+
 
 CBreakpoint* CBreakpoint::AddBreakpoint(uint16_t seg, uint32_t off, bool once)
 {
@@ -434,6 +484,38 @@ CBreakpoint* CBreakpoint::AddMemBreakpoint(uint16_t seg, uint32_t off)
 	return bp;
 }
 
+CBreakpoint* CBreakpoint::AddConditionalMemBreakpoint(uint16_t seg, uint32_t off, uint8_t targetValue)
+{
+	auto bp = AddMemBreakpoint(seg, off);
+	bp->SetCondition(targetValue);
+	return bp;
+}
+
+CBreakpoint* CBreakpoint::AddReturnBreakpoint()
+{
+	auto bp = new CBreakpoint();
+	bp->SetOnce(false);
+	bp->SetType(BKPNT_RETURN);
+	BPoints.push_front(bp);
+	// TODO: Handle as a singleton or in a different way
+	return bp;
+}
+
+
+CBreakpoint* CBreakpoint::AddRegBreakpoint(uint8_t reg)
+{
+	auto bp = new CBreakpoint();
+	bp->SetRegister(reg);
+	BPoints.push_front(bp);
+	return bp;
+}
+
+CBreakpoint* CBreakpoint::AddPixelBreakpoint(uint16_t x, uint16_t y)
+{
+	// TODO: This is based on a lot of assumptions about the graphics mode
+	return CBreakpoint::AddMemBreakpoint(0xa000, y * 320 + x);
+}
+
 void CBreakpoint::ActivateBreakpoints()
 {
 	// activate all breakpoints
@@ -461,9 +543,25 @@ void CBreakpoint::ActivateBreakpointsExceptAt(PhysPt adr)
 	}
 }
 
+bool CBreakpoint::CheckReturnBreakpoint() {
+	std::list<CBreakpoint*>::iterator i;
+	for (auto& bp : BPoints) {
+		// Do not activate breakpoints at adr
+		if (bp->GetType() == BKPNT_RETURN)
+			return true;
+	}
+	return false;
+}
+
 // Checks if breakpoint is valid and should stop execution
 bool CBreakpoint::CheckBreakpoint(Bitu seg, Bitu off)
 {
+
+	
+	// TODO: Quick and dirty implementation of jumping out of functions here
+
+
+
 	// Quick exit if there are no breakpoints
 	if (BPoints.empty()) return false;
 
@@ -509,15 +607,42 @@ bool CBreakpoint::CheckBreakpoint(Bitu seg, Bitu off)
 				else address = GetAddress(bp->GetSegment(),bp->GetOffset());
 				uint8_t value=0;
 				if (mem_readb_checked(address,&value)) return false;
-				if (bp->GetValue() != value) {
-					// Yup, memory value changed
-					DEBUG_ShowMsg("DEBUG: Memory breakpoint %s: %04X:%04X - %02X -> %02X\n",(bp->GetType()==BKPNT_MEMORY_PROT)?"(Prot)":"",bp->GetSegment(),bp->GetOffset(),bp->GetValue(),value);
-					bp->SetValue(value);
+				if (bp->IsConditionFulfilled(value)) {
+						// Yup, memory value changed
+						DEBUG_ShowMsg("DEBUG: Memory breakpoint %s: %04X:%04X - %02X -> %02X\n",
+						              (bp->GetType() ==
+						               BKPNT_MEMORY_PROT)
+						                      ? "(Prot)"
+						                      : "",
+						              bp->GetSegment(),
+						              bp->GetOffset(),
+						              bp->GetValue(),
+						              value);
+							// TODO: Duplicated, as we need to change the value in any case. There should be a better place to put this update.
+					        bp->SetValue(value);
+						return true;
+				}
+				bp->SetValue(value);
+			}
+		}
+#endif
+	}
+	return false;
+}
+
+bool CBreakpoint::CheckRegBreakpoint() {
+	if (BPoints.empty())
+		return false;
+
+	for (auto i = BPoints.begin(); i != BPoints.end(); ++i) {
+		auto bp = (*i);
+		if ((bp->GetType() == BKPNT_REG) && bp->IsActive()) {
+			if (bp->GetReg() == REGI_BP) {
+				if (oldregs.ebp != reg_ebp) {
 					return true;
 				}
 			}
 		}
-#endif
 	}
 	return false;
 }
@@ -643,6 +768,11 @@ void CBreakpoint::ShowList(void)
 			DEBUG_ShowMsg("%02X. BPPM %04X:%08X (%02X)\n",nr,bp->GetSegment(),bp->GetOffset(),bp->GetValue());
 		} else if (bp->GetType()==BKPNT_MEMORY_LINEAR ) {
 			DEBUG_ShowMsg("%02X. BPLM %08X (%02X)\n",nr,bp->GetOffset(),bp->GetValue());
+		} else if (bp->GetType() == BKPNT_REG) {
+			DEBUG_ShowMsg("%02X. BPREG %02X\n",
+			              nr,
+					// TODO: Display the name
+			              bp->GetReg());
 		}
 		nr++;
 	}
@@ -656,6 +786,10 @@ bool DEBUG_Breakpoint(void)
 	// PhysPt where=GetAddress(SegValue(cs),reg_eip); -- "where" is unused
 	CBreakpoint::DeactivateBreakpoints();	// Deactivate all breakpoints
 	return true;
+}
+
+bool DEBUG_ReturnBreakpoint(void) {
+	return CBreakpoint::CheckReturnBreakpoint();
 }
 
 bool DEBUG_IntBreakpoint(uint8_t intNum)
@@ -1008,6 +1142,13 @@ bool ChangeRegister(char* str)
 	return true;
 }
 
+extern bool mouseBreakpoint;
+extern bool mouseBreakpointHit;
+extern bool outsideStackWriteBreakpoint;
+extern bool outsideStackWriteBreakpointHit;
+extern PhysPt memReadWatch1;
+extern PhysPt memReadWatch2;
+
 bool ParseCommand(char* str) {
 	char* found = str;
 	for(char* idx = found;*idx != 0; idx++)
@@ -1036,6 +1177,20 @@ bool ParseCommand(char* str) {
 		uint32_t ofs = GetHexValue(found,found); found++;
 		uint32_t num = GetHexValue(found,found); found++;
 		SaveMemoryBin(seg,ofs,num);
+		return true;
+	}
+
+	if (command == "DUMPPPM") { // Dump image data from an off-screen buffer
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++;
+		SavePPM(seg, 0);
+		return true;
+	}
+
+	if (command == "NEXTSEG") {
+		DOS_PSP psp(dos.psp());
+		uint16_t size = psp.GetSize();
+		DEBUG_ShowMsg("DEBUG: PSP next_seg = %04X\n", size);
 		return true;
 	}
 
@@ -1089,6 +1244,15 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "ADDR") {
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++;
+		uint32_t ofs = GetHexValue(found, found);
+		found++;
+		uint32_t address = GetAddress(seg, ofs);
+		DEBUG_ShowMsg("DEBUG: Address if %04X:%04X is %08X\n", seg, ofs, address);
+	}
+
 	if (command == "SM") { // Set memory with following values
 		uint16_t seg = (uint16_t)GetHexValue(found,found); found++;
 		uint32_t ofs = GetHexValue(found,found); found++;
@@ -1114,6 +1278,36 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "BPREG") { // Add new breakpoint for register change
+		// Parse the name of the register
+		// TODO: Handle also the smaller parts of the registers like AH and AL
+		uint8_t reg = 0;
+		while (*found == ' ')
+			found++;
+		if (strncmp(found, "EAX", 3) == 0) {
+			reg = REGI_AX;
+		} else if (strncmp(found, "EBX", 3) == 0) {
+			reg = REGI_BX;
+		} else if (strncmp(found, "ECX", 3) == 0) {
+			reg = REGI_CX;
+		} else if (strncmp(found, "EDX", 3) == 0) {
+			reg = REGI_DX;
+		} else if (strncmp(found, "ESI", 3) == 0) {
+			reg = REGI_SI;
+		} else if (strncmp(found, "EDI", 3) == 0) {
+			reg = REGI_DI;
+		} else if (strncmp(found, "EBP", 3) == 0) {
+			reg = REGI_BP;
+		} else if (strncmp(found, "ESP", 3) == 0) {
+			reg = REGI_SP;
+		// TODO: Why is there no enum for this one?
+		// } else if (strncmp(found, "EIP", 3) == 0) {
+		// 	reg = REGI_IP;
+		};
+		CBreakpoint::AddRegBreakpoint(reg);
+		return true;
+	}
+
 #if C_HEAVY_DEBUG
 
 	if (command == "BPM") { // Add new breakpoint
@@ -1121,6 +1315,147 @@ bool ParseCommand(char* str) {
 		uint32_t ofs = GetHexValue(found,found);
 		CBreakpoint::AddMemBreakpoint(seg,ofs);
 		DEBUG_ShowMsg("DEBUG: Set memory breakpoint at %04X:%04X\n",seg,ofs);
+		return true;
+	}
+
+	if (command == "BPMR1") { // Update the memory read breakpoint address 1
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++; // skip ":"
+		uint32_t ofs = GetHexValue(found, found);
+
+		memReadWatch1 = GetAddress(seg, ofs);
+		DEBUG_ShowMsg("DEBUG: Set memory read watch address 1 to %04X:%04X\n",
+		              seg,
+		              ofs);
+		return true;
+	}
+	if (command == "BPMR2") { // Update the memory read breakpoint address 1
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++; // skip ":"
+		uint32_t ofs = GetHexValue(found, found);
+
+		memReadWatch2 = GetAddress(seg, ofs);
+		DEBUG_ShowMsg("DEBUG: Set memory read watch address 2 to %04X:%04X\n",
+		              seg,
+		              ofs);
+		return true;
+	}
+
+	if (command == "BPMC") { // Add a new conditional memory breakpoint
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++; // skip ":"
+		uint32_t ofs = GetHexValue(found, found);
+		// TODO: Which data type would this actually have?
+		uint8_t condition = (uint16_t)GetHexValue(found, found);
+		found++; // skip a whitespaceyu
+		CBreakpoint::AddConditionalMemBreakpoint(seg, ofs, condition);
+		DEBUG_ShowMsg("DEBUG: Set conditional memory breakpoint at %04X:%04X with target value %02X\n", seg, ofs, condition);
+		return true;
+	}
+	if (command == "BPMOUSE") { // Hacky "mouse press read memory" breakpoint
+		mouseBreakpoint = true;
+		mouseBreakpointHit = false;
+		return true;
+	}
+
+	if (command == "BPMW") { // Set a breakpoint on memory writes outside of the stack
+		outsideStackWriteBreakpoint = !outsideStackWriteBreakpoint;
+		outsideStackWriteBreakpointHit = false;
+		memwrites.clear();
+		return true;
+	}
+
+	if (command == "DUMPMW") { // Dump the memory writes
+		char name[13];
+		for (int i = 0; i < 12; i++) {
+			if (found[i] && (found[i] != ' '))
+				name[i] = found[i];
+			else {
+				name[i] = 0;
+				break;
+			}
+		}
+		name[12] = 0;
+		if (!name[0])
+			return false;
+
+		SaveMemWrites(name);
+
+		// Write the file
+		return true;
+	}
+
+	if (command == "CT") { // Toggle usage of the call stack/trace functionality
+		useCallstack = !useCallstack;
+		if (useCallstack) {
+			callstack.clear();
+			calltrace.clear();
+		}
+		filterCallstack = false;
+		DEBUG_ShowMsg("DEBUG: Toggling callstack usage\n");
+		return true;
+	}
+
+	if (command == "CTF") { // Toggle usage of the call stack/trace functionality
+		useCallstack    = !useCallstack;
+		if (useCallstack) {
+			callstack.clear();
+			calltrace.clear();
+		}
+		filterCallstack = true;
+		DEBUG_ShowMsg("DEBUG: Toggling filtered callstack usage\n");
+		return true;
+	}
+
+
+	if (command == "BPR") { // Add a new "return" breakpoint
+		CBreakpoint::AddReturnBreakpoint();
+		// TODO: Also add to bplist
+
+		return true;	
+	}
+
+	if (command == "ST") { // Dump the stack trace
+		DEBUG_ShowMsg("Call Stack:\n");
+		for (auto& current : callstack) {
+			
+			DEBUG_ShowMsg("%04X:%04X --> %04X:%04X\n",
+			              current.caller_seg,
+			              current.caller_off,
+			              current.callee_seg,
+			              current.callee_off);
+		}
+		return true;
+	}
+
+	if (command == "DUMPCT") { // Dump the call trace
+		// TODO: Grab the filename
+		// Call the dump function
+
+		char name[13];
+		for (int i = 0; i < 12; i++) {
+			if (found[i] && (found[i] != ' '))
+				name[i] = found[i];
+			else {
+				name[i] = 0;
+				break;
+			}
+		}
+		name[12] = 0;
+		if (!name[0])
+			return false;
+
+		SaveCalltrace(name);
+		return true;
+	}
+
+	if (command == "BPPIXEL") { // Add new breakpoint
+		uint16_t x = (uint16_t)GetHexValue(found, found);
+		// TODO: Skip all whitespace instead
+		found++; // skip ":"
+		uint16_t y = GetHexValue(found, found);
+		CBreakpoint::AddPixelBreakpoint(x, y);
+		DEBUG_ShowMsg("DEBUG: Set pixel breakpoint at %04X:%04X\n", x, y);
 		return true;
 	}
 
@@ -1650,6 +1985,14 @@ uint32_t DEBUG_CheckKeys(void) {
 		}
 #endif
 		switch (toupper(key)) {
+		// Temp code for seeing the memory at the source
+		case 'Y':
+			dataSeg = SegValue(ds);
+			if (cpu.pmode && !(reg_flags & FLAG_VM))
+				dataOfs = reg_esi;
+			else
+				dataOfs = reg_si;
+			break;
 		case 27:	// escape (a bit slow): Clears line. and processes alt commands.
 			key=getch();
 			if(key < 0) { //Purely escape Clear line
@@ -1873,6 +2216,7 @@ Bitu DEBUG_Loop(void) {
 }
 
 #include <queue>
+
 extern SDL_Window *pdc_window;
 extern std::queue<SDL_Event> pdc_event_queue;
 
@@ -2407,6 +2751,107 @@ static void SaveMemoryBin(uint16_t seg, uint32_t ofs1, uint32_t num) {
 	DEBUG_ShowMsg("DEBUG: Memory dump binary success.\n");
 }
 
+static void SavePPM(uint16_t seg, uint32_t ofs1) {
+	// Saves a PPM bitmap of an off-screen buffer, using the current VGA palette. Hardcoded to 320x200 @ 256 colors
+
+	// Grab the palette
+	constexpr auto palette_map = vga.dac.palette_map;
+
+	// Save the file
+	FILE* f = fopen("image.ppm", "wb");
+	if (!f) {
+		DEBUG_ShowMsg("DEBUG: Write PPM image failed.\n");
+		return;
+	}
+
+	// Write the header
+	fprintf(f, "P6\n");
+	fprintf(f, "320 200\n");
+	fprintf(f, "255\n");
+
+	// TODO: Should these be Bitus?
+	constexpr Bitu width = 320;
+	constexpr Bitu height = 200;
+
+	for (Bitu y = 0; y < height; y++) {
+		for (Bitu x = 0; x < width; x++) {
+			Bitu offset = y * width + x;
+			uint8_t val;
+			if (mem_readb_checked(GetAddress(seg, ofs1 + offset), &val))
+				val = 0;
+			fwrite(palette_map + val, 3, 1, f);
+		}
+		
+	}
+
+	fclose(f);
+	DEBUG_ShowMsg("DEBUG: Memory dump binary success.\n");
+}
+
+static void SaveCalltrace(char* filename)
+{
+	// Save the file
+	FILE* f = fopen(filename, "wb");
+	if (!f) {
+		DEBUG_ShowMsg("DEBUG: Write calltrace failed!\n");
+		return;
+	}
+
+	for (auto& current : calltrace) {
+		if (current.is_call) {
+			fprintf(f, "CALL: ");
+		}
+		else {
+			fprintf(f, "RET:  ");
+		}
+		fprintf(f,
+		        "%04X:%04X --> %04X:%04X\n",
+		        current.caller_seg,
+		        current.caller_off,
+		        current.callee_seg,
+		        current.callee_off);
+	}
+	fclose(f);
+	DEBUG_ShowMsg("DEBUG: Save calltrace complete.\n");
+}
+
+static void SaveMemWrites(char* filename) {
+	// Save the file
+	FILE* f = fopen(filename, "wb");
+	if (!f) {
+		DEBUG_ShowMsg("DEBUG: Write mem writes failed!\n");
+		return;
+	}
+
+
+	for (auto& current : memwrites) {
+		fprintf(f,
+		        "%04X:%04X %01X %02X %04X\n",
+		        current.caller_seg,
+		        current.caller_off,
+		        current.size,
+		        current.value,
+				current.address);
+		/* current
+		
+		if (current.is_call) {
+			fprintf(f, "CALL: ");
+		} else {
+			fprintf(f, "RET:  ");
+		}
+		fprintf(f,
+		        "%04X:%04X --> %04X:%04X\n",
+		        current.caller_seg,
+		        current.caller_off,
+		        current.callee_seg,
+		        current.callee_off); */
+	}
+	fclose(f);
+	DEBUG_ShowMsg("DEBUG: Save mem writes complete.\n");
+}
+
+
+
 static void OutputVecTable(char* filename) {
 	FILE* f = fopen(filename, "wt");
 	if (!f)
@@ -2595,6 +3040,23 @@ void DEBUG_HeavyWriteLogInstruction()
 
 bool DEBUG_HeavyIsBreakpoint(void) {
 	static Bitu zero_count = 0;
+
+	if (mouseBreakpointHit == true) {
+		//if (reg_eip != 0x0817 && reg_eip != 0x081A && reg_eip != 0x09AF && reg_eip != 0x09B2 && reg_eip != 0x09BF && reg_eip != 0x09c3 && reg_eip != 0x09df && reg_eip != 0x09dc) {
+			mouseBreakpoint    = false;
+			mouseBreakpointHit = false;
+			return true;
+	        /*}
+		else {
+			mouseBreakpointHit = false;
+		} */
+	}
+	if (outsideStackWriteBreakpointHit) {
+		// outsideStackWriteBreakpoint = false;
+		//outsideStackWriteBreakpointHit = false;
+		// return true;
+	}
+
 	if (cpuLog) {
 		if (cpuLogCounter>0) {
 			LogInstruction(SegValue(cs),reg_eip,cpuLogFile);
@@ -2625,6 +3087,8 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 		return false;
 	}
 	if (BPoints.size() && CBreakpoint::CheckBreakpoint(SegValue(cs), reg_eip))
+		return true;
+	if (BPoints.size() && CBreakpoint::CheckRegBreakpoint())
 		return true;
 
 	return false;
