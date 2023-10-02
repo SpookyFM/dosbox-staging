@@ -29,6 +29,8 @@
 #include <iomanip>
 #include <string>
 #include <sstream>
+#include <regex>
+#include <queue>
 using namespace std;
 
 #include "debug.h"
@@ -103,6 +105,10 @@ class DEBUG;
 DEBUG*	pDebugcom	= nullptr;
 bool	exitLoop	= false;
 
+std::regex* self_regex = nullptr;
+// Saves the last address at which a regex breakpoint was triggered, for figuring out if we should skip the breakpoint
+PhysPt regex_bp_addr = 0xFFFFFFFF;
+
 
 // Heavy Debugging Vars for logging
 #if C_HEAVY_DEBUG
@@ -138,6 +144,8 @@ Bitu cycle_count = 0;
 
 deque<callstack_entry> callstack;
 deque<callstack_entry> calltrace;
+deque<callstack_entry> rolling_calltrace;
+int rolling_calltrace_length = 500;
 bool callstack_started = false;
 
 static bool debugging = false;
@@ -515,6 +523,7 @@ CBreakpoint* CBreakpoint::AddPixelBreakpoint(uint16_t x, uint16_t y)
 {
 	// TODO: This is based on a lot of assumptions about the graphics mode
 	return CBreakpoint::AddMemBreakpoint(0xa000, y * 320 + x);
+	// return CBreakpoint::AddMemBreakpoint(0x026F, y * 320 + x);
 }
 
 void CBreakpoint::ActivateBreakpoints()
@@ -541,6 +550,9 @@ void CBreakpoint::ActivateBreakpointsExceptAt(PhysPt adr)
 		if (bp->GetType() == BKPNT_PHYSICAL && bp->GetLocation() == adr)
 			continue;
 		bp->Activate(true);
+	}
+	if (regex_bp_addr != adr) {
+		regex_bp_addr = 0xFFFFFFFF;
 	}
 }
 
@@ -1149,10 +1161,14 @@ extern bool outsideStackWriteBreakpoint;
 extern bool outsideStackWriteBreakpointHit;
 extern PhysPt memReadWatch1;
 extern PhysPt memReadWatch2;
+extern PhysPt memReadOverride;
+extern uint32_t memReadOverrideValue;
+
 
 bool ParseCommand(char* str) {
 	char* found = str;
-	for(char* idx = found;*idx != 0; idx++)
+	// Change: We only uppercase the first word = the command itself
+	for(char* idx = found;*idx != 0 && *idx != ' '; idx++)
 		*idx = toupper(*idx);
 
 	found = trim(found);
@@ -1319,6 +1335,24 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "REBP") { // Add a regular expression breakpoint
+		char source[51];
+		for (int i = 0; i < 50; i++) {
+			if (found[i] && (found[i] != ' ')) source[i] = found[i];
+			else { source[i] = 0; break; }
+		}
+		source[50] = 0;
+
+		if (source[0] == 0) {
+			delete self_regex;
+			self_regex = nullptr;
+		}
+		else {
+			self_regex = new std::regex(source, std::regex_constants::ECMAScript | std::regex_constants::icase);
+		}
+		return true;
+	}
+
 	if (command == "BPMR1") { // Update the memory read breakpoint address 1
 		uint16_t seg = (uint16_t)GetHexValue(found, found);
 		found++; // skip ":"
@@ -1339,6 +1373,21 @@ bool ParseCommand(char* str) {
 		DEBUG_ShowMsg("DEBUG: Set memory read watch address 2 to %04X:%04X\n",
 		              seg,
 		              ofs);
+		return true;
+	}
+	if (command == "BPMRO") { // Update the memory read override address
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++; // skip ":"
+		uint32_t ofs = GetHexValue(found, found);
+		found++;
+		uint32_t value = GetHexValue(found, found);
+
+		memReadOverride = GetAddress(seg, ofs);
+		memReadOverrideValue = value;
+		DEBUG_ShowMsg("DEBUG: Set memory read override address to %04X:%04X, returning value %04X\n",
+			seg,
+			ofs,
+			value);
 		return true;
 	}
 
@@ -2819,7 +2868,8 @@ static void SaveCalltrace(char* filename)
 		return;
 	}
 
-	for (auto& current : calltrace) {
+	//for (auto& current : calltrace) {
+	for (auto& current : rolling_calltrace) {
 		if (current.is_call) {
 			fprintf(f, "CALL: ");
 		}
@@ -3064,8 +3114,49 @@ void DEBUG_HeavyWriteLogInstruction()
 	DEBUG_ShowMsg("DEBUG: Done.\n");
 }
 
+Bitu tracePointSeg = 0x01e7;
+Bitu tracePointOff = 0xdb8e;
+
+// TODO: Hardcoded trace point functionality for a specific use case
+bool DEBUG_HandleTracePoint(Bitu seg, Bitu off) {
+	if (seg == tracePointSeg && off == tracePointOff) {
+		uint8_t alValue = reg_al;
+		return true;
+	}
+	return false;
+}
+
+
+
+bool DEBUG_HandleRegexpBreakpoint(Bitu seg, Bitu off) {
+	if (self_regex == nullptr) {
+		return false;
+	}
+	PhysPt start = GetAddress(seg, off);
+	if (start == regex_bp_addr) {
+		return false;
+	}
+	char dline[200]; Bitu size;
+	size = DasmI386(dline, start, reg_eip, cpu.code.big);
+
+	
+	if (std::regex_search(string(dline), *self_regex)) {
+		regex_bp_addr = start;
+		return true;
+	}
+	
+
+	return false;
+}
+
 bool DEBUG_HeavyIsBreakpoint(void) {
 	static Bitu zero_count = 0;
+
+	DEBUG_HandleTracePoint(SegValue(cs), reg_eip);
+	if (DEBUG_HandleRegexpBreakpoint(SegValue(cs), reg_eip)) {
+		return true;
+	}
+
 
 	if (mouseBreakpointHit == true) {
 		//if (reg_eip != 0x0817 && reg_eip != 0x081A && reg_eip != 0x09AF && reg_eip != 0x09B2 && reg_eip != 0x09BF && reg_eip != 0x09c3 && reg_eip != 0x09df && reg_eip != 0x09dc) {

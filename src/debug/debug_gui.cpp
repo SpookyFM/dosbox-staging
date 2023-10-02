@@ -158,7 +158,11 @@ void DEBUG_PushStackFrame(uint16_t callerSeg, uint32_t callerOff,
 	}
 	*/
 	if (!filterCallstack || isGame) {
-		calltrace.push_back(entry);
+		// calltrace.push_back(entry);
+		if (rolling_calltrace.size() == rolling_calltrace_length) {
+			rolling_calltrace.pop_front();
+		}
+		rolling_calltrace.push_back(entry);
 	}
 }
 void DEBUG_PopStackFrame(uint16_t curSeg, uint32_t curOff, uint16_t retSeg,
@@ -180,7 +184,11 @@ void DEBUG_PopStackFrame(uint16_t curSeg, uint32_t curOff, uint16_t retSeg,
 	bool isGame = isInGameCode(curSeg) || isInGameCode(retSeg);
 
 	if (!filterCallstack || isGame) {
-		calltrace.push_back(entry);
+		// calltrace.push_back(entry);
+		if (rolling_calltrace.size() == rolling_calltrace_length) {
+			rolling_calltrace.pop_front();
+		}
+		rolling_calltrace.push_back(entry);
 	}
 	
 	

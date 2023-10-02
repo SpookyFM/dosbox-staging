@@ -289,13 +289,27 @@ static inline PhysPt PAGING_GetPhysicalAddress(PhysPt linAddr) {
 }
 #endif
 
+extern PhysPt memReadWatch1;
+extern PhysPt memReadWatch2;
+
 /* Special inlined memory reading/writing */
 
 static inline uint8_t mem_readb_inline(PhysPt address) {
 	HostPt tlb_addr=get_tlb_read(address);
-	if (tlb_addr) return host_readb(tlb_addr+address);
+	uint8_t result;
+	if (tlb_addr) result = host_readb(tlb_addr+address);
 	else
-		return (get_tlb_readhandler(address))->readb(address);
+		result = (get_tlb_readhandler(address))->readb(address);
+
+	bool wasHit;
+	// if (address == 0x00196C64) {
+	if (address == memReadWatch1 || address == memReadWatch2) {
+		uint16_t seg = SegValue(cs);
+		uint32_t off = reg_eip;
+
+		wasHit = true;
+	}
+	return result;
 }
 
 extern bool mouseBreakpoint;
@@ -304,9 +318,16 @@ extern bool mouseBreakpointHit;
 extern bool outsideStackWriteBreakpoint;
 extern bool outsideStackWriteBreakpointHit;
 
-extern PhysPt memReadWatch1;
-extern PhysPt memReadWatch2;
 
+extern PhysPt memReadOverride;
+extern uint32_t memReadOverrideValue;
+
+// Dirty hack: Copying the helper functions over for ease of access
+// #include "cpu.h"
+
+uint32_t PhysMakeProt(uint16_t selector, uint32_t offset);
+
+uint32_t GetAddress(uint16_t seg, uint32_t offset);
 
 static inline uint16_t mem_readw_inline(PhysPt address) {
 
@@ -336,6 +357,19 @@ static inline uint16_t mem_readw_inline(PhysPt address) {
 
 		wasHit = true;
 	}
+	if (result == 0x805) {
+		uint16_t seg = SegValue(cs);
+		uint32_t off = reg_eip;
+
+		wasHit = true;
+	}
+
+	uint16_t seg = SegValue(cs);
+	uint32_t off = reg_eip;
+	if (GetAddress(seg, off) == memReadOverride) {
+		return memReadOverrideValue;
+	}
+	
 	return result;
 }
 
@@ -352,8 +386,7 @@ static inline uint32_t mem_readd_inline(PhysPt address)
 	}
 }
 
-// Dirty hack: Copying the helper functions over for ease of access
-// #include "cpu.h"
+
 
 struct memwrite_entry {
 	uint16_t caller_seg;
@@ -365,9 +398,7 @@ struct memwrite_entry {
 
 extern std::vector<memwrite_entry> memwrites;
 
-uint32_t PhysMakeProt(uint16_t selector, uint32_t offset);
 
-uint32_t GetAddress(uint16_t seg, uint32_t offset);
 
 static void handleWriteBreakpoint(PhysPt address, uint16_t size, uint32_t value)
 {

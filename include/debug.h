@@ -22,6 +22,7 @@
 #include "dosbox.h"
 
 #include <deque>
+#include <queue>
 
 #include "paging.h"
 
@@ -57,7 +58,10 @@ struct callstack_entry {
 
 extern std::deque<callstack_entry> callstack;
 extern std::deque<callstack_entry> calltrace;
+extern std::deque<callstack_entry> rolling_calltrace;
+extern int rolling_calltrace_length;
 extern bool callstack_started;
+
 
 #ifdef C_HEAVY_DEBUG
 bool DEBUG_HeavyIsBreakpoint(void);
