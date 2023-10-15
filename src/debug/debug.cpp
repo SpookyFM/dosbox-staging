@@ -621,6 +621,12 @@ bool CBreakpoint::CheckBreakpoint(Bitu seg, Bitu off)
 				uint8_t value=0;
 				if (mem_readb_checked(address,&value)) return false;
 				if (bp->IsConditionFulfilled(value)) {
+					// TODO: Hardcoded check - make sure we are in game code
+					uint16_t bpSeg = SegValue(cs);
+					if (!(bpSeg == 0x01F7 || bpSeg == 0x01E7 || bpSeg == 0x01D7 || bpSeg == 0x0217)) {
+						return false;
+					}
+				
 						// Yup, memory value changed
 						DEBUG_ShowMsg("DEBUG: Memory breakpoint %s: %04X:%04X - %02X -> %02X\n",
 						              (bp->GetType() ==
@@ -3126,6 +3132,36 @@ bool DEBUG_HandleTracePoint(Bitu seg, Bitu off) {
 	return false;
 }
 
+void DEBUG_HandleSpecial(Bitu seg, Bitu off) {
+	// Check if we are at the target location
+	if (!(seg == 0x01E7 && off == 0x1BAA)) {
+		return;
+	}
+
+	// Check if we are following the right object
+	uint16_t ptrBP = reg_bp;
+	uint32_t ptrSS = SegValue(ss);
+	uint32_t objectID = mem_readw_inline(GetAddress(ptrSS, ptrBP + 0x06));
+	if (objectID != 01) {
+		return;
+	}
+
+	
+	// At this point, we have the correct values in the registers.
+	uint16_t ptrES = SegValue(es);
+	uint32_t ptrDI = reg_edi;
+	
+	// Load the x value
+	uint32_t x = mem_readw_inline(GetAddress(ptrES, ptrDI));
+
+
+	// Load the y value
+	uint32_t y = mem_readw_inline(GetAddress(ptrES, ptrDI + 2));
+
+	uint32_t nonsense = x + y;
+	
+}
+
 
 
 bool DEBUG_HandleRegexpBreakpoint(Bitu seg, Bitu off) {
@@ -3151,6 +3187,8 @@ bool DEBUG_HandleRegexpBreakpoint(Bitu seg, Bitu off) {
 
 bool DEBUG_HeavyIsBreakpoint(void) {
 	static Bitu zero_count = 0;
+
+	DEBUG_HandleSpecial(SegValue(cs), reg_eip);
 
 	DEBUG_HandleTracePoint(SegValue(cs), reg_eip);
 	if (DEBUG_HandleRegexpBreakpoint(SegValue(cs), reg_eip)) {
