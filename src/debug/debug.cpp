@@ -956,7 +956,10 @@ static void DrawRegisters(void) {
 	}
 
 	wattrset(dbg.win_reg,0);
-	mvwprintw(dbg.win_reg,3,60,"%" PRIuPTR "       ",cycle_count);
+	// We replace cycle counter by the current scripting location
+	uint32_t script_location = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+	// mvwprintw(dbg.win_reg,3,60,"%" PRIuPTR "       ",cycle_count);
+	mvwprintw(dbg.win_reg, 3, 60, "%.4x", script_location);
 	wrefresh(dbg.win_reg);
 }
 
@@ -1169,6 +1172,7 @@ extern PhysPt memReadWatch1;
 extern PhysPt memReadWatch2;
 extern PhysPt memReadOverride;
 extern uint32_t memReadOverrideValue;
+bool printSpecial = true;
 
 
 bool ParseCommand(char* str) {
@@ -1449,6 +1453,12 @@ bool ParseCommand(char* str) {
 		}
 		filterCallstack = false;
 		DEBUG_ShowMsg("DEBUG: Toggling callstack usage\n");
+		return true;
+	}
+
+	if (command == "TS") { // Toggle special function output
+		printSpecial = !printSpecial;
+		system("CLS");
 		return true;
 	}
 
@@ -3132,6 +3142,74 @@ bool DEBUG_HandleTracePoint(Bitu seg, Bitu off) {
 	return false;
 }
 
+uint16_t script_read_seg;
+uint16_t script_read_off;
+uint16_t script_last_read_off = 0xFFFF;
+
+void DEBUG_HandleScript(Bitu seg, Bitu off) {
+	if (!printSpecial) {
+		return;
+	}
+	if (seg == 0x01D7 && off == 0x082A) {
+		fprintf(stdout, "*** Mouse press ***\n");
+		return;
+	}
+	if (seg != 0x01E7) {
+		return;
+	}
+
+	uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
+	uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
+
+	if (off == 0xDB56) {
+		fprintf(stdout, "----- Scripting function entered\n");
+	}
+	else if (off == 0xE3E5) {
+		fprintf(stdout, "----- Scripting function left\n");
+	}
+	if (off == 0x9F17) {
+		// This is the case where we read a byte from the file
+		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+		fprintf(stdout, "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_al, SegValue(es), reg_di, script_offset, ret_seg, ret_off);
+		if (reg_di - script_last_read_off > 1) {
+			fprintf(stdout, "-- Gap of %u bytes\n", reg_di - script_last_read_off);
+		}
+		script_last_read_off = reg_di + 1;
+	}
+	else if (off == 0x9F34) {
+		// First stage of capturing script read: Save the location we are reading from
+		script_read_seg = reg_dx;
+		script_read_off = reg_ax;
+	}
+	else if (off == 0x9F40) {
+		// Second stage of a script read for a pointed to value
+		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+		fprintf(stdout, "Script read (word): %.4x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_ax, script_read_seg, script_read_off, script_offset, ret_seg, ret_off);
+		if (script_read_off - script_last_read_off > 2) {
+			fprintf(stdout, "-- Gap of %u bytes\n", script_read_off - script_last_read_off);
+		}
+		script_last_read_off = script_read_off + 2;
+	}
+	else if (off == 0xDB8E) {
+		fprintf(stdout, "- First block opcode: %.2x\n", reg_al);
+	}
+	else if (off == 0xDC6B) {
+		fprintf(stdout, "- Second block opcode: %.2x\n", reg_al);
+	}
+	else if (off == 0x9F56) {
+		fprintf(stdout, "- 9F4D opcode: %.2x (%.4x:%.4x)\n", reg_al, ret_seg, ret_off);
+	}
+	else if (off == 0xA332) {
+		fprintf(stdout, "- 9F4D results: %.4x %.4x (%.4x:%.4x)\n", reg_ax, reg_dx, ret_seg, ret_off);
+	}
+	else if (off == 0xA417) {
+		// We are skipping bytes using A3D2
+		uint32_t num_bytes = reg_ax;
+		uint16_t opcode1 = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x1));
+		fprintf(stdout, "- A3D2 skipping %u bytes for opcode %.2x (%.4x:%.4x)\n", num_bytes, opcode1, ret_seg, ret_off);
+	}
+}
+
 void DEBUG_HandleSpecial(Bitu seg, Bitu off) {
 	// Check if we are at the target location
 	if (!(seg == 0x01E7 && off == 0x1BAA)) {
@@ -3189,6 +3267,7 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 	static Bitu zero_count = 0;
 
 	DEBUG_HandleSpecial(SegValue(cs), reg_eip);
+	DEBUG_HandleScript(SegValue(cs), reg_eip);
 
 	DEBUG_HandleTracePoint(SegValue(cs), reg_eip);
 	if (DEBUG_HandleRegexpBreakpoint(SegValue(cs), reg_eip)) {

@@ -44,6 +44,7 @@ extern Bitu debugCallback;
 
 extern bool useCallstack;
 extern bool filterCallstack;
+extern bool printSpecial;
 
 struct callstack_entry {
 	bool is_call; // True if this is a call, false if this is a return
