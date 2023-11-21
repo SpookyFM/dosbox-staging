@@ -53,16 +53,16 @@ void ImageCapturer::ConfigureGroupedMode(const std::string& prefs)
 	grouped_mode.wants_upscaled = false;
 	grouped_mode.wants_rendered = false;
 
-	const auto formats = split(prefs, ' ');
+	const auto formats = split_with_empties(prefs, ' ');
 	if (formats.size() == 0) {
-		LOG_WARNING("CAPTURE: 'default_image_capture_formats' not specified; "
-		            "defaulting to 'upscaled'");
+		LOG_WARNING("CAPTURE: 'default_image_capture_formats' not specified, "
+		            "using 'upscaled'");
 		set_defaults();
 		return;
 	}
 	if (formats.size() > 3) {
 		LOG_WARNING("CAPTURE: Invalid 'default_image_capture_formats' setting: '%s'. "
-		            "Must not contain more than 3 formats; defaulting to 'upscaled'.",
+		            "Must not contain more than 3 formats, using 'upscaled'.",
 		            prefs.c_str());
 		set_defaults();
 		return;
@@ -76,10 +76,9 @@ void ImageCapturer::ConfigureGroupedMode(const std::string& prefs)
 		} else if (format == "rendered") {
 			grouped_mode.wants_rendered = true;
 		} else {
-			LOG_WARNING("CAPTURE: Invalid image capture format specified for "
-			            "'default_image_capture_formats': '%s'. "
+			LOG_WARNING("CAPTURE: Invalid 'default_image_capture_formats' setting: '%s'. "
 			            "Valid formats are 'raw', 'upscaled', and 'rendered'; "
-			            "defaulting to 'upscaled'.",
+			            "using 'upscaled'.",
 			            format.c_str());
 			set_defaults();
 			return;
@@ -179,26 +178,17 @@ void ImageCapturer::MaybeCaptureImage(const RenderedImage& image)
 	if (do_rendered) {
 		rendered_path = generate_capture_filename(CaptureType::RenderedImage,
 		                                          index);
-
-		// We need to propagate the image info to the PNG writer
-		// so we can include the source image metadata.
-		rendered_image_info = {image.width,
-		                       image.height,
-		                       image.pixel_aspect_ratio};
 	}
 }
 
 void ImageCapturer::CapturePostRenderImage(const RenderedImage& image)
 {
-	GetNextImageSaver().QueueImage(image,
-	                               CapturedImageType::Rendered,
-	                               rendered_path,
-	                               rendered_image_info);
+	GetNextImageSaver().QueueImage(image, CapturedImageType::Rendered, rendered_path);
 
 	state.rendered = CaptureState::Off;
 
-	// In grouped capture mode, adding the post-render image is always the
-	// last step, so we can safely clear the flag here.
+	// In grouped capture mode, adding the post-render image is
+	// always the last step, so we can safely clear the flag here.
 	state.grouped = CaptureState::Off;
 }
 
@@ -241,3 +231,31 @@ void ImageCapturer::RequestGroupedCapture()
 	state.grouped = CaptureState::Pending;
 }
 
+uint8_t get_double_scan_row_skip_count(const RenderedImage& image)
+{
+	// Double-scanning can be either:
+	//
+	// 1) "baked" into the image; `image.image_data` contains twice as many
+	// rows (e.g. `video_mode.height` is 200 and `image.height` 400),
+	//
+	// 2) or it can be "faked" with `image.double_height` set to true, in
+	// which case `video_mode.height` equals `image.height` (e.g. both are
+	// 200) and the height-doubling happens as a post-processing step on
+	// `image.image_data` just before the final output.
+	//
+	// For case 2, there's nothing to do; the image data itself is not
+	// double-scanned. For case 1, we need to reconstruct the raw,
+	// non-double-scanned image to serve as the basis for our further output
+	// and scaling operations, so we must skip every second row if we're
+	// dealing with "baked in" double-scanning.
+	//
+	// This function returns `0` for case 1 images (faked double-scan), and
+	// `1` for case 2 images (baked-in double-scan).
+	//
+	const auto& src = image.params;
+
+	assert(src.height >= src.video_mode.height);
+	assert(src.height % src.video_mode.height == 0);
+
+	return check_cast<uint8_t>(src.height / src.video_mode.height - 1);
+}

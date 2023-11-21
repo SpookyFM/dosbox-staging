@@ -65,7 +65,7 @@ static std::vector<comdata_t> internal_progs_comdata;
 static std::vector<PROGRAMS_Creator> internal_progs;
 
 static uint8_t last_written_character = '\n';
-constexpr int WriteOutBufSize         = 2048;
+constexpr int WriteOutBufSize         = 4096;
 
 static void write_to_stdout(std::string_view output)
 {
@@ -311,7 +311,7 @@ private:
 	void WriteConfig(const std::string& name)
 	{
 		WriteOut(MSG_Get("PROGRAM_CONFIG_FILE_WHICH"), name.c_str());
-		if (!control->PrintConfig(name)) {
+		if (!control->WriteConfig(name)) {
 			WriteOut(MSG_Get("PROGRAM_CONFIG_FILE_ERROR"), name.c_str());
 		}
 		return;
@@ -386,15 +386,18 @@ void CONFIG::Run(void)
 				for (size_t i = 0; i < pvars.size(); i++) {
 					restart_params.push_back(pvars[i]);
 				}
-				// the rest on the commandline, too
-				cmd->FillVector(restart_params);
+				const auto remaining_args = cmd->GetArguments();
+				restart_params.insert(restart_params.end(),
+				                      remaining_args.begin(),
+				                      remaining_args.end());
+
 				restart_program(restart_params);
 			}
 			return;
 
 		case P_LISTCONF: {
 			Bitu size = control->configfiles.size();
-			const std_fs::path config_path = get_platform_config_dir();
+			const std_fs::path config_path = GetConfigDir();
 			WriteOut(MSG_Get("PROGRAM_CONFIG_CONFDIR"),
 			         VERSION,
 			         config_path.c_str());
@@ -432,13 +435,7 @@ void CONFIG::Run(void)
 				WriteOut(MSG_Get("SHELL_TOO_MANY_PARAMETERS"));
 				return;
 			}
-			std::string name;
-			Cross::GetPlatformConfigName(name);
-
-			// write file to the default config directory
-			const auto config_path = get_platform_config_dir() / name;
-			name = config_path.string();
-			WriteConfig(name);
+			WriteConfig(GetPrimaryConfigPath().string());
 			break;
 		}
 		case P_WRITECONF:
@@ -455,7 +452,8 @@ void CONFIG::Run(void)
 				// write config to startup directory
 				WriteConfig(pvars[0]);
 			} else {
-				// -wc without parameter: write dosbox.conf to startup directory
+				// -wc without parameter: write dosbox.conf to
+				// startup directory
 				if (control->configfiles.size()) {
 					WriteConfig("dosbox.conf");
 				} else {
@@ -487,7 +485,7 @@ void CONFIG::Run(void)
 					return;
 				}
 				// if it's a section, leave it as one-param
-				Section* sec = control->GetSection(pvars[0].c_str());
+				Section* sec = control->GetSection(pvars[0]);
 				if (!sec) {
 					// could be a property
 					sec = control->GetSectionFromProperty(
@@ -504,7 +502,7 @@ void CONFIG::Run(void)
 			}
 			case 2: {
 				// sanity check
-				Section* sec = control->GetSection(pvars[0].c_str());
+				Section* sec  = control->GetSection(pvars[0]);
 				Section* sec2 = control->GetSectionFromProperty(
 				        pvars[1].c_str());
 				if (!sec) {
@@ -520,7 +518,7 @@ void CONFIG::Run(void)
 			}
 			// if we have one value in pvars, it's a section
 			// two values are section + property
-			Section* sec = control->GetSection(pvars[0].c_str());
+			Section* sec = control->GetSection(pvars[0]);
 			if (sec == nullptr) {
 				WriteOut(MSG_Get("PROGRAM_CONFIG_PROPERTY_ERROR"),
 				         pvars[0].c_str());
@@ -552,6 +550,9 @@ void CONFIG::Run(void)
 					if (p == nullptr) {
 						break;
 					}
+					if (p->IsDeprecated()) {
+						continue;
+					}
 					WriteOut("  - %s\n", p->propname.c_str());
 				}
 			} else {
@@ -566,13 +567,13 @@ void CONFIG::Run(void)
 					                pvars[1].c_str())) {
 						// found it; make the list of
 						// possible values
-						std::string propvalues;
+						std::string possible_values;
 						std::vector<Value> pv = p->GetValues();
 
 						if (p->Get_type() == Value::V_BOOL) {
 							// possible values for
 							// boolean are true, false
-							propvalues += "true, false";
+							possible_values += "true, false";
 						} else if (p->Get_type() ==
 						           Value::V_INT) {
 							// print min, max for
@@ -589,31 +590,46 @@ void CONFIG::Run(void)
 								oss << pint->GetMin();
 								oss << "..";
 								oss << pint->GetMax();
-								propvalues += oss.str();
+								possible_values +=
+								        oss.str();
 							}
 						}
 						for (Bitu k = 0; k < pv.size(); k++) {
 							if (pv[k].ToString() == "%u") {
-								propvalues += MSG_Get(
+								possible_values += MSG_Get(
 								        "PROGRAM_CONFIG_HLP_POSINT");
 							} else {
-								propvalues += pv[k].ToString();
+								possible_values +=
+								        pv[k].ToString();
 							}
 							if ((k + 1) < pv.size()) {
-								propvalues += ", ";
+								possible_values += ", ";
 							}
 						}
 
-						WriteOut(
-						        MSG_Get("PROGRAM_CONFIG_HLP_PROPHLP"),
-						        p->propname.c_str(),
-						        sec->GetName(),
-						        p->GetHelp(),
-						        propvalues.c_str(),
-						        p->GetDefaultValue()
-						                .ToString()
-						                .c_str(),
-						        p->GetValue().ToString().c_str());
+						WriteOut(MSG_Get("PROGRAM_CONFIG_HLP_PROPHLP"),
+						         p->propname.c_str(),
+						         sec->GetName(),
+						         p->GetHelp());
+
+						if (!p->IsDeprecated()) {
+							if (!possible_values.empty()) {
+								WriteOut(MSG_Get("PROGRAM_CONFIG_HLP_PROPHLP_POSSIBLE_VALUES"),
+								         possible_values
+								                 .c_str());
+							}
+
+							WriteOut(MSG_Get("PROGRAM_CONFIG_HLP_PROPHLP_DEFAULT_VALUE"),
+							         p->GetDefaultValue()
+							                 .ToString()
+							                 .c_str());
+
+							WriteOut(MSG_Get("PROGRAM_CONFIG_HLP_PROPHLP_CURRENT_VALUE"),
+							         p->GetValue()
+							                 .ToString()
+							                 .c_str());
+						}
+
 						// print 'changability'
 						if (p->GetChange() ==
 						    Property::Changeable::OnlyAtStart) {
@@ -695,7 +711,7 @@ void CONFIG::Run(void)
 			case 1: {
 				// property/section only
 				// is it a section?
-				Section* sec = control->GetSection(pvars[0].c_str());
+				Section* sec = control->GetSection(pvars[0]);
 				if (sec) {
 					// list properties in section
 					Bitu i = 0;
@@ -778,7 +794,7 @@ void CONFIG::Run(void)
 			if (cmd->GetStringRemain(rest)) {
 				pvars.push_back(rest);
 			}
-			const char* result = SetProp(pvars);
+			const char* result = control->SetProp(pvars);
 			if (strlen(result)) {
 				WriteOut(result);
 			} else {
@@ -805,10 +821,9 @@ void CONFIG::Run(void)
 				        inputline.c_str());
 
 				if (!change_success) {
-					auto val = value;
-					trim(val);
+					trim(value);
 					WriteOut(MSG_Get("PROGRAM_CONFIG_VALUE_ERROR"),
-					         val.c_str(),
+					         value.c_str(),
 					         pvars[1].c_str());
 				}
 				tsec->ExecuteInit(false);
@@ -882,43 +897,40 @@ void PROGRAMS_Init(Section* sec)
 	        "Performs configuration management and other miscellaneous actions.\n"
 	        "\n"
 	        "Usage:\n"
-	        "  [color=green]config[reset] [color=white]COMMAND[reset] [color=cyan][PARAMETERS][reset]\n"
+	        "  [color=light-green]config[reset] [color=white]COMMAND[reset] [color=light-cyan][PARAMETERS][reset]\n"
 	        "\n"
 	        "Where [color=white]COMMAND[reset] is one of:\n"
 	        "  -writeconf\n"
-	        "  -wc               Writes the config to `dosbox.conf` in the current working\n"
-	        "                    directory.\n"
+	        "  -wc               Writes the current configuration to the local `dosbox.conf`\n"
+	        "                    config file in the current working directory.\n"
 	        "\n"
 	        "  -writeconf [color=white]PATH[reset]\n"
-	        "  -wc [color=white]PATH          [reset]If [color=white]PATH[reset] is a filename, writes the config to that name\n"
-	        "                    in the current working directory, otherwise to the\n"
+	        "  -wc [color=white]PATH          [reset]If [color=white]PATH[reset] is a filename, writes the current configuration to\n"
+	        "                    that file in the current working directory, otherwise to the\n"
 	        "                    specified absolute or relative path.\n"
 	        "\n"
-	        "  -wcd              Writes the config to the global `dosbox-staging.conf`\n"
-	        "                    file in the configuration directory.\n"
+	        "  -wcd              Writes the current configuration to the primary (default)\n"
+	        "                    `dosbox-staging.conf` config file in the configuration\n"
+	        "                    directory.\n"
 	        "\n"
 	        "  -writelang [color=white]FILENAME[reset]\n"
 	        "  -wl [color=white]FILENAME      [reset]Writes the current language strings to [color=white]FILENAME [reset]in the\n"
 	        "                    current working directory.\n"
 	        "\n"
-	        "  -r [color=cyan][PROPERTY1=VALUE1 [PROPERTY2=VALUE2 ...]][reset]\n"
+	        "  -r [color=light-cyan][PROPERTY1=VALUE1 [PROPERTY2=VALUE2 ...]][reset]\n"
 	        "                    Restarts DOSBox with the optionally supplied config\n"
 	        "                    properties.\n"
 	        "\n"
 	        "  -l                Shows the currently loaded config files and command line\n"
 	        "                    arguments provided at startup.\n"
 	        "\n"
-	        "  -help sections\n"
-	        "  -h    sections\n"
-	        "  -?    sections    Lists the names of all config sections.\n"
-	        "\n"
 	        "  -help [color=white]SECTION[reset]\n"
 	        "  -h    [color=white]SECTION[reset]\n"
 	        "  -?    [color=white]SECTION     [reset]Lists the names of all properties in a config section.\n"
 	        "\n"
-	        "  -help [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
-	        "  -h    [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
-	        "  -?    [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "  -help [color=light-cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "  -h    [color=light-cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "  -?    [color=light-cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
 	        "                    Shows the description and the current value of a config\n"
 	        "                    property.\n"
 	        "\n"
@@ -931,22 +943,28 @@ void PROGRAMS_Init(Section* sec)
 	        "  -startmapper      Starts the keymapper.\n"
 	        "\n"
 	        "  -get [color=white]SECTION      [reset]Shows all properties and their values in a config section.\n"
-	        "  -get [color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
+	        "  -get [color=light-cyan][SECTION][reset] [color=white]PROPERTY[reset]\n"
 	        "                    Shows the value of a single config property.\n"
 	        "\n"
-	        "  -set [color=cyan][SECTION][reset] [color=white]PROPERTY[reset][=][color=white]VALUE[reset]\n"
+	        "  -set [color=light-cyan][SECTION][reset] [color=white]PROPERTY[reset][=][color=white]VALUE[reset]\n"
 	        "                    Sets the value of a config property.");
 
 	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP",
-	        "[color=white]Purpose of property [color=green]'%s'[color=white] "
-			"(contained in section [color=cyan][%s][color=white])[reset]:\n\n%s\n\n"
-	        "[color=white]Possible values:[reset]  %s\n"
-	        "[color=white]Default value:[reset]    %s\n"
+	        "[color=white]Purpose of property [color=light-green]'%s'[color=white] "
+	        "(contained in section [color=light-cyan][%s][color=white]):[reset]\n\n%s\n\n");
+
+	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP_POSSIBLE_VALUES",
+	        "[color=white]Possible values:[reset]  %s\n");
+
+	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP_DEFAULT_VALUE",
+	        "[color=white]Default value:[reset]    %s\n");
+
+	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP_CURRENT_VALUE",
 	        "[color=white]Current value:[reset]    %s\n");
 
 	MSG_Add("PROGRAM_CONFIG_HLP_LINEHLP",
-	        "[color=white]Purpose of section [%s][reset]:\n"
-			"%s\n[color=white]Current value:[reset]\n%s\n");
+	        "[color=white]Purpose of section [%s]:[reset]\n"
+	        "%s\n[color=white]Current value:[reset]\n%s\n");
 
 	MSG_Add("PROGRAM_CONFIG_HLP_NOCHANGE",
 	        "This property cannot be changed at runtime.\n");
@@ -954,7 +972,7 @@ void PROGRAMS_Init(Section* sec)
 	MSG_Add("PROGRAM_CONFIG_HLP_POSINT", "positive integer");
 
 	MSG_Add("PROGRAM_CONFIG_HLP_SECTHLP",
-	        "[color=white]Section [color=cyan][%s] [color=white]contains the following properties:[reset]\n");
+	        "[color=white]Section [color=light-cyan][%s] [color=white]contains the following properties:[reset]\n");
 
 	MSG_Add("PROGRAM_CONFIG_HLP_SECTLIST",
 	        "[color=white]DOSBox configuration contains the following sections:[reset]\n");
@@ -970,8 +988,8 @@ void PROGRAMS_Init(Section* sec)
 	        "'%s' is not a valid value for property '%s'.\n");
 
 	MSG_Add("PROGRAM_CONFIG_GET_SYNTAX",
-	        "Usage: [color=green]config[reset] -get "
-	        "[color=cyan][SECTION][reset] [color=white]PROPERTY[reset]\n");
+	        "Usage: [color=light-green]config[reset] -get "
+	        "[color=light-cyan][SECTION][reset] [color=white]PROPERTY[reset]\n");
 
 	MSG_Add("PROGRAM_CONFIG_PRINT_STARTUP",
 	        "\n[color=white]DOSBox was started with the following command line arguments:[reset]\n  %s\n");

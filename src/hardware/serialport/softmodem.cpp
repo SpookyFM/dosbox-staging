@@ -126,7 +126,7 @@ CSerialModem::CSerialModem(const uint8_t port_idx, CommandLine *cmd)
 	// enet: Setting to 1 enables enet on the port, otherwise TCP.
 	if (getUintFromString("sock:", bool_temp, cmd)) {
 		if (bool_temp == 1) {
-			socketType = SOCKET_TYPE_ENET;
+			socketType = SocketType::Enet;
 		}
 	}
 
@@ -153,19 +153,14 @@ CSerialModem::CSerialModem(const uint8_t port_idx, CommandLine *cmd)
 	}
 
 	// Get the connect speed to report
-	constexpr auto min_baudrate = 300u;
-	constexpr auto max_baudrate = 57600u;
-	if (getUintFromString("baudrate:", val, cmd)) {
-		val = clamp(val, min_baudrate, max_baudrate);
+	uint32_t requested_bps = 0;
+	if (getUintFromString("bps:", val, cmd)) {
+		requested_bps = val;
 	} else {
-		val = max_baudrate;
+		requested_bps = 57600;
 	}
 
-	assert(val >= min_baudrate && val <= max_baudrate);
-	safe_sprintf(connect_string, "CONNECT %d", val);
-
-	LOG_MSG("SERIAL: Port %" PRIu8 " will report baud rate %d",
-			GetPortNumber(), val);
+	SetModemSpeed(requested_bps);
 
 	InstallationSuccessful=true;
 }
@@ -250,28 +245,30 @@ void CSerialModem::SendNumber(uint32_t val)
 }
 
 void CSerialModem::SendRes(const ResTypes response) {
-	char const * string = nullptr;
+	const char* response_str = nullptr;
 	uint32_t code = -1;
 	switch (response) {
-		case ResOK:         code = 0; string = "OK"; break;
-		case ResCONNECT:    code = 1; string = connect_string; break;
-		case ResRING:       code = 2; string = "RING"; break;
-		case ResNOCARRIER:  code = 3; string = "NO CARRIER"; break;
-		case ResERROR:      code = 4; string = "ERROR"; break;
-		case ResNODIALTONE: code = 6; string = "NO DIALTONE"; break;
-		case ResBUSY:       code = 7; string = "BUSY"; break;
-		case ResNOANSWER:   code = 8; string = "NO ANSWER"; break;
-		case ResNONE:       return;
+	case ResOK:         code = 0; response_str = "OK"; break;
+	case ResCONNECT:    code = 1; response_str = connect_string; break;
+	case ResRING:       code = 2; response_str = "RING"; break;
+	case ResNOCARRIER:  code = 3; response_str = "NO CARRIER"; break;
+	case ResERROR:      code = 4; response_str = "ERROR"; break;
+	case ResNODIALTONE: code = 6; response_str = "NO DIALTONE"; break;
+	case ResBUSY:       code = 7; response_str = "BUSY"; break;
+	case ResNOANSWER:   code = 8; response_str = "NO ANSWER"; break;
+	case ResNONE: return;
 	}
 
 	if(doresponse != 1) {
 		if (doresponse == 2 && (response == ResRING ||
-			response == ResCONNECT || response == ResNOCARRIER))
+			response == ResCONNECT || response == ResNOCARRIER)) {
 			return;
-		if (numericresponse && code != static_cast<uint32_t>(-1))
+		}
+		if (numericresponse && code != static_cast<uint32_t>(-1)) {
 			SendNumber(code);
-		else if (string != nullptr)
-			SendLine(string);
+		} else if (response_str != nullptr) {
+			SendLine(response_str);
+		}
 
 		// if(CSerial::CanReceiveByte())	// very fast response
 		//	if(rqueue->inuse() && CSerial::getRTS())
@@ -281,9 +278,10 @@ void CSerialModem::SendRes(const ResTypes response) {
 		//	        GetPortNumber(), rbyte);
 		//	}
 
-		if (string != nullptr) {
+		if (response_str != nullptr) {
 			LOG_MSG("SERIAL: Port %" PRIu8 " modem response: %s.",
-			        GetPortNumber(), string);
+			        GetPortNumber(),
+			        response_str);
 		}
 	}
 }
@@ -350,6 +348,25 @@ char CSerialModem::GetChar(char * & scan) const {
 	char ch = *scan;
 	scan++;
 	return ch;
+}
+
+void CSerialModem::SetModemSpeed(const uint32_t cfg_val) {
+	modem_bps_config = cfg_val;
+	LOG_MSG("SERIAL: Port %" PRIu8 " modem will report connection speed "
+	        "of up to %d bits per second",
+	        GetPortNumber(),
+	        modem_bps_config);
+	UpdateConnectString();
+}
+
+void CSerialModem::UpdateConnectString() {
+	const uint32_t connect_val = clamp(modem_bps_config,
+	                                   SerialMinBaudRate,
+	                                   GetPortBaudRate());
+
+	assert(connect_val >= SerialMinBaudRate &&
+	       connect_val <= SerialMaxBaudRate);
+	safe_sprintf(connect_string, "CONNECT %d", connect_val);
 }
 
 void CSerialModem::Reset(){
@@ -494,19 +511,30 @@ void CSerialModem::DoCommand()
 			if (is_next_token("SOCK", scanbuf)) {
 				scanbuf += 4;
 				const uint32_t requested_mode = ScanNumber(scanbuf);
-				if (requested_mode >= SOCKET_TYPE_COUNT) {
+				const auto requested_type = static_cast<SocketType>(
+				        requested_mode);
+				if (requested_type >= SocketType::Invalid) {
 					SendRes(ResERROR);
 					return;
 				}
-				if (socketType != (SocketTypesE)requested_mode) {
-					socketType = (SocketTypesE)requested_mode;
-					// This will break when there's more than two socket types.
-					LOG_MSG("SERIAL: Port %" PRIu8 " socket type %s",
+				if (socketType != requested_type) {
+					socketType = requested_type;
+					// This will break when there's more
+					// than two socket types.
+					LOG_MSG("SERIAL: Port %" PRIu8
+					        " socket type %s",
 					        GetPortNumber(),
-					        socketType ? "ENet" : "TCP");
+					        to_string(socketType));
 					// Reset port state.
 					EnterIdleState();
 				}
+				break;
+			}
+			// Set reported connection speed.
+			if (is_next_token("BPS", scanbuf)) {
+				scanbuf += 3;
+				const auto requested_bps = ScanNumber(scanbuf);
+				SetModemSpeed(requested_bps);
 				break;
 			}
 			// If the command wasn't recognized then stop parsing
@@ -548,7 +576,7 @@ void CSerialModem::DoCommand()
 					// be a valid IP/name
 					// Transform by adding dots
 					size_t j = 0;
-					size_t foundlen = strlen(foundstr);
+					const size_t foundlen = strlen(foundstr);
 					for (size_t i = 0; i < foundlen; i++) {
 						buffer[j++] = foundstr[i];
 						// Add a dot after the third, sixth and ninth number
@@ -556,7 +584,7 @@ void CSerialModem::DoCommand()
 							buffer[j++] = '.';
 						// If the string is longer than 12 digits,
 						// interpret the rest as port
-						if (i == 11 && strlen(foundstr) > 12)
+						if (i == 11 && foundlen > 12)
 							buffer[j++] = ':';
 					}
 					buffer[j] = 0;
@@ -1083,6 +1111,7 @@ void CSerialModem::transmitByte(uint8_t val, bool first)
 void CSerialModem::updatePortConfig(uint16_t, uint8_t lcr)
 {
 	(void)lcr; // deliberately unused but needed for API compliance
+	UpdateConnectString();
 }
 
 void CSerialModem::updateMSR() {

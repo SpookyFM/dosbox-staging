@@ -332,6 +332,8 @@ static bool is_combining_mark(const uint32_t code_point)
 		// Note: Arabic Combining Marks start from 0x064b, but some are
 		// present as standalone characters in arabic code pages. To
 		// allow this, we do not recognize them as combining marks!
+		// Similarly for Spacing Modifier Letters.
+		{0x02b9, 0x02bf}, // Spacing Modifier Letters
 		{0x1ab0, 0x1aff}, // Combining Diacritical Marks Extended
 		{0x1dc0, 0x1dff}, // Combining Diacritical Marks Supplement
 		{0x20d0, 0x20ff}, // Combining Diacritical Marks for Symbols
@@ -656,16 +658,6 @@ static void warn_code_page(const uint16_t code_page)
 	}
 	already_warned.insert(code_page);
 	LOG_WARNING("UNICODE: Requested unknown code page %d", code_page);
-}
-
-static void warn_default_code_page()
-{
-	static bool already_warned = false;
-	if (already_warned) {
-		return;
-	}
-	already_warned = true;
-	LOG_WARNING("UNICODE: Unable to prepare default code page");
 }
 
 static bool wide_to_dos(const std::vector<uint16_t>& str_in, std::string& str_out,
@@ -1889,8 +1881,8 @@ static bool construct_mapping(const uint16_t code_page)
 
 	auto& mappings = per_code_page_mappings[code_page];
 
-	mappings.dos_to_grapheme_normalized = new_mapping;
-	mappings.grapheme_to_dos = new_mapping_reverse;
+	mappings.dos_to_grapheme_normalized = std::move(new_mapping);
+	mappings.grapheme_to_dos = std::move(new_mapping_reverse);
 
 	// Construct decomposed mapping
 	construct_decomposed(mappings.dos_to_grapheme_normalized,
@@ -1973,27 +1965,17 @@ static void load_config_if_needed()
 	}
 }
 
-static uint16_t get_default_code_page()
-{
-	constexpr uint16_t default_code_page = 437; // United States
-
-	if (!prepare_code_page(default_code_page)) {
-		warn_default_code_page();
-		return 0;
-	}
-
-	return default_code_page;
-}
-
 static uint16_t get_custom_code_page(const uint16_t in_code_page)
 {
+	load_config_if_needed();
+
 	if (in_code_page == 0) {
 		return 0;
 	}
 
 	const uint16_t code_page = deduplicate_code_page(in_code_page);
 	if (!prepare_code_page(code_page)) {
-		return get_default_code_page();
+		return 0;
 	}
 
 	return code_page;
@@ -2007,19 +1989,19 @@ uint16_t get_utf8_code_page()
 {
 	load_config_if_needed();
 
-	if (!IS_EGAVGA_ARCH) {
-		// Below EGA it wasn't possible to change the character set
-		return get_default_code_page();
-	}
+	constexpr uint16_t rom_code_page = 437; // United States
 
-	const uint16_t code_page = deduplicate_code_page(dos.loaded_codepage);
+	// Below EGA it wasn't possible to change the character set
+	const uint16_t code_page = IS_EGAVGA_ARCH
+	                                 ? deduplicate_code_page(dos.loaded_codepage)
+	                                 : rom_code_page;
 
 	// For unsupported code pages revert to default one
 	if (prepare_code_page(code_page)) {
 		return code_page;
 	}
 
-	return get_default_code_page();
+	return 0;
 }
 
 static bool utf8_to_dos_common(const std::string& in_str, std::string& out_str,
@@ -2072,7 +2054,7 @@ void dos_to_utf8(const std::string& in_str, std::string& out_str,
 	dos_to_utf8_common(in_str, out_str, get_custom_code_page(code_page));
 }
 
-static void lowercase_dos_common(std::string & in_str, const uint16_t code_page)
+static void lowercase_dos_common(std::string& in_str, const uint16_t code_page)
 {
 	load_config_if_needed();
 

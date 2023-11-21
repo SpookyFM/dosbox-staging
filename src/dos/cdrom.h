@@ -93,7 +93,7 @@ inline TMSF frames_to_msf(uint32_t frames)
 
 // Conversion function from Minutes/Second/Frames to frames
 //
-inline uint32_t msf_to_frames(const TMSF &msf)
+inline uint32_t msf_to_frames(const TMSF msf)
 {
 	return msf.min * 60 * REDBOOK_FRAMES_PER_SECOND + msf.sec * REDBOOK_FRAMES_PER_SECOND + msf.fr;
 }
@@ -369,7 +369,7 @@ private:
 		uint32_t                 totalTrackFrames   = 0;
 		uint32_t                 startSector        = 0;
 		uint32_t                 totalRedbookFrames = 0;
-		int16_t                  buffer[MIXER_BUFSIZE * REDBOOK_CHANNELS] = {0};
+		int16_t buffer[MixerBufferLength * REDBOOK_CHANNELS] = {0};
 		bool                     isPlaying          = false;
 		bool                     isPaused           = false;
 	} player;

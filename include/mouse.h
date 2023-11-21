@@ -39,7 +39,7 @@ void MOUSE_AddConfigSection(const config_ptr_t &);
 
 enum class MouseInterfaceId : uint8_t {
 	DOS,  // emulated DOS mouse driver
-	PS2,  // PS/2 mouse (this includes VMware mouse protocol)
+	PS2,  // PS/2 mouse (this includes VMware and VirtualBox protocols)
 	COM1, // serial mouse
 	COM2,
 	COM3,
@@ -59,6 +59,21 @@ enum class MouseMapStatus : uint8_t {
 	Disabled
 };
 
+// Each mouse button has a corresponding fixed identifying value, similar to
+// keyboard scan codes.
+enum class MouseButtonId : uint8_t {
+	Left   = 0,
+	Right  = 1,
+	Middle = 2,
+	Extra1 = 3,
+	Extra2 = 4,
+
+	// Aliases
+	First = Left,
+	Last  = Extra2,
+	None  = UINT8_MAX,
+};
+
 // ***************************************************************************
 // Notifications from external subsystems - all should go via these methods
 // ***************************************************************************
@@ -68,8 +83,8 @@ void MOUSE_EventMoved(const float x_rel, const float y_rel,
 void MOUSE_EventMoved(const float x_rel, const float y_rel,
                       const MouseInterfaceId device_id);
 
-void MOUSE_EventButton(const uint8_t idx, const bool pressed);
-void MOUSE_EventButton(const uint8_t idx, const bool pressed,
+void MOUSE_EventButton(const MouseButtonId button_id, const bool pressed);
+void MOUSE_EventButton(const MouseButtonId button_id, const bool pressed,
                        const MouseInterfaceId device_id);
 
 void MOUSE_EventWheel(const int16_t w_rel);
@@ -137,6 +152,40 @@ void MOUSEDOS_BeforeNewVideoMode();
 void MOUSEDOS_AfterNewVideoMode(const bool is_mode_changing);
 
 // ***************************************************************************
+// Virtual Machine Manager (VMware/VirtualBox) PS/2 mouse protocol extensions
+// ***************************************************************************
+
+enum class MouseVmmProtocol : uint8_t {
+	VirtualBox,
+	VmWare,
+};
+
+struct MouseVirtualBoxPointerStatus {
+	uint16_t absolute_x = 0;
+	uint16_t absolute_y = 0;
+};
+
+struct MouseVmWarePointerStatus {
+	uint16_t absolute_x = 0;
+	uint16_t absolute_y = 0;
+
+	uint8_t buttons       = 0;
+	uint8_t wheel_counter = 0;
+};
+
+bool MOUSEVMM_IsSupported(const MouseVmmProtocol protocol);
+
+void MOUSEVMM_Activate(const MouseVmmProtocol protocol);
+void MOUSEVMM_Deactivate(const MouseVmmProtocol protocol);
+void MOUSEVMM_DeactivateAll();
+
+void MOUSEVMM_GetPointerStatus(MouseVirtualBoxPointerStatus& status);
+void MOUSEVMM_GetPointerStatus(MouseVmWarePointerStatus& status);
+
+void MOUSEVMM_SetPointerVisible_VirtualBox(const bool is_visible);
+bool MOUSEVMM_CheckIfUpdated_VmWare();
+
+// ***************************************************************************
 // MOUSECTL.COM / GUI configurator interface
 // ***************************************************************************
 
@@ -198,6 +247,8 @@ public:
 	const std::vector<MousePhysicalInfoEntry> &GetInfoPhysical();
 
 	static bool IsNoMouseMode();
+	static bool IsMappingBlockedByDriver();
+	
 	static bool CheckInterfaces(const ListIDs &list_ids);
 	static bool PatternToRegex(const std::string &pattern, std::regex &regex);
 

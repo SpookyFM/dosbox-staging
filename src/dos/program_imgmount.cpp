@@ -278,8 +278,8 @@ void IMGMOUNT::Run(void)
 				        temp_line.c_str());
 			}
 		} else {
-			const auto home_resolve = resolve_home(temp_line).string();
-			if (home_resolve == real_path) {
+			const auto home_dir = resolve_home(temp_line).string();
+			if (home_dir == real_path) {
 				LOG_MSG("IMGMOUNT: Path '%s' found",
 				        temp_line.c_str());
 			} else {
@@ -291,12 +291,13 @@ void IMGMOUNT::Run(void)
 		}
 
 		// Test if input is file on virtual DOS drive.
+		constexpr int posix_success = 0;
 		struct stat test;
-		if (stat(temp_line.c_str(), &test)) {
+		if (posix_success != stat(temp_line.c_str(), &test)) {
 			// See if it works if the ~ are written out
-			const auto homedir = resolve_home(temp_line).string();
-			if (!stat(homedir.c_str(), &test)) {
-				temp_line = std::move(homedir);
+			const auto home_dir = resolve_home(temp_line).string();
+			if (posix_success == stat(home_dir.c_str(), &test)) {
+				temp_line = home_dir;
 			} else {
 				// convert dosbox filename to system filename
 				char fullname[CROSS_LEN];
@@ -326,7 +327,7 @@ void IMGMOUNT::Run(void)
 				ldp->GetSystemFilename(tmp, fullname);
 				temp_line = tmp;
 
-				if (stat(temp_line.c_str(), &test)) {
+				if (posix_success != stat(temp_line.c_str(), &test)) {
 					if (add_wildcard_paths(temp_line, paths)) {
 						continue;
 					} else {
@@ -466,7 +467,7 @@ void IMGMOUNT::Run(void)
 			char root[7] = {drive, ':', '\\', '*', '.', '*', 0};
 
 			// Obtain the drive label, saving it in the dirCache
-			if (!DOS_FindFirst(root, DOS_ATTR_VOLUME)) {
+			if (!DOS_FindFirst(root, FatAttributeFlags::Volume)) {
 				LOG_WARNING("DRIVE: Unable to find %c drive's volume label",
 				            drive);
 			}
@@ -611,39 +612,39 @@ void IMGMOUNT::AddMessages()
 	        "Mounts a CD-ROM, floppy, or disk image to a drive letter.\n"
 	        "\n"
 	        "Usage:\n"
-	        "  [color=green]imgmount[reset] [color=white]DRIVE[reset] [color=cyan]CDROM-SET[reset] [-fs iso] [-ide] -t cdrom|iso\n"
-	        "  [color=green]imgmount[reset] [color=white]DRIVE[reset] [color=cyan]IMAGEFILE[reset] [IMAGEFILE2 [..]] [-fs fat] -t hdd|floppy -ro\n"
-	        "  [color=green]imgmount[reset] [color=white]DRIVE[reset] [color=cyan]BOOTIMAGE[reset] [-fs fat|none] -t hdd -size GEOMETRY -ro\n"
-	        "  [color=green]imgmount[reset] -u [color=white]DRIVE[reset]  (unmounts the [color=white]DRIVE[reset]'s image)\n"
+	        "  [color=light-green]imgmount[reset] [color=white]DRIVE[reset] [color=light-cyan]CDROM-SET[reset] [-fs iso] [-ide] -t cdrom|iso\n"
+	        "  [color=light-green]imgmount[reset] [color=white]DRIVE[reset] [color=light-cyan]IMAGEFILE[reset] [IMAGEFILE2 [..]] [-fs fat] -t hdd|floppy -ro\n"
+	        "  [color=light-green]imgmount[reset] [color=white]DRIVE[reset] [color=light-cyan]BOOTIMAGE[reset] [-fs fat|none] -t hdd -size GEOMETRY -ro\n"
+	        "  [color=light-green]imgmount[reset] -u [color=white]DRIVE[reset]  (unmounts the [color=white]DRIVE[reset]'s image)\n"
 	        "\n"
 	        "Where:\n"
 	        "  [color=white]DRIVE[reset]     is the drive letter where the image will be mounted: a, c, d, ...\n"
-	        "  [color=cyan]CDROM-SET[reset] is an ISO, CUE+BIN, CUE+ISO, or CUE+ISO+FLAC/OPUS/OGG/MP3/WAV\n"
-	        "  [color=cyan]IMAGEFILE[reset] is a hard drive or floppy image in FAT16 or FAT12 format\n"
-	        "  [color=cyan]BOOTIMAGE[reset] is a bootable disk image with specified -size GEOMETRY:\n"
+	        "  [color=light-cyan]CDROM-SET[reset] is an ISO, CUE+BIN, CUE+ISO, or CUE+ISO+FLAC/OPUS/OGG/MP3/WAV\n"
+	        "  [color=light-cyan]IMAGEFILE[reset] is a hard drive or floppy image in FAT16 or FAT12 format\n"
+	        "  [color=light-cyan]BOOTIMAGE[reset] is a bootable disk image with specified -size GEOMETRY:\n"
 	        "            bytes-per-sector,sectors-per-head,heads,cylinders\n"
 	        "Notes:\n"
-	        "  - %s+F4 swaps & mounts the next [color=cyan]CDROM-SET[reset] or [color=cyan]BOOTIMAGE[reset], if provided.\n"
+	        "  - %s+F4 swaps & mounts the next [color=light-cyan]CDROM-SET[reset] or [color=light-cyan]BOOTIMAGE[reset], if provided.\n"
 	        "  - The -ro flag mounts the disk image in read-only (write-protected) mode.\n"
 	        "  - The -ide flag emulates an IDE controller with attached IDE CD drive, useful\n"
 	        "    for CD-based games that need a real DOS environment via bootable HDD image.\n"
 	        "\n"
 	        "Examples:\n"
 #if defined(WIN32)
-	        "  [color=green]imgmount[reset] [color=white]D[reset] [color=cyan]C:\\games\\doom.iso[reset] -t cdrom\n"
-	        "  [color=green]imgmount[reset] [color=white]D[reset] [color=cyan]cd/quake1.cue[reset] -t cdrom\n"
-	        "  [color=green]imgmount[reset] [color=white]A[reset] [color=cyan]floppy1.img floppy2.img floppy3.img[reset] -t floppy -ro\n"
-	        "  [color=green]imgmount[reset] [color=white]C[reset] [color=cyan]bootable.img[reset] -t hdd -fs none -size 512,63,32,1023\n"
+	        "  [color=light-green]imgmount[reset] [color=white]D[reset] [color=light-cyan]C:\\games\\doom.iso[reset] -t cdrom\n"
+	        "  [color=light-green]imgmount[reset] [color=white]D[reset] [color=light-cyan]cd/quake1.cue[reset] -t cdrom\n"
+	        "  [color=light-green]imgmount[reset] [color=white]A[reset] [color=light-cyan]floppy1.img floppy2.img floppy3.img[reset] -t floppy -ro\n"
+	        "  [color=light-green]imgmount[reset] [color=white]C[reset] [color=light-cyan]bootable.img[reset] -t hdd -fs none -size 512,63,32,1023\n"
 #elif defined(MACOSX)
-	        "  [color=green]imgmount[reset] [color=white]D[reset] [color=cyan]/Users/USERNAME/games/doom.iso[reset] -t cdrom\n"
-	        "  [color=green]imgmount[reset] [color=white]D[reset] [color=cyan]cd/quake1.cue[reset] -t cdrom\n"
-	        "  [color=green]imgmount[reset] [color=white]A[reset] [color=cyan]floppy1.img floppy2.img floppy3.img[reset] -t floppy -ro\n"
-	        "  [color=green]imgmount[reset] [color=white]C[reset] [color=cyan]bootable.img[reset] -t hdd -fs none -size 512,63,32,1023\n"
+	        "  [color=light-green]imgmount[reset] [color=white]D[reset] [color=light-cyan]/Users/USERNAME/games/doom.iso[reset] -t cdrom\n"
+	        "  [color=light-green]imgmount[reset] [color=white]D[reset] [color=light-cyan]cd/quake1.cue[reset] -t cdrom\n"
+	        "  [color=light-green]imgmount[reset] [color=white]A[reset] [color=light-cyan]floppy1.img floppy2.img floppy3.img[reset] -t floppy -ro\n"
+	        "  [color=light-green]imgmount[reset] [color=white]C[reset] [color=light-cyan]bootable.img[reset] -t hdd -fs none -size 512,63,32,1023\n"
 #else
-	        "  [color=green]imgmount[reset] [color=white]D[reset] [color=cyan]/home/USERNAME/games/doom.iso[reset] -t cdrom\n"
-	        "  [color=green]imgmount[reset] [color=white]D[reset] [color=cyan]cd/quake1.cue[reset] -t cdrom\n"
-	        "  [color=green]imgmount[reset] [color=white]A[reset] [color=cyan]floppy1.img floppy2.img floppy3.img[reset] -t floppy -ro\n"
-	        "  [color=green]imgmount[reset] [color=white]C[reset] [color=cyan]bootable.img[reset] -t hdd -fs none -size 512,63,32,1023\n"
+	        "  [color=light-green]imgmount[reset] [color=white]D[reset] [color=light-cyan]/home/USERNAME/games/doom.iso[reset] -t cdrom\n"
+	        "  [color=light-green]imgmount[reset] [color=white]D[reset] [color=light-cyan]cd/quake1.cue[reset] -t cdrom\n"
+	        "  [color=light-green]imgmount[reset] [color=white]A[reset] [color=light-cyan]floppy1.img floppy2.img floppy3.img[reset] -t floppy -ro\n"
+	        "  [color=light-green]imgmount[reset] [color=white]C[reset] [color=light-cyan]bootable.img[reset] -t hdd -fs none -size 512,63,32,1023\n"
 #endif
 	);
 
@@ -652,11 +653,11 @@ void IMGMOUNT::AddMessages()
 	MSG_Add("PROGRAM_IMGMOUNT_SPECIFY2",
 	        "Must specify drive number (0 or 3) to mount image at (0,1=fda,fdb;2,3=hda,hdb).\n");
 	MSG_Add("PROGRAM_IMGMOUNT_SPECIFY_GEOMETRY",
-	        "For [color=light-yellow]CD-ROM[reset] images:   [color=blue]IMGMOUNT drive-letter location-of-image -t iso[reset]\n"
+	        "For [color=brown]CD-ROM[reset] images:   [color=light-blue]IMGMOUNT drive-letter location-of-image -t iso[reset]\n"
 	        "\n"
-	        "For [color=light-yellow]hardrive[reset] images: Must specify drive geometry for hard drives:\n"
-	        "bytes_per_sector, sectors_per_cylinder, heads_per_cylinder, cylinder_count.\n"
-	        "[color=blue]IMGMOUNT drive-letter location-of-image -size bps,spc,hpc,cyl[reset]\n");
+	        "For [color=brown]hardrive[reset] images: Must specify drive geometry for hard drives:\n"
+	        "bytes-per-sector,sectors-per-head,heads,cylinders\n"
+	        "[color=light-blue]IMGMOUNT drive-letter location-of-image -size bps,spc,hpc,cyl[reset]\n");
 	MSG_Add("PROGRAM_IMGMOUNT_STATUS_NONE", "No drive available\n");
 	MSG_Add("PROGRAM_IMGMOUNT_IDE_CONTROLLERS_UNAVAILABLE",
 	        "No available IDE controllers. Drive will not have IDE emulation.\n");
@@ -674,7 +675,7 @@ void IMGMOUNT::AddMessages()
 	        "Must specify file-image to mount.\n");
 	MSG_Add("PROGRAM_IMGMOUNT_FILE_NOT_FOUND", "Image file not found.\n");
 	MSG_Add("PROGRAM_IMGMOUNT_MOUNT",
-	        "To mount directories, use the [color=blue]MOUNT[reset] command, not the [color=blue]IMGMOUNT[reset] command.\n");
+	        "To mount directories, use the [color=light-blue]MOUNT[reset] command, not the [color=light-blue]IMGMOUNT[reset] command.\n");
 	MSG_Add("PROGRAM_IMGMOUNT_ALREADY_MOUNTED",
 	        "Drive already mounted at that letter.\n");
 	MSG_Add("PROGRAM_IMGMOUNT_CANT_CREATE", "Can't create drive from file.\n");

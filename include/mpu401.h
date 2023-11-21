@@ -1,5 +1,7 @@
 /*
- *  Copyright (C) 2002-2021  The DOSBox Team
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ *  Copyright (C) 2023-2023  The DOSBox Staging Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,3 +18,13 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#ifndef DOSBOX_MPU401_H
+#define DOSBOX_MPU401_H
+
+class Section;
+
+void MPU401_Init(Section* sec);
+
+void MPU401_Destroy(Section* sec);
+
+#endif // DOSBOX_MPU401_H

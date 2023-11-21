@@ -25,6 +25,8 @@
 
 CHECK_NARROWING();
 
+// #define DEBUG_ADLIB_GOLD
+
 // Yamaha YM7128B Surround Processor emulation
 // -------------------------------------------
 
@@ -57,9 +59,11 @@ void SurroundProcessor::ControlWrite(const uint8_t val)
 
 	// Change register data at the falling edge of 'a0' word clock
 	if (control_state.a0 && !reg.a0) {
-		//		DEBUG_LOG_MSG("ADLIBGOLD: Surround: Write
-		// control register %d, data: %d",
-		// control_state.addr, control_state.data);
+#ifdef DEBUG_ADLIB_GOLD
+		LOG_DEBUG("ADLIBGOLD: Surround: Write control register %d, data: %d",
+		          control_state.addr,
+		          control_state.data);
+#endif
 
 		YM7128B_ChipIdeal_Write(&chip, control_state.addr, control_state.data);
 	} else {
@@ -68,16 +72,17 @@ void SurroundProcessor::ControlWrite(const uint8_t val)
 		// the rising edge of 'sci'.
 		if (!control_state.sci && reg.sci) {
 			// The 'a0' word clock determines the type of the data.
-			if (reg.a0)
+			if (reg.a0) {
 				// Data cycle
 				control_state.data = static_cast<uint8_t>(
 				                             control_state.data << 1) |
 				                     reg.din;
-			else
+			} else {
 				// Address cycle
 				control_state.addr = static_cast<uint8_t>(
 				                             control_state.addr << 1) |
 				                     reg.din;
+			}
 		}
 	}
 
@@ -85,7 +90,7 @@ void SurroundProcessor::ControlWrite(const uint8_t val)
 	control_state.a0  = reg.a0;
 }
 
-AudioFrame SurroundProcessor::Process(const AudioFrame &frame)
+AudioFrame SurroundProcessor::Process(const AudioFrame frame)
 {
 	YM7128B_ChipIdeal_Process_Data data = {};
 
@@ -115,16 +120,18 @@ void StereoProcessor::SetLowShelfGain(const double gain_db)
 {
 	constexpr auto cutoff_freq = 400.0;
 	constexpr auto slope       = 0.5;
-	for (auto &f : lowshelf)
+	for (auto& f : lowshelf) {
 		f.setup(sample_rate, cutoff_freq, gain_db, slope);
+	}
 }
 
 void StereoProcessor::SetHighShelfGain(const double gain_db)
 {
 	constexpr auto cutoff_freq = 2500.0;
 	constexpr auto slope       = 0.5;
-	for (auto &f : highshelf)
+	for (auto& f : highshelf) {
 		f.setup(sample_rate, cutoff_freq, gain_db, slope);
+	}
 }
 
 StereoProcessor::~StereoProcessor() = default;
@@ -179,17 +186,23 @@ void StereoProcessor::ControlWrite(const StereoProcessorControlReg reg,
 	case StereoProcessorControlReg::VolumeLeft: {
 		const auto value = data & volume_control_mask;
 		gain.left        = calc_volume_gain(value);
-		DEBUG_LOG_MSG("ADLIBGOLD: Stereo: Final left volume set to %.2fdB (value %d)",
-		              gain.left,
-		              value);
+
+#ifdef DEBUG_ADLIB_GOLD
+		LOG_DEBUG("ADLIBGOLD: Stereo: Final left volume set to %.2fdB (value %d)",
+		          gain.left,
+		          value);
+#endif
 	} break;
 
 	case StereoProcessorControlReg::VolumeRight: {
 		const auto value = data & volume_control_mask;
 		gain.right       = calc_volume_gain(value);
-		DEBUG_LOG_MSG("ADLIBGOLD: Stereo: Final right volume set to %.2fdB (value %d)",
-		              gain.right,
-		              value);
+
+#ifdef DEBUG_ADLIB_GOLD
+		LOG_DEBUG("ADLIBGOLD: Stereo: Final right volume set to %.2fdB (value %d)",
+		          gain.right,
+		          value);
+#endif
 	} break;
 
 	case StereoProcessorControlReg::Bass: {
@@ -197,9 +210,11 @@ void StereoProcessor::ControlWrite(const StereoProcessorControlReg reg,
 		const auto gain_db = calc_filter_gain_db(value);
 		SetLowShelfGain(gain_db);
 
-		DEBUG_LOG_MSG("ADLIBGOLD: Stereo: Bass gain set to %.2fdB (value %d)",
-		              gain_db,
-		              value);
+#ifdef DEBUG_ADLIB_GOLD
+		LOG_DEBUG("ADLIBGOLD: Stereo: Bass gain set to %.2fdB (value %d)",
+		          gain_db,
+		          value);
+#endif
 	} break;
 
 	case StereoProcessorControlReg::Treble: {
@@ -210,9 +225,11 @@ void StereoProcessor::ControlWrite(const StereoProcessorControlReg reg,
 		const auto gain_db = calc_filter_gain_db(value + extra_treble);
 		SetHighShelfGain(gain_db);
 
-		DEBUG_LOG_MSG("ADLIBGOLD: Stereo: Treble gain set to %.2fdB (value %d)",
-		              gain_db,
-		              value);
+#ifdef DEBUG_ADLIB_GOLD
+		LOG_DEBUG("ADLIBGOLD: Stereo: Treble gain set to %.2fdB (value %d)",
+		          gain_db,
+		          value);
+#endif
 	} break;
 
 	case StereoProcessorControlReg::SwitchFunctions: {
@@ -223,14 +240,16 @@ void StereoProcessor::ControlWrite(const StereoProcessorControlReg reg,
 		stereo_mode = StereoProcessorStereoMode(
 		        static_cast<uint8_t>(sf.stereo_mode));
 
-		DEBUG_LOG_MSG("ADLIBGOLD: Stereo: Source selector set to %d, stereo mode set to %d",
-		              static_cast<int>(source_selector),
-		              static_cast<int>(stereo_mode));
+#ifdef DEBUG_ADLIB_GOLD
+		LOG_DEBUG("ADLIBGOLD: Stereo: Source selector set to %d, stereo mode set to %d",
+		          static_cast<int>(source_selector),
+		          static_cast<int>(stereo_mode));
+#endif
 	} break;
 	}
 }
 
-AudioFrame StereoProcessor::ProcessSourceSelection(const AudioFrame &frame)
+AudioFrame StereoProcessor::ProcessSourceSelection(const AudioFrame frame)
 {
 	switch (source_selector) {
 	case StereoProcessorSourceSelector::SoundA1:
@@ -250,7 +269,7 @@ AudioFrame StereoProcessor::ProcessSourceSelection(const AudioFrame &frame)
 	}
 }
 
-AudioFrame StereoProcessor::ProcessShelvingFilters(const AudioFrame &frame)
+AudioFrame StereoProcessor::ProcessShelvingFilters(const AudioFrame frame)
 {
 	AudioFrame out_frame = {};
 
@@ -261,7 +280,7 @@ AudioFrame StereoProcessor::ProcessShelvingFilters(const AudioFrame &frame)
 	return out_frame;
 }
 
-AudioFrame StereoProcessor::ProcessStereoProcessing(const AudioFrame &frame)
+AudioFrame StereoProcessor::ProcessStereoProcessing(const AudioFrame frame)
 {
 	AudioFrame out_frame = {};
 
@@ -292,7 +311,7 @@ AudioFrame StereoProcessor::ProcessStereoProcessing(const AudioFrame &frame)
 	return out_frame;
 }
 
-AudioFrame StereoProcessor::Process(const AudioFrame &frame)
+AudioFrame StereoProcessor::Process(const AudioFrame frame)
 {
 	auto out_frame = ProcessSourceSelection(frame);
 	out_frame      = ProcessShelvingFilters(out_frame);
@@ -328,7 +347,7 @@ void AdlibGold::SurroundControlWrite(const uint8_t val)
 	surround_processor->ControlWrite(val);
 }
 
-void AdlibGold::Process(const int16_t *in, const uint32_t frames, float *out)
+void AdlibGold::Process(const int16_t* in, const uint32_t frames, float* out)
 {
 	auto frames_remaining = frames;
 

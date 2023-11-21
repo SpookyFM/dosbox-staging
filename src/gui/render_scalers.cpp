@@ -57,11 +57,12 @@ scalerChangeCache_t scalerChangeCache;
 #define conc4d(A,B,C,D) _conc7(A,_,B,_,C,_,D)
 
 static inline void BituMove( void *_dst, const void * _src, Bitu size) {
-	Bitu * dst=(Bitu *)(_dst);
-	const Bitu * src=(Bitu *)(_src);
-	size/=sizeof(Bitu);
-	for (Bitu x=0; x<size;x++)
-		dst[x] = src[x];
+	 auto dst = static_cast<Bitu*>(_dst);
+	 auto src = static_cast<const Bitu*>(_src);
+	 size /= sizeof(Bitu);
+	 for (Bitu x = 0; x < size; x++) {
+		 dst[x] = src[x];
+	 }
 }
 
 static inline void ScalerAddLines( Bitu changed, Bitu count ) {
@@ -234,6 +235,25 @@ ScalerSimpleBlock_t ScaleNormalDh = {
 {	       nullptr,		NormalDh_24_15_R,	NormalDh_24_16_R,	NormalDh_24_32_R},
 {	       nullptr,		NormalDh_32_15_R,	NormalDh_32_16_R,	NormalDh_32_32_R},
 {	NormalDh_8_8_R,		NormalDh_9_15_R ,	NormalDh_9_16_R ,	NormalDh_9_32_R }
+}};
+
+ScalerSimpleBlock_t ScaleNormal2x = {
+	"Normal2x",
+	GFX_CAN_8|GFX_CAN_15|GFX_CAN_16|GFX_CAN_32,
+	2,2,{
+{   Normal2x_8_8_L,     Normal2x_8_15_L,    Normal2x_8_16_L,    Normal2x_8_32_L },
+{          nullptr,     Normal2x_15_15_L,   Normal2x_15_16_L,   Normal2x_15_32_L},
+{          nullptr,     Normal2x_16_15_L,   Normal2x_16_16_L,   Normal2x_16_32_L},
+{          nullptr,     Normal2x_24_15_L,   Normal2x_24_16_L,   Normal2x_24_32_L},
+{          nullptr,     Normal2x_32_15_L,   Normal2x_32_16_L,   Normal2x_32_32_L},
+{   Normal2x_8_8_L,     Normal2x_9_15_L ,   Normal2x_9_16_L,    Normal2x_9_32_L }
+},{
+{   Normal2x_8_8_R,     Normal2x_8_15_R ,   Normal2x_8_16_R,    Normal2x_8_32_R },
+{          nullptr,     Normal2x_15_15_R,   Normal2x_15_16_R,   Normal2x_15_32_R},
+{          nullptr,     Normal2x_16_15_R,   Normal2x_16_16_R,   Normal2x_16_32_R},
+{          nullptr,     Normal2x_24_15_R,   Normal2x_24_16_R,   Normal2x_24_32_R},
+{          nullptr,     Normal2x_32_15_R,   Normal2x_32_16_R,   Normal2x_32_32_R},
+{   Normal2x_8_8_R,     Normal2x_9_15_R ,   Normal2x_9_16_R,    Normal2x_9_32_R },
 }};
 
 // clang-format on

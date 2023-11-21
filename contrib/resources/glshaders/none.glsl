@@ -1,3 +1,5 @@
+#version 120
+
 /*
  *  SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -22,6 +24,8 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
+
+#pragma use_npot_texture
 
 varying vec2 v_texCoord;
 

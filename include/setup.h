@@ -107,7 +107,7 @@ public:
 	operator Hex() const;
 	operator int() const;
 	operator double() const;
-	operator const char*() const;
+	operator std::string() const;
 
 	bool SetValue(const std::string& in, Etype _type = V_CURRENT);
 
@@ -319,10 +319,9 @@ private:
 		{}
 	};
 
-	std::deque<Function_wrapper> early_init_functions = {};
-	std::deque<Function_wrapper> init_functions       = {};
-	std::deque<Function_wrapper> destroyfunctions     = {};
-	std::string sectionname                           = {};
+	std::deque<Function_wrapper> init_functions   = {};
+	std::deque<Function_wrapper> destroyfunctions = {};
+	std::string sectionname                       = {};
 
 public:
 	Section() = default;
@@ -335,15 +334,11 @@ public:
 	// Children must call executedestroy!
 	virtual ~Section() = default;
 
-	void AddEarlyInitFunction(SectionFunction func,
-	                          bool changeable_at_runtime = false);
-
 	void AddInitFunction(SectionFunction func, bool changeable_at_runtime = false);
 
 	void AddDestroyFunction(SectionFunction func,
 	                        bool changeable_at_runtime = false);
 
-	void ExecuteEarlyInit(bool initall = true);
 	void ExecuteInit(bool initall = true);
 	void ExecuteDestroy(bool destroyall = true);
 
@@ -404,7 +399,10 @@ public:
 
 	int Get_int(const std::string& _propname) const;
 
-	const char* Get_string(const std::string& _propname) const;
+	std::string Get_string(const std::string& _propname) const;
+
+	Prop_bool* GetBoolProp(const std::string& propname) const;
+	Prop_string* GetStringProp(const std::string& propname) const;
 
 	bool Get_bool(const std::string& _propname) const;
 
@@ -509,10 +507,6 @@ public:
 	}
 };
 
-void SETUP_ParseConfigFiles(const std_fs::path& config_path);
-
-const std::string& SETUP_GetLanguage();
-
-const char* SetProp(std::vector<std::string>& pvars);
+bool config_file_is_valid(const std_fs::path& path);
 
 #endif

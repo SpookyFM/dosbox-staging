@@ -27,6 +27,8 @@
 #include <tuple>
 
 #include "autoexec.h"
+#include "bios.h"
+#include "channel_names.h"
 #include "control.h"
 #include "dma.h"
 #include "hardware.h"
@@ -280,10 +282,19 @@ static void PlayDMATransfer(uint32_t size);
 typedef void (*process_dma_f)(uint32_t);
 static process_dma_f ProcessDMATransfer;
 
-static void DSP_SetSpeaker(bool requested_state) {
-	// Speaker-output is already in the requested state
-	if (sb.speaker == requested_state)
+static void DSP_SetSpeaker(bool requested_state)
+{
+	// The speaker-output is always enabled on the SB16; speaker enable/disable
+	// commands are simply ignored. Only the SB Pro and earlier models can
+	// toggle the speaker-output via speaker enable/disable commands.
+	if (sb.type == SBT_16) {
 		return;
+	}
+
+	// Speaker-output is already in the requested state
+	if (sb.speaker == requested_state) {
+		return;
+	}
 
 	// If the speaker's being turned on, then flush old
 	// content before releasing the channel for playback.
@@ -293,26 +304,33 @@ static void DSP_SetSpeaker(bool requested_state) {
 		// Speaker powered-on after cold-state, give it warmup time
 		sb.dsp.warmup_remaining_ms = sb.dsp.cold_warmup_ms;
 	}
+
 	sb.chan->Enable(requested_state);
 	sb.speaker = requested_state;
+
 	LOG_MSG("%s: Speaker-output has been toggled %s",
-	        CardType(), requested_state ? "on" : "off");
+	        CardType(),
+	        (requested_state ? "on" : "off"));
 }
 
 static void InitializeSpeakerState()
 {
-	// Real SBPro2 hardware starts with the card's speaker-output disabled
-	sb.speaker = false;
-
-	// The SB16's output channel starts active however subsequent
-	// requests to disable the speaker will be honored (see: SetSpeaker).
-	// Also, because the channel is active, we treat this as startup event.
 	if (sb.type == SBT_16) {
-		const bool is_cold_start = sb.dsp.reset_tally <= DSP_INITIAL_RESET_LIMIT;
+		// Speaker-output (DAC output) is only enabled by default on the SB16
+		// and it cannot be disabled. Because the channel is active, we treat
+		// this as a startup event.
+		const bool is_cold_start = sb.dsp.reset_tally <=
+		                           DSP_INITIAL_RESET_LIMIT;
+
 		sb.dsp.warmup_remaining_ms = is_cold_start ? sb.dsp.cold_warmup_ms
 		                                           : sb.dsp.hot_warmup_ms;
+		sb.speaker = true;
 		sb.chan->Enable(true);
+
 	} else {
+		// SB Pro and earlier models have the speaker-output disabled by
+		// default.
+		sb.speaker = false;
 		sb.chan->Enable(false);
 	}
 }
@@ -452,7 +470,7 @@ static void configure_sb_filter(mixer_channel_t channel,
 	const auto filter_type = determine_filter_type(filter_choice, sb_type);
 
 	if (!filter_type) {
-		LOG_WARNING("%s: Invalid 'sb_filter' value: '%s', using 'off'",
+		LOG_WARNING("%s: Invalid 'sb_filter' setting: '%s', using 'off'",
 		            CardType(),
 		            filter_choice.c_str());
 
@@ -526,7 +544,7 @@ static void configure_opl_filter(mixer_channel_t channel,
 
 	if (!filter_type) {
 		if (filter_choice != "off")
-			LOG_WARNING("%s: Invalid 'opl_filter' value: '%s', using 'off'",
+			LOG_WARNING("%s: Invalid 'opl_filter' setting: '%s', using 'off'",
 			            CardType(),
 			            filter_choice.c_str());
 
@@ -550,7 +568,7 @@ static void configure_opl_filter(mixer_channel_t channel,
 	case FilterType::SBPro2: enable_lpf(1, 8000); break;
 	}
 
-	log_filter_config("OPL", *filter_type);
+	log_filter_config(ChannelName::Opl, *filter_type);
 	set_filter(channel, config);
 }
 
@@ -1647,20 +1665,20 @@ static void CTMIXER_UpdateVolumes() {
 
 	float m0 = calc_vol(sb.mixer.master[0]);
 	float m1 = calc_vol(sb.mixer.master[1]);
-	auto chan = MIXER_FindChannel("SB");
+	auto chan = MIXER_FindChannel(ChannelName::SoundBlasterDac);
 	if (chan) {
-		chan->SetAppVolume(m0 * calc_vol(sb.mixer.dac[0]),
-		                   m1 * calc_vol(sb.mixer.dac[1]));
+		chan->SetAppVolume({m0 * calc_vol(sb.mixer.dac[0]),
+		                    m1 * calc_vol(sb.mixer.dac[1])});
 	}
-	chan = MIXER_FindChannel("OPL");
+	chan = MIXER_FindChannel(ChannelName::Opl);
 	if (chan) {
-		chan->SetAppVolume(m0 * calc_vol(sb.mixer.fm[0]),
-		                   m1 * calc_vol(sb.mixer.fm[1]));
+		chan->SetAppVolume({m0 * calc_vol(sb.mixer.fm[0]),
+		                    m1 * calc_vol(sb.mixer.fm[1])});
 	}
-	chan = MIXER_FindChannel("CDAUDIO");
+	chan = MIXER_FindChannel(ChannelName::CdAudio);
 	if (chan) {
-		chan->SetAppVolume(m0 * calc_vol(sb.mixer.cda[0]),
-		                   m1 * calc_vol(sb.mixer.cda[1]));
+		chan->SetAppVolume({m0 * calc_vol(sb.mixer.cda[0]),
+		                    m1 * calc_vol(sb.mixer.cda[1])});
 	}
 }
 
@@ -2010,15 +2028,14 @@ static void adlib_gusforward(io_port_t, io_val_t value, io_width_t)
 bool SB_Get_Address(uint16_t &sbaddr, uint8_t &sbirq, uint8_t &sbdma)
 {
 	sbaddr = 0;
-	sbirq =0;
-	sbdma =0;
-	if (sb.type == SBT_NONE) return false;
-	else {
-		sbaddr=sb.hw.base;
-		sbirq =sb.hw.irq;
-		sbdma = sb.hw.dma8;
-		return true;
+	sbirq  = 0;
+	sbdma  = 0;
+	if (sb.type != SBT_NONE) {
+		sbaddr = sb.hw.base;
+		sbirq  = sb.hw.irq;
+		sbdma  = sb.hw.dma8;
 	}
+	return (sbaddr != 0 && sbirq != 0 && sbdma != 0);
 }
 
 static void SBLASTER_CallBack(uint32_t len)
@@ -2054,7 +2071,7 @@ SB_TYPES find_sbtype()
 	const auto sect = static_cast<Section_prop *>(control->GetSection("sblaster"));
 	assert(sect);
 
-	const std::string_view pref = sect->Get_string("sbtype");
+	const std::string pref = sect->Get_string("sbtype");
 
 	// Default
 	auto sbtype = SB_TYPES::SBT_NONE;
@@ -2081,7 +2098,7 @@ OplMode find_oplmode()
 	const auto sect = static_cast<Section_prop *>(control->GetSection("sblaster"));
 	assert(sect);
 
-	const std::string_view pref = sect->Get_string("oplmode");
+	const std::string pref = sect->Get_string("oplmode");
 
 	// Default
 	auto opl_mode = OplMode::None;
@@ -2174,6 +2191,8 @@ public:
 		sb.hw.base=section->Get_hex("sbbase");
 
 		sb.hw.irq = static_cast<uint8_t>(section->Get_int("irq"));
+
+		sb.dsp.cold_warmup_ms = check_cast<uint8_t>(section->Get_int("sbwarmup"));
 		sb.dsp.hot_warmup_ms = sb.dsp.cold_warmup_ms >> 5;
 
 		sb.mixer.enabled=section->Get_bool("sbmixer");
@@ -2204,7 +2223,7 @@ public:
 		case OplMode::Opl3:
 		case OplMode::Opl3Gold: {
 			OPL_Init(section, oplmode);
-			auto opl_channel = MIXER_FindChannel("OPL");
+			auto opl_channel = MIXER_FindChannel(ChannelName::Opl);
 			assert(opl_channel);
 
 			const std::string opl_filter_prefs = section->Get_string(
@@ -2213,10 +2232,23 @@ public:
 		} break;
 		}
 
-		if (sb.type == SBT_NONE || sb.type == SBT_GB)
-			return;
+		// The CMS/Adlib (sbtype=none) and GameBlaster don't have DACs
+		const auto has_dac = (sb.type != SBT_NONE && sb.type != SBT_GB);
 
-		sb.hw.dma8 = static_cast<uint8_t>(section->Get_int("dma"));
+		sb.hw.dma8 = has_dac ? static_cast<uint8_t>(section->Get_int("dma"))
+		                     : 0;
+
+		// Setup BIOS DAC callbacks as soon as the card's access ports (
+		// port, IRQ, and potential 8-bit DMA address) are defined.
+		//
+		BIOS_SetupTandySbDacCallbacks();
+
+		if (!has_dac) {
+			return;
+		}
+		// The code below here sets up the DAC and DMA channels on all
+		// "sbtype = sb*" SoundBlaster type cards.
+		//
 		auto dma_channel = DMA_GetChannel(sb.hw.dma8);
 		assert(dma_channel);
 		dma_channel->ReserveFor(CardType(), SBLASTER_ShutDown);
@@ -2243,7 +2275,7 @@ public:
 
 		sb.chan = MIXER_AddChannel(&SBLASTER_CallBack,
 		                           default_playback_rate_hz,
-		                           "SB",
+		                           ChannelName::SoundBlasterDac,
 		                           channel_features);
 
 		const std::string sb_filter_prefs = section->Get_string("sb_filter");

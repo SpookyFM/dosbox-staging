@@ -62,7 +62,7 @@ typedef ScalerLineHandler_t ScalerLineBlock_t[6][4];
 
 struct ScalerSimpleBlock_t {
 	const char* name         = {};
-	uint16_t gfxFlags        = 0;
+	uint8_t gfxFlags         = 0;
 	uint8_t xscale           = 0;
 	uint8_t yscale           = 0;
 	ScalerLineBlock_t Linear = {};
@@ -77,4 +77,5 @@ struct ScalerSimpleBlock_t {
 extern ScalerSimpleBlock_t ScaleNormal1x;
 extern ScalerSimpleBlock_t ScaleNormalDw;
 extern ScalerSimpleBlock_t ScaleNormalDh;
+extern ScalerSimpleBlock_t ScaleNormal2x;
 #endif

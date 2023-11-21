@@ -39,7 +39,7 @@
 #endif
 
 struct _LogGroup {
-	char const *front = nullptr;
+	const char* front = nullptr;
 	bool enabled = false;
 };
 #include <list>
@@ -55,10 +55,9 @@ static _LogGroup loggrp[LOG_MAX]={{"",true},{nullptr,false}};
 static FILE *debuglog = nullptr;
 
 extern int old_cursor_state;
-extern SDL_Window* pdc_window;
 
-
-void DEBUG_ShowMsg(char const* format,...) {
+void DEBUG_ShowMsg(const char* format, ...)
+{
 	// Quit early if the window hasn't been created yet
 	if (!dbg.win_out)
 		return;
@@ -100,9 +99,9 @@ void DEBUG_RefreshPage(int scroll) {
 		return;
 
 	if (scroll == -1 && logBuffPos != logBuff.begin())
-		logBuffPos--;
+		--logBuffPos;
 	else if (scroll == 1 && logBuffPos != logBuff.end())
-		logBuffPos++;
+		++logBuffPos;
 
 	list<string>::iterator i = logBuffPos;
 	int maxy, maxx; getmaxyx(dbg.win_out,maxy,maxx);
@@ -227,7 +226,6 @@ void LOG::operator() (char const* format, ...){
 	DEBUG_ShowMsg("%10u: %s:%s\n",static_cast<uint32_t>(cycle_count),loggrp[d_type].front,buf);
 }
 
-
 static void Draw_RegisterLayout(void) {
 	// Quit early if the window hasn't been created yet
 	if (!dbg.win_reg)
@@ -320,8 +318,8 @@ static void LOG_Destroy(Section*) {
 
 static void LOG_Init(Section * sec) {
 	Section_prop * sect = static_cast<Section_prop *>(sec);
-	const char * blah = sect->Get_string("logfile");
-	if(blah && blah[0] && (debuglog = fopen(blah,"wt+"))){
+	std::string blah = sect->Get_string("logfile");
+	if(!blah.empty() && (debuglog = fopen(blah.c_str(),"wt+"))){
 		;
 	} else {
 		debuglog = nullptr;

@@ -180,8 +180,8 @@ option(
 )
 
 option(
-    'experimental_voodoo_support',
+    'time_trace',
     type: 'boolean',
     value: false,
-    description: 'Enable experimental 3dfx Voodoo emulation support'
+    description: 'Time build events, for use with the Clang Build Analyzer tool',
 )

@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "autoexec.h"
+#include "channel_names.h"
 #include "control.h"
 #include "dma.h"
 #include "hardware.h"
@@ -440,8 +441,8 @@ float Voice::GetSample(const ram_array_t &ram) noexcept
 		sample += (next_sample - sample) *
 		          static_cast<float>(fraction) * WAVE_WIDTH_INV;
 	}
-	assert(sample >= static_cast<float>(MIN_AUDIO) &&
-	       sample <= static_cast<float>(MAX_AUDIO));
+	assert(sample >= static_cast<float>(Min16BitSampleValue) &&
+	       sample <= static_cast<float>(Max16BitSampleValue));
 	return sample;
 }
 
@@ -620,7 +621,7 @@ Gus::Gus(const io_port_t port_pref, const uint8_t dma_pref, const uint8_t irq_pr
 
 	audio_channel = MIXER_AddChannel(mixer_callback,
 	                                 use_mixer_rate,
-	                                 "GUS",
+	                                 ChannelName::GravisUltrasound,
 	                                 {ChannelFeature::Sleep,
 	                                  ChannelFeature::Stereo,
 	                                  ChannelFeature::ReverbSend,
@@ -636,7 +637,7 @@ Gus::Gus(const io_port_t port_pref, const uint8_t dma_pref, const uint8_t irq_pr
 
 	if (!audio_channel->TryParseAndSetCustomFilter(filter_prefs)) {
 		if (filter_prefs != "off")
-			LOG_WARNING("GUS: Invalid 'gus_filter' value: '%s', using 'off'",
+			LOG_WARNING("GUS: Invalid 'gus_filter' setting: '%s', using 'off'",
 			            filter_prefs.c_str());
 
 		audio_channel->SetHighPassFilter(FilterState::Off);
@@ -838,7 +839,7 @@ uint32_t Gus::GetDmaOffset() noexcept
 	return check_cast<uint32_t>(adjusted << 4) + dma_addr_nibble;
 }
 
-// Update the current 16-bit DMA position from the the given 20-bit RAM offset
+// Update the current 16-bit DMA position from the given 20-bit RAM offset
 void Gus::UpdateDmaAddr(uint32_t offset) noexcept
 {
 	uint32_t adjusted;
@@ -1053,9 +1054,11 @@ void Gus::PopulatePanScalars() noexcept
 		pan_scalar->right = static_cast<float>(sin(angle));
 		++pan_scalar;
 		++i;
-		// DEBUG_LOG_MSG("GUS: pan_scalar[%u] = %f | %f", i,
-		//               pan_scalar->left,
-		//               pan_scalar->right);
+
+		// LOG_DEBUG("GUS: pan_scalar[%u] = %f | %f",
+		//          i,
+		//          pan_scalar->left,
+		//          pan_scalar->right);
 	}
 }
 
@@ -1331,7 +1334,7 @@ void Gus::UpdateDmaAddress(const uint8_t new_address)
 	dma1 = new_address;
 	dma_channel = DMA_GetChannel(dma1);
 	assert(dma_channel);
-	dma_channel->ReserveFor("GUS", gus_destroy);
+	dma_channel->ReserveFor(ChannelName::GravisUltrasound, gus_destroy);
 	dma_channel->RegisterCallback(std::bind(&Gus::DmaCallback, this, _1, _2));
 #if LOG_GUS
 	LOG_MSG("GUS: Assigned DMA1 address to %u", dma1);
@@ -1648,12 +1651,12 @@ static void gus_init(Section *sec)
 	                       MIN_IRQ_ADDRESS,
 	                       MAX_IRQ_ADDRESS);
 
-	const auto ultradir = conf->Get_string("ultradir");
+	const std::string ultradir = conf->Get_string("ultradir");
 
 	const std::string filter_prefs = conf->Get_string("gus_filter");
 
 	// Instantiate the GUS with the settings
-	gus = std::make_unique<Gus>(port, dma, irq, ultradir, filter_prefs);
+	gus = std::make_unique<Gus>(port, dma, irq, ultradir.c_str(), filter_prefs);
 
 	constexpr auto changeable_at_runtime = true;
 	sec->AddDestroyFunction(&gus_destroy, changeable_at_runtime);

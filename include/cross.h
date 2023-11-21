@@ -25,11 +25,11 @@
 #include "dosbox.h"
 
 #include <cstdio>
-#include <string>
-#include <vector>
 #include <ctime>
+#include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <vector>
 
 #if defined (_MSC_VER)						/* MS Visual C++ */
 #include <direct.h>
@@ -106,18 +106,16 @@ constexpr auto localtime_r = ::localtime_r;
 
 } // namespace cross
 
-void CROSS_DetermineConfigPaths();
+// Create or determine the location of the config directory (e.g., in portable
+// mode, the config directory is the executable dir). Must be called before
+// calling GetConfigDir().
+void InitConfigDir();
 
-std_fs::path get_platform_config_dir();
+std_fs::path GetConfigDir();
+std::string GetPrimaryConfigName();
+std_fs::path GetPrimaryConfigPath();
 
 std_fs::path resolve_home(const std::string &str) noexcept;
-
-class Cross {
-public:
-	static void GetPlatformConfigName(std::string& in);
-	static void CreatePlatformConfigDir(std::string& in);
-	static bool IsPathAbsolute(std::string const& in);
-};
 
 #if defined (WIN32)
 #ifndef WIN32_LEAN_AND_MEAN

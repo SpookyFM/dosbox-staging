@@ -247,8 +247,7 @@ void VFILE_GetPathZDrive(std::string &path, const std::string &dirname)
 		}
 		if (!path.length() || result == -1 || (cstat.st_mode & S_IFDIR) == 0) {
 			path.clear();
-			Cross::CreatePlatformConfigDir(path);
-			path += dirname;
+			path = (GetConfigDir() / dirname).string();
 			result = stat(path.c_str(), &cstat);
 			if (result == -1 || (cstat.st_mode & S_IFDIR) == 0)
 				path.clear();
@@ -436,7 +435,9 @@ bool Virtual_Drive::FileOpen(DOS_File * * file,char * name,uint32_t flags) {
 	return false;
 }
 
-bool Virtual_Drive::FileCreate(DOS_File * * /*file*/,char * /*name*/,uint16_t /*attributes*/) {
+bool Virtual_Drive::FileCreate(DOS_File** /*file*/, char* /*name*/,
+                               FatAttributeFlags /*attributes*/)
+{
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
@@ -463,12 +464,15 @@ bool Virtual_Drive::TestDir(char * dir) {
 	return find_vfile_dir_by_name(dir).get();
 }
 
-bool Virtual_Drive::FileStat(const char* name, FileStat_Block * const stat_block){
+bool Virtual_Drive::FileStat(const char* name, FileStat_Block* const stat_block)
+{
 	assert(name);
 	auto vfile = find_vfile_by_name(name);
 	if (vfile) {
-		stat_block->attr = (int)(vfile->isdir ? DOS_ATTR_DIRECTORY
-		                                      : DOS_ATTR_ARCHIVE);
+		FatAttributeFlags attr = {FatAttributeFlags::ReadOnly};
+		attr.directory = vfile->isdir;
+
+		stat_block->attr = attr._data;
 		stat_block->size = vfile->data->size();
 		stat_block->date = default_date;
 		stat_block->time = default_time;
@@ -508,23 +512,26 @@ bool Virtual_Drive::FindFirst(char *_dir, DOS_DTA &dta, bool fcb_findfirst)
 		}
 	}
 	dta.SetDirID(position);
-	uint8_t attr;
+
+	FatAttributeFlags attr = {};
 	char pattern[DOS_NAMELENGTH_ASCII];
 	dta.GetSearchParams(attr, pattern);
-	search_file = (attr & DOS_ATTR_DIRECTORY) && position > 0 ? parent_dir
-	                                                          : first_file;
-	if (attr == DOS_ATTR_VOLUME) {
-		dta.SetResult(GetLabel(), 0, 0, 0, DOS_ATTR_VOLUME);
+	search_file = attr.directory && position > 0 ? parent_dir : first_file;
+	if (attr == FatAttributeFlags::Volume) {
+		dta.SetResult(GetLabel(), 0, 0, 0, FatAttributeFlags::Volume);
 		return true;
-	} else if ((attr & DOS_ATTR_VOLUME) && !fcb_findfirst) {
+	} else if (attr.volume && !fcb_findfirst) {
 		if (WildFileCmp(GetLabel(), pattern)) {
-			dta.SetResult(GetLabel(), 0, 0, 0, DOS_ATTR_VOLUME);
+			dta.SetResult(GetLabel(), 0, 0, 0, FatAttributeFlags::Volume);
 			return true;
 		}
-	} else if ((attr & DOS_ATTR_DIRECTORY) && position > 0) {
+	} else if (attr.directory && position > 0) {
 		if (WildFileCmp(".", pattern)) {
-			dta.SetResult(".", 0, default_date,
-			              default_time, DOS_ATTR_DIRECTORY);
+			dta.SetResult(".",
+			              0,
+			              default_date,
+			              default_time,
+			              FatAttributeFlags::Directory);
 			return true;
 		}
 	}
@@ -532,27 +539,30 @@ bool Virtual_Drive::FindFirst(char *_dir, DOS_DTA &dta, bool fcb_findfirst)
 }
 
 vfile_block_t find_vfile_by_atribute_pattern_and_pos(vfile_block_t head_file,
-                                                     uint8_t attr, const char* pattern,
+                                                     FatAttributeFlags attr,
+                                                     const char* pattern,
                                                      unsigned int pos)
 {
 	return find_vfile_by_predicate(head_file, [pos, attr, pattern](vfile_block_t vfile) {
-		return pos == vfile->position &&
-		       ((attr & DOS_ATTR_DIRECTORY) || !vfile->isdir) &&
+		return pos == vfile->position && (attr.directory || !vfile->isdir) &&
 		       WildFileCmp(vfile->name.c_str(), pattern);
 	});
 }
 
 bool Virtual_Drive::FindNext(DOS_DTA& dta)
 {
-	uint8_t attr;
+	FatAttributeFlags attr = {};
 	char pattern[DOS_NAMELENGTH_ASCII];
 	dta.GetSearchParams(attr, pattern);
 	unsigned int pos = dta.GetDirID();
 	if (search_file == parent_dir) {
 		bool cmp = WildFileCmp("..", pattern);
 		if (cmp)
-			dta.SetResult("..", 0, default_date,
-			              default_time, DOS_ATTR_DIRECTORY);
+			dta.SetResult("..",
+			              0,
+			              default_date,
+			              default_time,
+			              FatAttributeFlags::Directory);
 		search_file = first_file;
 		if (cmp)
 			return true;
@@ -562,12 +572,14 @@ bool Virtual_Drive::FindNext(DOS_DTA& dta)
 	                                                     pattern,
 	                                                     pos);
 	if (search_file) {
+		FatAttributeFlags attr = {FatAttributeFlags::ReadOnly};
+		attr.directory = search_file->isdir;
+
 		dta.SetResult(search_file->name.c_str(),
 		              search_file->data->size(),
 		              search_file->date,
 		              search_file->time,
-		              (int)(search_file->isdir ? DOS_ATTR_DIRECTORY
-		                                       : DOS_ATTR_ARCHIVE));
+		              attr);
 		search_file = search_file->next;
 		return true;
 	}
@@ -575,23 +587,26 @@ bool Virtual_Drive::FindNext(DOS_DTA& dta)
 	return false;
 }
 
-bool Virtual_Drive::GetFileAttr(char *name, uint16_t *attr)
+bool Virtual_Drive::GetFileAttr(char* name, FatAttributeFlags* attr)
 {
+	*attr = {};
 	assert(name);
 	if (*name == 0) {
-		*attr = DOS_ATTR_DIRECTORY;
+		attr->directory = true;
+		attr->read_only = true;
 		return true;
 	}
-	auto vfile = find_vfile_by_name(name);
+	const auto vfile = find_vfile_by_name(name);
 	if (vfile) {
-		*attr = (int)(vfile->isdir ? DOS_ATTR_DIRECTORY // Maybe
-		                           : DOS_ATTR_ARCHIVE); // Read-only?
+		attr->directory = vfile->isdir;
+		attr->read_only = true;
 		return true;
 	}
 	return false;
 }
 
-bool Virtual_Drive::SetFileAttr(const char *name, [[maybe_unused]] uint16_t attr)
+bool Virtual_Drive::SetFileAttr(const char* name,
+                                [[maybe_unused]] FatAttributeFlags attr)
 {
 	assert(name);
 	if (*name == 0) {

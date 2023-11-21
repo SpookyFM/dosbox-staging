@@ -61,10 +61,6 @@ public:
 
 	void Clear();
 
-	// Manage the write mask
-	void DeleteWriteMask();
-	void GrowWriteMask(const uint16_t new_mask_len);
-
 	// link this cache block to another block, index specifies the code
 	// path (always zero for unconditional links, 0/1 for conditional ones
 	void LinkTo(Bitu index, CacheBlock *toblock)
@@ -92,6 +88,17 @@ public:
 		uint8_t* wmapmask = {};
 		uint16_t maskstart = 0;
 		uint16_t masklen   = 0;
+
+		// Manage the write mask
+		void DeleteWriteMask();
+		inline void AddByteToWriteMaskAt(const size_t page_index);
+		inline void AddWordToWriteMaskAt(const size_t page_index);
+		inline void AddDwordToWriteMaskAt(const size_t page_index);
+
+	private:
+		inline void GrowWriteMask(const uint16_t new_mask_len);
+		size_t GrowMaskForTypeAt(const uint8_t type_size,
+		                         const size_t page_index);
 	} cache = {};
 
 	struct Hash {
@@ -456,7 +463,7 @@ public:
 					}
 				}
 			}
-			block->DeleteWriteMask();
+			block->cache.DeleteWriteMask();
 		} else {
 			for (Bitu i = block->page.start; i <= block->page.end; i++) {
 				if (write_map[i]) {
@@ -562,33 +569,80 @@ static CacheBlock *cache_getblock()
 }
 
 CacheBlock::~CacheBlock() {
-	DeleteWriteMask();
+	cache.DeleteWriteMask();
 }
 
-void CacheBlock::DeleteWriteMask() {
-	delete[] cache.wmapmask;
-	cache.wmapmask = {};
-
-	cache.masklen = 0;
+void CacheBlock::Cache::DeleteWriteMask()
+{
+	delete[] wmapmask;
+	wmapmask = {};
+	masklen  = 0;
 }
 
-void CacheBlock::GrowWriteMask(const uint16_t new_mask_len) {
+inline void CacheBlock::Cache::GrowWriteMask(const uint16_t new_mask_len)
+{
 	// This function is only called to increase the mask
-	auto& curr_mask_len = cache.masklen;
-	assert(new_mask_len > curr_mask_len);
+	assert(new_mask_len > masklen);
 
 	// Allocate the new mask
 	auto new_mask = new uint8_t[new_mask_len];
+	memset(new_mask, 0, new_mask_len);
 
 	// Copy the current into the new
-	auto& curr_mask = cache.wmapmask;
-	std::copy(curr_mask, curr_mask + curr_mask_len, new_mask);
+	std::copy(wmapmask, wmapmask + masklen, new_mask);
 
 	// Update the current
-	delete[] curr_mask;
-	curr_mask = new_mask;
+	delete[] wmapmask;
+	wmapmask = new_mask;
 
-	curr_mask_len = new_mask_len;
+	masklen = new_mask_len;
+}
+
+// Grow the mask to accomodate the given type size at the give page index.
+// Returns the offset into the write mask for incoming index.
+size_t CacheBlock::Cache::GrowMaskForTypeAt(const uint8_t type_size,
+                                            const size_t page_index)
+{
+	size_t map_offset = 0;
+
+	// Make the map mask if needed
+	if (GCC_UNLIKELY(!wmapmask)) {
+		constexpr uint8_t initial_mask_len = 64;
+		GrowWriteMask(initial_mask_len);
+		maskstart = check_cast<uint16_t>(page_index);
+	}
+	// Do we need a larger mask to accomodate the added type?
+	else {
+		map_offset = page_index - maskstart;
+		const size_t map_offset_end = map_offset + type_size;
+		if (GCC_UNLIKELY(map_offset_end >= masklen)) {
+			size_t new_mask_len = masklen * 4;
+			if (new_mask_len < map_offset_end) {
+				new_mask_len = ((map_offset_end) & ~3) * 2;
+			}
+			GrowWriteMask(check_cast<uint16_t>(new_mask_len));
+		}
+	}
+	assert(map_offset + type_size < masklen);
+	return map_offset;
+}
+
+inline void CacheBlock::Cache::AddByteToWriteMaskAt(const size_t page_index)
+{
+	const auto map_offset = GrowMaskForTypeAt(sizeof(uint8_t), page_index);
+	wmapmask[map_offset] += 0x01;
+}
+
+inline void CacheBlock::Cache::AddWordToWriteMaskAt(const size_t page_index)
+{
+	const auto map_offset = GrowMaskForTypeAt(sizeof(uint16_t), page_index);
+	add_to_unaligned_uint16(wmapmask + map_offset, 0x0101);
+}
+
+inline void CacheBlock::Cache::AddDwordToWriteMaskAt(const size_t page_index)
+{
+	const auto map_offset = GrowMaskForTypeAt(sizeof(uint32_t), page_index);
+	add_to_unaligned_uint32(wmapmask + map_offset, 0x01010101);
 }
 
 void CacheBlock::Clear()
@@ -634,7 +688,7 @@ void CacheBlock::Clear()
 		page.handler->DelCacheBlock(this);
 		page.handler=nullptr;
 	}
-	DeleteWriteMask();
+	cache.DeleteWriteMask();
 }
 
 static CacheBlock *cache_openblock()
@@ -711,7 +765,7 @@ static void cache_closeblock()
 	                            (block->cache.next->cache.start > limit));
 #endif
 	if (cache_is_full) {
-		// DEBUG_LOG_MSG("Cache full; restarting");
+		// LOG_DEBUG("Cache full; restarting");
 		cache.block.active=cache.block.first;
 	} else {
 		cache.block.active=block->cache.next;
@@ -795,12 +849,31 @@ constexpr bool is_64bit_platform = sizeof(void *) == 8;
 
 static inline void dyn_mem_adjust(void *&ptr, size_t &size)
 {
+#if (PAGESIZE == 65536)
+	// Use different code on 64K page systems (currently just ppc64le).
+	// The other code will sometimes underrun our pointer into unmapped
+	// memory and mprotect() will then fail.
+	const uintptr_t p = reinterpret_cast<uintptr_t>(ptr);
+	const auto align_adjust = p % host_pagesize;
+	const auto p_aligned = p - align_adjust;
+	assert((p_aligned % host_pagesize) == 0);
+
+	const auto new_size = size + align_adjust;
+	const auto new_size_adjust = new_size % host_pagesize;
+	if (new_size <= host_pagesize) {
+		size = host_pagesize;
+	} else if (new_size_adjust) {
+		size = (new_size - new_size_adjust) + host_pagesize;
+		assert((size % host_pagesize) == 0);
+	}
+#else
 	// Align to page boundary and adjust size. The -1/+1 voodoo
 	// is required to avoid segfaults on 32-bit builds.
 	const auto p = reinterpret_cast<uintptr_t>(ptr) - 1;
 	const auto align_adjust = p % host_pagesize;
 	const auto p_aligned = p - align_adjust;
 	size += align_adjust + 1;
+#endif
 	ptr = reinterpret_cast<void *>(p_aligned);
 }
 
@@ -929,7 +1002,7 @@ static void cache_init(bool enable) {
 			// align the cache at a page boundary
 			cache_code = reinterpret_cast<uint8_t *>(
 			    (reinterpret_cast<uintptr_t>(cache_code_start_ptr) +
-			    host_pagesize - 1) & ~(host_pagesize - 1));
+			    static_cast<size_t>(host_pagesize) - 1) & ~(static_cast<size_t>(host_pagesize) - 1));
 
 			cache_code_link_blocks=cache_code;
 			cache_code=cache_code+host_pagesize;

@@ -41,8 +41,10 @@
 #include "rwqueue.h"
 #include "std_filesystem.h"
 
+// forward declaration
 class LASynthModel;
-using model_and_dir_t = std::pair<const LASynthModel*, std_fs::path>;
+
+using ModelAndDir = std::pair<const LASynthModel*, std_fs::path>;
 
 static_assert(MT32EMU_VERSION_MAJOR > 2 ||
                       (MT32EMU_VERSION_MAJOR == 2 && MT32EMU_VERSION_MINOR >= 5),
@@ -66,10 +68,10 @@ public:
 		return MidiDeviceType::BuiltIn;
 	}
 
-	MIDI_RC ListAll(Program *caller) override;
-	bool Open(const char *conf) override;
+	MIDI_RC ListAll(Program* caller) override;
+	bool Open(const char* conf) override;
 	void PlayMsg(const MidiMessage& msg) override;
-	void PlaySysex(uint8_t *sysex, size_t len) override;
+	void PlaySysex(uint8_t* sysex, size_t len) override;
 	void PrintStats();
 
 private:
@@ -87,13 +89,14 @@ private:
 	RWQueue<MidiWork> work_fifo{1};
 
 	std::mutex service_mutex = {};
-	service_t service = {};
-	std::thread renderer = {};
-	std::optional<model_and_dir_t> model_and_dir = {};
+	service_t service        = {};
+	std::thread renderer     = {};
+
+	std::optional<ModelAndDir> model_and_dir = {};
 
 	// Used to track the balance of time between the last mixer callback
 	// versus the current MIDI Sysex or Msg event.
-	double last_rendered_ms = 0.0;
+	double last_rendered_ms   = 0.0;
 	double ms_per_audio_frame = 0.0;
 
 	bool had_underruns = false;

@@ -28,8 +28,9 @@
 bool is_hex_digits(const std::string_view s) noexcept
 {
 	for (const auto ch : s) {
-		if (!isxdigit(ch))
+		if (!isxdigit(ch)) {
 			return false;
+		}
 	}
 	return true;
 }
@@ -50,6 +51,10 @@ void strreplace(char *str, char o, char n)
 			*str = n;
 		str++;
 	}
+}
+
+void ltrim(std::string &str) {
+    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](int c) {return !isspace(c);}));
 }
 
 char *ltrim(char *str)
@@ -121,7 +126,7 @@ void trim(std::string &str, const char trim_chars[])
 	str.erase(0, empty_pfx);
 }
 
-std::vector<std::string> split(const std::string_view seq, const char delim)
+std::vector<std::string> split_with_empties(const std::string_view seq, const char delim)
 {
 	std::vector<std::string> words;
 	if (seq.empty())
@@ -148,30 +153,29 @@ std::vector<std::string> split(const std::string_view seq, const char delim)
 	return words;
 }
 
-std::vector<std::string> split(const std::string_view seq)
+std::vector<std::string> split(const std::string_view seq, const std::string_view delims)
 {
 	std::vector<std::string> words;
-	if (seq.empty())
+	if (seq.empty()) {
 		return words;
-
-	constexpr auto whitespace = " \f\n\r\t\v";
+	}
 
 	// count words to reserve space in our vector
 	size_t n  = 0;
-	auto head = seq.find_first_not_of(whitespace, 0);
+	auto head = seq.find_first_not_of(delims, 0);
 	while (head != std::string::npos) {
-		const auto tail = seq.find_first_of(whitespace, head);
-		head            = seq.find_first_not_of(whitespace, tail);
+		const auto tail = seq.find_first_of(delims, head);
+		head            = seq.find_first_not_of(delims, tail);
 		++n;
 	}
 	words.reserve(n);
 
 	// populate the vector with the words
-	head = seq.find_first_not_of(whitespace, 0);
+	head = seq.find_first_not_of(delims, 0);
 	while (head != std::string::npos) {
-		const auto tail = seq.find_first_of(whitespace, head);
+		const auto tail = seq.find_first_of(delims, head);
 		words.emplace_back(seq.substr(head, tail - head));
-		head = seq.find_first_not_of(whitespace, tail);
+		head = seq.find_first_not_of(delims, tail);
 	}
 
 	// did we reserve the exact space needed?
@@ -260,6 +264,30 @@ char* strip_word(char*& line)
 	return begin;
 }
 
+std::string strip_word(std::string& line)
+{
+	ltrim(line);
+	if (line.empty()) {
+		return "";
+	}
+	if (line[0] == '"') {
+		size_t end_quote = line.find('"', 1);
+		if (end_quote != std::string::npos) {
+			std::string word = line.substr(1, end_quote - 1);
+			line.erase(0, end_quote + 1);
+			ltrim(line);
+			return word;
+		}
+	}
+	auto end_word = std::find_if(line.begin(), line.end(), [](int c) {return isspace(c);});
+	std::string word(line.begin(), end_word);
+	if (end_word != line.end()) {
+		++end_word;
+	}
+	line.erase(line.begin(), end_word);
+	return word;
+}
+
 void strip_punctuation(std::string &str)
 {
 	str.erase(std::remove_if(str.begin(),
@@ -310,52 +338,55 @@ void clear_language_if_default(std::string &l)
 	}
 }
 
-std::optional<float> parse_value(const std::string_view s,
-                                 const float min_value, const float max_value)
+std::optional<float> parse_float(const std::string& s)
 {
-	// parse_value can check if a string holds a number (or not), so we expect
-	// exceptions and return an empty result to indicate conversion status.
+	// parse_float can check if a string holds a number (or not), so we
+	// expect exceptions and return an empty result to indicate conversion
+	// status.
 	try {
 		if (!s.empty()) {
-			return std::clamp(std::stof(s.data()), min_value, max_value);
+			size_t num_chars_processed = 0;
+			const auto number = std::stof(s, &num_chars_processed);
+			if (s.size() == num_chars_processed) {
+				return number;
+			}
 		}
 		// Note: stof can throw invalid_argument and out_of_range
-	} catch (const std::invalid_argument &) {
+	} catch (const std::invalid_argument&) {
 		// do nothing, we expect these
-	} catch (const std::out_of_range &) {
+	} catch (const std::out_of_range&) {
 		// do nothing, we expect these
 	}
-	return {}; // empty
+	return {};
 }
 
-std::optional<float> parse_percentage(const std::string_view s)
-{
-	constexpr auto min_percentage = 0.0f;
-	constexpr auto max_percentage = 100.0f;
-	return parse_value(s, min_percentage, max_percentage);
-}
-
-std::optional<float> parse_prefixed_value(const char prefix, const std::string &s,
-                                          const float min_value, const float max_value)
-{
-	if (s.size() <= 1 || !ciequals(s[0], prefix))
-		return {};
-
-	return parse_value(s.substr(1), min_value, max_value);
-}
-
-std::optional<float> parse_prefixed_percentage(const char prefix, const std::string &s)
-{
-	constexpr auto min_percentage = 0.0f;
-	constexpr auto max_percentage = 100.0f;
-	return parse_prefixed_value(prefix, s, min_percentage, max_percentage);
-}
-
-std::optional<int> to_int(const std::string& value)
+std::optional<int> parse_int(const std::string& s, const int base)
 {
 	try {
-		return std::stoi(value);
-	} catch (...) {
-		return {};
+		if (!s.empty()) {
+			size_t num_chars_processed = 0;
+			const auto number = std::stoi(s, &num_chars_processed, base);
+			if (s.size() == num_chars_processed) {
+				return number;
+			}
+		}
+		// Note: stof can throw invalid_argument and out_of_range
+	} catch (const std::invalid_argument&) {
+		// do nothing, we expect these
+	} catch (const std::out_of_range&) {
+		// do nothing, we expect these
 	}
+	return {};
+}
+
+std::optional<float> parse_percentage(const std::string& s)
+{
+	constexpr auto min_percentage = 0.0f;
+	constexpr auto max_percentage = 100.0f;
+	if (const auto p = parse_float(s); p) {
+		if (*p >= min_percentage && *p <= max_percentage) {
+			return p;
+		}
+	}
+	return {};
 }

@@ -27,6 +27,7 @@
 #include <queue>
 #include <string.h>
 
+#include "channel_names.h"
 #include "control.h"
 #include "dma.h"
 #include "inout.h"
@@ -127,7 +128,7 @@ Ps1Dac::Ps1Dac(const std::string_view filter_choice)
 
 	channel = MIXER_AddChannel(callback,
 	                           use_mixer_rate,
-	                           "PS1DAC",
+	                           ChannelName::Ps1AudioCardDac,
 	                           {ChannelFeature::Sleep,
 	                            ChannelFeature::ReverbSend,
 	                            ChannelFeature::ChorusSend,
@@ -145,7 +146,7 @@ Ps1Dac::Ps1Dac(const std::string_view filter_choice)
 
 	} else if (!channel->TryParseAndSetCustomFilter(filter_choice)) {
 		if (!filter_choice_has_bool) {
-			LOG_WARNING("PS1DAC: Invalid 'ps1audio_dac_filter' value: '%s', using 'off'",
+			LOG_WARNING("PS1DAC: Invalid 'ps1audio_dac_filter' setting: '%s', using 'off'",
 			            filter_choice.data());
 		}
 
@@ -410,13 +411,13 @@ private:
 };
 
 Ps1Synth::Ps1Synth(const std::string_view filter_choice)
-        : device(machine_config(), nullptr, nullptr, ps1_psg_clock_hz)
+        : device(nullptr, nullptr, ps1_psg_clock_hz)
 {
 	const auto callback = std::bind(&Ps1Synth::AudioCallback, this, _1);
 
 	channel = MIXER_AddChannel(callback,
 	                           use_mixer_rate,
-	                           "PS1",
+	                           ChannelName::Ps1AudioCardPsg,
 	                           {ChannelFeature::Sleep,
 	                            ChannelFeature::ReverbSend,
 	                            ChannelFeature::ChorusSend,

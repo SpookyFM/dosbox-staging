@@ -30,19 +30,20 @@
 
 CHECK_NARROWING();
 
-void ImageScaler::Init(const RenderedImage& image, const ScalingMode mode)
+// to avoid circular dependency
+uint8_t get_double_scan_row_skip_count(const RenderedImage&);
+
+void ImageScaler::Init(const RenderedImage& image)
 {
 	input = image;
-	input_decoder.Init(image);
 
-	switch (mode) {
-	case ScalingMode::DoublingOnly: UpdateOutputParamsDoublingOnly(); break;
-	case ScalingMode::AspectRatioPreservingUpscale:
-		UpdateOutputParamsUpscale();
-		break;
-	}
-	assert(output.width >= input.width);
-	assert(output.height >= input.height);
+	auto row_skip_count = get_double_scan_row_skip_count(image);
+	input_decoder.Init(image, row_skip_count);
+
+	UpdateOutputParamsUpscale();
+
+	assert(output.width >= image.params.video_mode.width);
+	assert(output.height >= image.params.video_mode.height);
 	assertm(output.horiz_scale >= 1.0f, "ImageScaler can currently only upscale");
 	assertm(output.vert_scale >= 1, "ImageScaler can currently only upscale");
 
@@ -56,55 +57,62 @@ static bool is_integer(const float f)
 	return fabsf(f - roundf(f)) < 0.0001f;
 }
 
-void ImageScaler::UpdateOutputParamsDoublingOnly()
-{
-	output.horiz_scaling_mode = PerAxisScaling::Integer;
-	output.vert_scaling_mode  = PerAxisScaling::Integer;
-
-	output.horiz_scale = input.double_width ? 2.0f : 1.0f;
-	output.vert_scale  = input.double_height ? 2 : 1;
-
-	output.one_per_horiz_scale = 1.0f / output.horiz_scale;
-
-	output.width  = static_cast<uint16_t>(input.width * output.horiz_scale);
-	output.height = static_cast<uint16_t>(input.height * output.vert_scale);
-
-	if (input.is_paletted()) {
-		output.pixel_format = PixelFormat::Indexed8;
-	} else {
-		output.pixel_format = PixelFormat::Rgb888;
-	}
-
-	output.curr_row   = 0;
-	output.row_repeat = 0;
-}
-
 void ImageScaler::UpdateOutputParamsUpscale()
 {
 	constexpr auto target_output_height = 1200;
 
-	// Slight fudge factor to push 350-line modes into 4x vertical scaling
-	constexpr auto fudge_offset = 0.1f;
+	auto video_mode = input.params.video_mode;
 
-	// Calculate integer vertical scaling factor so the
-	// resulting output image height is roughly around
-	// 1200px. See TODO table for further details.
-	output.vert_scale = static_cast<uint8_t>(
-	        roundf(static_cast<float>(target_output_height) / input.height +
-	               fudge_offset));
+	// Calculate initial integer vertical scaling factor so the resulting
+	// output image height is roughly around 1200px.
+	output.vert_scale = static_cast<uint8_t>(roundf(
+	        static_cast<float>(target_output_height) / video_mode.height));
 
 	output.vert_scaling_mode = PerAxisScaling::Integer;
 
-	// Determine horizontal scaling factor & scaling mode
-	if (input.double_height) {
-		output.vert_scale = static_cast<uint8_t>(output.vert_scale * 2);
+	// Adjusting for a few special modes where the rendered width is twice
+	// the video mode width:
+	// - The Tandy/PCjr 160x200 is rendered as 320x200
+	// - The Tandy 640x200 4-colour composite mode is rendered as 1280x200
+	assert(input.params.width % video_mode.width == 0);
+	const auto par_adjustment_factor = (input.params.width / video_mode.width);
+
+	const auto pixel_aspect_ratio = video_mode.pixel_aspect_ratio /
+	                                par_adjustment_factor;
+
+	// Calculate horizontal scale factor, and potentially refine the results
+	// by bumping up the vertical scale factor iteratively.
+	for (;;) {
+		auto horiz_scale_fract = pixel_aspect_ratio * output.vert_scale;
+
+		output.horiz_scale = horiz_scale_fract.ToFloat();
+		output.one_per_horiz_scale = horiz_scale_fract.Inverse().ToFloat();
+
+		output.width = static_cast<uint16_t>(
+		        roundf(input.params.width * output.horiz_scale));
+
+		output.height = static_cast<uint16_t>(video_mode.height *
+		                                      output.vert_scale);
+
+		if (is_integer(output.horiz_scale)) {
+			// Ensure the upscaled image is at least 1000px high for
+			// 1:1 pixel aspect ratio images.
+			if (output.height < 1000) {
+				++output.vert_scale;
+			} else {
+				break;
+			}
+		} else {
+			// Ensure fractional horizontal scale factors are
+			// above 2.0, otherwise we'd get bad looking horizontal
+			// blur.
+			if (output.horiz_scale < 2.0f) {
+				++output.vert_scale;
+			} else {
+				break;
+			}
+		}
 	}
-
-	const auto horiz_scale_fract = input.pixel_aspect_ratio * output.vert_scale *
-	                               (input.double_width ? 2 : 1);
-
-	output.horiz_scale         = horiz_scale_fract.ToFloat();
-	output.one_per_horiz_scale = horiz_scale_fract.Inverse().ToFloat();
 
 	if (is_integer(output.horiz_scale)) {
 		output.horiz_scale = static_cast<float>(
@@ -115,21 +123,15 @@ void ImageScaler::UpdateOutputParamsUpscale()
 		output.horiz_scaling_mode = PerAxisScaling::Fractional;
 	}
 
-	// Determine scaled output dimensions, taking the double
-	// width/height input flags into account
-	output.width  = static_cast<uint16_t>(input.width * output.horiz_scale);
-	output.height = static_cast<uint16_t>(input.height * output.vert_scale);
-
 	// Determine pixel format
-	const auto only_integer_scaling = (output.horiz_scaling_mode ==
-	                                           PerAxisScaling::Integer &&
-	                                   output.vert_scaling_mode ==
-	                                           PerAxisScaling::Integer);
+	const auto only_integer_scaling =
+	        ((output.horiz_scaling_mode == PerAxisScaling::Integer) &&
+	         (output.vert_scaling_mode == PerAxisScaling::Integer));
 
 	if (only_integer_scaling && input.is_paletted()) {
-		output.pixel_format = PixelFormat::Indexed8;
+		output.pixel_format = OutputPixelFormat::Indexed8;
 	} else {
-		output.pixel_format = PixelFormat::Rgb888;
+		output.pixel_format = OutputPixelFormat::Rgb888;
 	}
 
 	output.curr_row   = 0;
@@ -138,30 +140,37 @@ void ImageScaler::UpdateOutputParamsUpscale()
 
 void ImageScaler::LogParams()
 {
-	auto pixel_format_to_string = [](const PixelFormat pf) -> std::string {
+	auto pixel_format_to_string = [](const OutputPixelFormat pf) -> std::string {
 		switch (pf) {
-		case PixelFormat::Indexed8: return "Indexed8";
-		case PixelFormat::Rgb888: return "RGB888";
+		case OutputPixelFormat::Indexed8: return "Indexed8";
+		case OutputPixelFormat::Rgb888: return "RGB888";
 		default: assert(false); return {};
 		}
 	};
 
-	auto scale_mode_to_string = [](const PerAxisScaling sm) -> std::string {
-		switch (sm) {
+	auto scale_mode_to_string = [](const PerAxisScaling s) -> std::string {
+		switch (s) {
 		case PerAxisScaling::Integer: return "Integer";
 		case PerAxisScaling::Fractional: return "Fractional";
 		default: assert(false); return {};
 		}
 	};
 
+	const auto& src        = input.params;
+	const auto& video_mode = input.params.video_mode;
+
 	LOG_MSG("ImageScaler params:\n"
 	        "    input.width:                %10d\n"
 	        "    input.height:               %10d\n"
 	        "    input.double_width:         %10s\n"
 	        "    input.double_height:        %10s\n"
-	        "    input.pixel_aspect_ratio:   1:%1.6f (%d:%d)\n"
-	        "    input.bits_per_pixel:       %10d\n"
+	        "    input.PAR:                  1:%1.6f (%d:%d)\n"
+	        "    input.pixel_format:         %10s\n"
 	        "    input.pitch:                %10d\n"
+	        "    --------------------------------------\n"
+	        "    video_mode.width:           %10d\n"
+	        "    video_mode.height:          %10d\n"
+	        "    video_mode.PAR:             1:%1.6f (%d:%d)\n"
 	        "    --------------------------------------\n"
 	        "    output.width:               %10d\n"
 	        "    output.height:              %10d\n"
@@ -170,15 +179,22 @@ void ImageScaler::LogParams()
 	        "    output.horiz_scaling_mode:  %10s\n"
 	        "    output.vert_scaling_mode:   %10s\n"
 	        "    output.pixel_format:        %10s\n",
-	        input.width,
-	        input.height,
-	        input.double_width ? "yes" : "no",
-	        input.double_height ? "yes" : "no",
-	        input.pixel_aspect_ratio.Inverse().ToDouble(),
-	        static_cast<int32_t>(input.pixel_aspect_ratio.Num()),
-	        static_cast<int32_t>(input.pixel_aspect_ratio.Denom()),
-	        input.bits_per_pixel,
+	        src.width,
+	        src.height,
+	        src.double_width ? "yes" : "no",
+	        src.double_height ? "yes" : "no",
+	        src.pixel_aspect_ratio.Inverse().ToDouble(),
+	        static_cast<int32_t>(src.pixel_aspect_ratio.Num()),
+	        static_cast<int32_t>(src.pixel_aspect_ratio.Denom()),
+	        to_string(src.pixel_format),
 	        input.pitch,
+
+	        video_mode.width,
+	        video_mode.height,
+	        video_mode.pixel_aspect_ratio.Inverse().ToDouble(),
+	        static_cast<int32_t>(video_mode.pixel_aspect_ratio.Num()),
+	        static_cast<int32_t>(video_mode.pixel_aspect_ratio.Denom()),
+
 	        output.width,
 	        output.height,
 	        output.horiz_scale,
@@ -192,8 +208,8 @@ void ImageScaler::AllocateBuffers()
 {
 	uint8_t bytes_per_pixel = {};
 	switch (output.pixel_format) {
-	case PixelFormat::Indexed8: bytes_per_pixel = 8; break;
-	case PixelFormat::Rgb888: bytes_per_pixel = 24; break;
+	case OutputPixelFormat::Indexed8: bytes_per_pixel = 8; break;
+	case OutputPixelFormat::Rgb888: bytes_per_pixel = 24; break;
 	default: assert(false);
 	}
 
@@ -203,7 +219,7 @@ void ImageScaler::AllocateBuffers()
 	// Pad by 1 pixel at the end so we can handle the last pixel of the row
 	// without branching (the interpolator operates on the current and the
 	// next pixel).
-	linear_row_buf.resize((input.width + 1u) * ComponentsPerRgbPixel);
+	linear_row_buf.resize((input.params.width + 1u) * ComponentsPerRgbPixel);
 }
 
 uint16_t ImageScaler::GetOutputWidth() const
@@ -216,7 +232,7 @@ uint16_t ImageScaler::GetOutputHeight() const
 	return output.height;
 }
 
-PixelFormat ImageScaler::GetOutputPixelFormat() const
+OutputPixelFormat ImageScaler::GetOutputPixelFormat() const
 {
 	return output.pixel_format;
 }
@@ -225,8 +241,8 @@ void ImageScaler::DecodeNextRowToLinearRgb()
 {
 	auto out = linear_row_buf.begin();
 
-	for (auto x = 0; x < input.width; ++x) {
-		const auto pixel = input_decoder.GetNextRgb888Pixel();
+	for (auto x = 0; x < input.params.width; ++x) {
+		const auto pixel = input_decoder.GetNextPixelAsRgb888();
 
 		*out++ = srgb8_to_linear_lut(pixel.red);
 		*out++ = srgb8_to_linear_lut(pixel.green);
@@ -251,7 +267,7 @@ void ImageScaler::GenerateNextIntegerUpscaledOutputRow()
 {
 	auto out = output.row_buf.begin();
 
-	for (auto x = 0; x < input.width; ++x) {
+	for (auto x = 0; x < input.params.width; ++x) {
 		auto pixels_to_write = static_cast<uint32_t>(output.horiz_scale);
 
 		if (input.is_paletted()) {
@@ -260,7 +276,7 @@ void ImageScaler::GenerateNextIntegerUpscaledOutputRow()
 				*out++ = pixel;
 			}
 		} else {
-			const auto pixel = input_decoder.GetNextRgb888Pixel();
+			const auto pixel = input_decoder.GetNextPixelAsRgb888();
 			while (pixels_to_write--) {
 				*out++ = pixel.red;
 				*out++ = pixel.green;
@@ -281,7 +297,7 @@ void ImageScaler::GenerateNextSharpUpscaledOutputRow()
 	for (auto x = 0; x < output.width; ++x) {
 		const auto x0 = static_cast<float>(x) * output.one_per_horiz_scale;
 		const auto floor_x0 = static_cast<uint16_t>(x0);
-		assert(floor_x0 < input.width);
+		assert(floor_x0 < input.params.width);
 
 		const auto row_offs = floor_x0 * ComponentsPerRgbPixel;
 		auto pixel_addr     = row_start + row_offs;

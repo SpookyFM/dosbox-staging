@@ -21,9 +21,11 @@
 #include "config.h"
 
 #ifdef WIN32
-
+// clang-format off
+// 'windows.h' must be included first, otherwise we'll get compilation errors
 #include <windows.h>
 #include <stdio.h>
+// clang-format on
 
 #include "string_utils.h"
 
@@ -260,6 +262,8 @@ bool SERIAL_setCommParameters(COMPORT port,
 
 #if defined (LINUX) || defined (MACOSX) || defined (BSD)
 
+#include "logging.h"
+
 #include <string.h> // safe_strlen
 #include <stdlib.h>
 
@@ -280,7 +284,19 @@ struct _COMPORT {
 	termios backup;
 };
 
-bool SERIAL_open(const char* portname, COMPORT* port) {
+static void log_ioctl_if_error(const int retval, const char* action_description)
+{
+	// On error, -1 is returned, and errno is set to indicate the error.
+	// Ref: https://man7.org/linux/man-pages/man2/ioctl.2.html
+	//
+	if (retval == -1) {
+		LOG_WARNING("SERIAL: ioctl reported error '%s' while %s, continuing.",
+		            strerror(errno), action_description);
+	}
+}
+
+bool SERIAL_open(const char* portname, COMPORT* port)
+{
 	int result;
 	// allocate COMPORT structure
 	COMPORT cp = (_COMPORT*)malloc(sizeof(_COMPORT));
@@ -366,7 +382,9 @@ void SERIAL_getErrorString(char* buffer, size_t length) {
 
 int SERIAL_getmodemstatus(COMPORT port) {
 	long flags = 0;
-	ioctl (port->porthandle, TIOCMGET, &flags);
+	const auto rcode = ioctl(port->porthandle, TIOCMGET, &flags);
+	log_ioctl_if_error(rcode, "getting MODEM status");
+
 	int retval = 0;
 	if (flags & TIOCM_CTS) retval |= SERIAL_CTS;
 	if (flags & TIOCM_DSR) retval |= SERIAL_DSR;
@@ -469,17 +487,20 @@ bool SERIAL_setCommParameters(COMPORT port,
 }
 
 void SERIAL_setBREAK(COMPORT port, bool value) {
-	ioctl(port->porthandle, value?TIOCSBRK:TIOCCBRK);
+	const auto rcode = ioctl(port->porthandle, value ? TIOCSBRK : TIOCCBRK);
+	log_ioctl_if_error(rcode, "setting break");
 }
 
 void SERIAL_setDTR(COMPORT port, bool value) {
 	long flag = TIOCM_DTR;
-	ioctl(port->porthandle, value?TIOCMBIS:TIOCMBIC, &flag);
+	const auto rcode = ioctl(port->porthandle, value ? TIOCMBIS : TIOCMBIC, &flag);
+	log_ioctl_if_error(rcode, "setting data-terminal-ready (DTR)");
 }
 
 void SERIAL_setRTS(COMPORT port, bool value) {
 	long flag = TIOCM_RTS;
-	ioctl(port->porthandle, value?TIOCMBIS:TIOCMBIC, &flag);
+	const auto rcode = ioctl(port->porthandle, value ? TIOCMBIS : TIOCMBIC, &flag);
+	log_ioctl_if_error(rcode, "setting request-to-send (RTS)");
 }
 
 #endif

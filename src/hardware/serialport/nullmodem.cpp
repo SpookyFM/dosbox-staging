@@ -39,7 +39,7 @@ CNullModem::CNullModem(const uint8_t port_idx, CommandLine *cmd)
 	// enet: Setting to 1 enables enet on the port, otherwise TCP.
 	if (getUintFromString("sock:", bool_temp, cmd)) {
 		if (bool_temp == 1) {
-			socketType = SOCKET_TYPE_ENET;
+			socketType = SocketType::Enet;
 		}
 	}
 	// usedtr: The nullmodem will
@@ -89,9 +89,10 @@ CNullModem::CNullModem(const uint8_t port_idx, CommandLine *cmd)
 	if (getUintFromString("inhsocket:", bool_temp, cmd)) {
 #ifdef NATIVESOCKETS
 		if (bool_temp == 1) {
-			int sock;
-			if (control->cmdline->FindInt("-socket", sock, true)) {
-				dtrrespect = false;
+			const auto arguments = &control->arguments;
+			if (arguments->socket) {
+				int sock    = *arguments->socket;
+				dtrrespect  = false;
 				transparent = true;
 				LOG_MSG("SERIAL: Port %" PRIu8 " inheritance "
 				        "socket handle: %d",
@@ -153,8 +154,8 @@ CNullModem::CNullModem(const uint8_t port_idx, CommandLine *cmd)
 }
 
 CNullModem::~CNullModem() {
-	if (serversocket) delete serversocket;
-	if (clientsocket) delete clientsocket;
+	delete serversocket;
+	delete clientsocket;
 	// remove events
 	for (uint16_t i = SERIAL_BASE_EVENT_COUNT + 1;
 	     i <= SERIAL_NULLMODEM_EVENT_COUNT; i++) {
@@ -227,7 +228,8 @@ bool CNullModem::ServerListen() {
 	LOG_MSG("SERIAL: Port %" PRIu8 " nullmodem server waiting for connection on "
 	        "%s port %" PRIu16 " ...",
 	        GetPortNumber(),
-	        (socketType == SOCKET_TYPE_ENET ? "ENet" : "TCP"), serverport);
+	        to_string(socketType),
+	        serverport);
 	setEvent(SERIAL_SERVER_POLLING_EVENT, 50);
 	setCD(false);
 	return true;

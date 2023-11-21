@@ -34,7 +34,6 @@
 #include "fs_utils.h"
 #include "image/image_capturer.h"
 #include "mapper.h"
-#include "sdlmain.h"
 #include "setup.h"
 #include "string_utils.h"
 #include "support.h"
@@ -188,7 +187,6 @@ static std::optional<int32_t> find_highest_capture_index(const CaptureType type)
 	std::string filename_start = capture_type_to_basename(type);
 	lowcase(filename_start);
 
-	const auto ext        = capture_type_to_extension(type);
 	int32_t highest_index = 0;
 	std::error_code ec    = {};
 
@@ -199,14 +197,24 @@ static std::optional<int32_t> find_highest_capture_index(const CaptureType type)
 			            ec.message().c_str());
 			return {};
 		}
-		if (!entry.is_regular_file(ec) || entry.path().extension() != ext) {
+		if (!entry.is_regular_file(ec)) {
 			continue;
 		}
 		auto stem = entry.path().stem().string();
 		lowcase(stem);
+
 		if (starts_with(stem, filename_start)) {
-			const auto index = to_int(strip_prefix(stem, filename_start));
-			highest_index = std::max(highest_index, *index);
+			auto index_str = strip_prefix(stem, filename_start);
+
+			// Strip "-raw" or "-rendered" postfix if it's there
+			if (const auto dash_pos = index_str.find('-');
+			    dash_pos != std::string::npos) {
+				index_str = index_str.substr(0, dash_pos);
+			}
+			const auto index = parse_int(index_str);
+			if (index) {
+				highest_index = std::max(highest_index, *index);
+			}
 		}
 	}
 	return highest_index;
@@ -376,8 +384,7 @@ void CAPTURE_StopVideoCapture()
 	}
 }
 
-void CAPTURE_AddFrame([[maybe_unused]] const RenderedImage& image,
-                      [[maybe_unused]] const float frames_per_second)
+void CAPTURE_AddFrame(const RenderedImage& image, const float frames_per_second)
 {
 	if (image_capturer) {
 		image_capturer->MaybeCaptureImage(image);
@@ -394,7 +401,7 @@ void CAPTURE_AddFrame([[maybe_unused]] const RenderedImage& image,
 	}
 }
 
-void CAPTURE_AddPostRenderImage([[maybe_unused]] const RenderedImage& image)
+void CAPTURE_AddPostRenderImage(const RenderedImage& image)
 {
 	if (image_capturer) {
 		image_capturer->CapturePostRenderImage(image);
@@ -548,7 +555,7 @@ static void handle_capture_video_event(bool pressed)
 	}
 }
 
-static void capture_destroy([[maybe_unused]] Section* sec)
+static void capture_destroy(Section* /*sec*/)
 {
 	if (capture.state.audio == CaptureState::InProgress) {
 		capture_audio_finalise();
@@ -660,24 +667,24 @@ static void init_capture_dosbox_settings(Section_prop& secprop)
 	str_prop->Set_help(
 	        "Set the capture format of the default screenshot action ('upscaled' by\n"
 	        "default):\n"
-	        "  raw:       The content of the raw framebuffer is captured\n"
-	        "             (legacy behaviour; this always results in square pixels).\n"
-	        "             The filenames of raw screenshots end with '_raw'\n"
-	        "             (e.g. 'image0001_raw.png').\n"
-	        "  upscaled:  The image is bilinear-sharp upscaled so the height is around\n"
-	        "             1200 pixels and the correct aspect ratio is maintained\n"
-	        "             (depending on the 'aspect' setting). The vertical scaling factor\n"
-	        "             is always an integer. For example, 320x200 content is upscaled\n"
-	        "             to 1600x1200 (5:6 integer scaling), 640x480 to 1920x1440\n"
-	        "             (3:3 integer scaling), and 640x350 to 1867x1400 (2.9165:4\n"
-	        "             scaling, integer vertically and fractional horizontally).\n"
+	        "  upscaled:  The image is bilinear-sharp upscaled and the correct aspect\n"
+	        "             ratio is maintained, depending on the 'aspect' setting. The\n"
+	        "             vertical scaling factor is always an integer. For example,\n"
+	        "             320x200 content is upscaled to 1600x1200 (5:6 integer scaling),\n"
+	        "             640x480 to 1920x1440 (3:3 integer scaling), and 640x350 to\n"
+	        "             1400x1050 (2.1875:3 scaling; fractional horizontally and\n"
+	        "             integer vertically). The filenames of upscaled screenshots\n"
+	        "             have no postfix (e.g. 'image0001.png').\n"
 	        "  rendered:  The post-rendered, post-shader image shown on the screen is\n"
 	        "             captured. The filenames of rendered screenshots end with\n"
-	        "             '_rendered' (e.g. 'image0001_rendered.png').\n"
-	        "If multiple formats are specified separated by spaces, a single default\n"
-	        "screenshot action will result in multiple image files being saved in all\n"
-	        "specified formats. In addition to the default screenshot action, keybindings\n"
-	        "for taking a single capture of a specific format are also available.");
+	        "             '-rendered' (e.g. 'image0001-rendered.png').\n"
+	        "  raw:       The contents of the raw framebuffer is captured (this always\n"
+	        "             results in square pixels). The filenames of raw screenshots\n"
+	        "             end with '-raw' (e.g. 'image0001-raw.png').\n"
+	        "If multiple formats are specified separated by spaces, the default\n"
+	        "screenshot action will save multiple images in the specified formats.\n"
+	        "Keybindings for taking single screenshots in specific formats are also\n"
+	        "available.");
 	assert(str_prop);
 }
 

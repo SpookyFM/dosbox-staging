@@ -101,7 +101,7 @@ static uint8_t delay_ms = 5;
 // true = delay timer is in progress
 static bool delay_running = false;
 // true = delay timer expired, event can be sent immediately
-static bool delay_finished = true;
+static bool delay_expired = true;
 
 static MouseButtonsAll buttons;     // currently visible button state
 static MouseButtonsAll buttons_all; // state of all 5 buttons as on the host side
@@ -119,6 +119,8 @@ static uint8_t unlock_idx_xp = 0;
 static std::vector<uint8_t> frame = {};
 // if enough movement or other mouse state changes for a new frame
 static bool has_data_for_frame = false;
+// if virtual machine mouse interface needs us to issue dummy event
+static bool vmm_needs_dummy_event = false;
 
 static uint8_t rate_hz = 0; // maximum rate at which the mouse state is updated
 static bool scaling_21 = false;
@@ -153,8 +155,8 @@ static void warn_unknown_command(const Command command)
 
 void MOUSEPS2_UpdateButtonSquish()
 {
-	// - if VMware compatible driver is enabled, never try to report
-	//   mouse buttons 4 and 5, that would be asking for trouble
+	// - if VMware or VirtualBox compatible driver is enabled, never try
+	//   to report mouse buttons 4 and 5, that would be asking for trouble
 	// - for PS/2 modes other than IntelliMouse Explorer there is
 	//   no standard way to report buttons 4 and 5
 
@@ -341,8 +343,8 @@ static void maybe_transfer_frame(); // forward declaration
 
 static void delay_handler(uint32_t /*val*/)
 {
-	delay_running  = false;
-	delay_finished = true;
+	delay_running = false;
+	delay_expired = true;
 
 	maybe_transfer_frame();
 }
@@ -353,8 +355,8 @@ static void maybe_start_delay_timer(const uint8_t timer_delay_ms)
 		return;
 	}
 	PIC_AddEvent(delay_handler, timer_delay_ms);
-	delay_running  = true;
-	delay_finished = false;
+	delay_running = true;
+	delay_expired = false;
 }
 
 static bool should_report()
@@ -364,7 +366,7 @@ static bool should_report()
 
 static void maybe_transfer_frame()
 {
-	if (!delay_finished) {
+	if (!delay_expired) {
 		maybe_start_delay_timer(delay_ms);
 		return;
 	}
@@ -534,7 +536,9 @@ static void cmd_reset(bool is_startup = false)
 	set_protocol(MouseModelPS2::Standard);
 	frame.clear();
 
-	if (!is_startup) {
+	if (is_startup) {
+		PIC_SetIRQMask(mouse_predefined.IRQ_PS2, false);
+	} else {
 		I8042_AddAuxByte(0xaa); // self-test passed
 		cmd_get_dev_id();
 	}
@@ -677,14 +681,17 @@ void MOUSEPS2_NotifyMoved(const float x_rel, const float y_rel)
 	constexpr float threshold = 0.5f;
 
 	has_data_for_frame |= (std::fabs(delta_x) >= threshold) ||
-	                      (std::fabs(delta_y) >= threshold);
+	                      (std::fabs(delta_y) >= threshold) ||
+	                      vmm_needs_dummy_event;
 	maybe_transfer_frame();
+	vmm_needs_dummy_event = false;
 }
 
 void MOUSEPS2_NotifyMovedDummy()
 {
-	has_data_for_frame = true;
-	maybe_transfer_frame();
+	if (should_report()) {
+		vmm_needs_dummy_event = true;
+	}
 }
 
 void MOUSEPS2_NotifyButton(const MouseButtons12S new_buttons_12S,
@@ -696,22 +703,25 @@ void MOUSEPS2_NotifyButton(const MouseButtons12S new_buttons_12S,
 	buttons_all = new_buttons_all;
 	MOUSEPS2_UpdateButtonSquish();
 
-	has_data_for_frame |= (buttons_old._data != buttons._data);
+	has_data_for_frame |= (buttons_old._data != buttons._data) ||
+	                      vmm_needs_dummy_event;
 	maybe_transfer_frame();
+	vmm_needs_dummy_event = false;
 }
 
 void MOUSEPS2_NotifyWheel(const int16_t w_rel)
 {
-	if (protocol != MouseModelPS2::IntelliMouse &&
-	    protocol != MouseModelPS2::Explorer) {
-		return;
+	// Note: VMware mouse protocol can support wheel even if the emulated
+	// PS/2 mouse does not have it - this works at least with VBADOS v0.67
+	auto old_counter_w = counter_w;
+	if (protocol == MouseModelPS2::IntelliMouse ||
+	    protocol == MouseModelPS2::Explorer) {
+		counter_w = clamp_to_int8(static_cast<int32_t>(counter_w + w_rel));
 	}
 
-	auto old_counter_w = counter_w;
-	counter_w = clamp_to_int8(static_cast<int32_t>(counter_w + w_rel));
-
-	has_data_for_frame |= (old_counter_w != counter_w);
+	has_data_for_frame |= (old_counter_w != counter_w) || vmm_needs_dummy_event;
 	maybe_transfer_frame();
+	vmm_needs_dummy_event = false;
 }
 
 void MOUSEPS2_SetDelay(const uint8_t new_delay_ms)
@@ -742,6 +752,37 @@ static RealPt ps2_callback   = 0;
 
 std::vector<uint8_t> bios_buffer = {};
 
+static bool bios_delay_running = false;
+static bool bios_delay_expired = true;
+
+static void bios_delay_handler(uint32_t /*val*/)
+{
+	bios_delay_running = false;
+	bios_delay_expired = true;
+
+	PIC_ActivateIRQ(mouse_predefined.IRQ_PS2);
+}
+
+static void bios_maybe_start_delay_timer()
+{
+	constexpr uint8_t timer_delay_ms = 1;
+
+	if (bios_delay_running) {
+		return;
+	}
+
+	PIC_AddEvent(bios_delay_handler, timer_delay_ms);
+	bios_delay_running = true;
+	bios_delay_expired = false;
+}
+
+static void bios_cancel_delay_timer()
+{
+	PIC_RemoveEvents(bios_delay_handler);
+	bios_delay_running = false;
+	bios_delay_expired = true;
+}
+
 static bool bios_enable()
 {
 	mouse_shared.active_bios = callback_init;
@@ -753,6 +794,8 @@ static bool bios_enable()
 
 static bool bios_disable()
 {
+	bios_cancel_delay_timer();
+
 	mouse_shared.active_bios = false;
 	bios_buffer.clear();
 	MOUSE_UpdateGFX();
@@ -813,7 +856,11 @@ bool MOUSEBIOS_CheckCallback()
 		return false;
 	}
 
-	const size_t max_buffer_size = static_cast<size_t>(bios_frame_size * 4);
+	// Least common multiple of supported framed sizes - to minimize chances
+	// of guest driver going out-of-sync if we are forced to remove frame
+	// from the buffer
+	constexpr size_t max_buffer_size = 3 * 4;
+
 	while (1) {
 		if (!bios_is_aux_byte_waiting()) {
 			// No more AUX data to read
@@ -838,20 +885,37 @@ bool MOUSEBIOS_CheckCallback()
 	return true;
 }
 
+static bool is_bios_frame_size_supported(const uint8_t frame_size)
+{
+	return (frame_size == 1) || // VBADOS (VBMOUSE.EXE) preferred size
+	       (frame_size == 3) || // standard size, has to be supported
+	       (frame_size == 4);   // CuteMouse 2.1 uses this for wheel mice
+}
+
 void MOUSEBIOS_DoCallback()
 {
-	assert(bios_frame_size == 3 || bios_frame_size == 4);
+	assert(is_bios_frame_size_supported(bios_frame_size));
 	assert(bios_buffer.size() >= bios_frame_size);
 
-	if (bios_frame_size == 3) {
+	switch (bios_frame_size) {
+	case 1:
+		CPU_Push16(bios_buffer[0]);
+		CPU_Push16(0);
+		CPU_Push16(0);
+		break;
+	case 3:
 		CPU_Push16(bios_buffer[0]);
 		CPU_Push16(bios_buffer[1]);
 		CPU_Push16(bios_buffer[2]);
-	} else {
+		break;
+	case 4: {
 		const auto word_0 = bios_buffer[0] + (bios_buffer[1] << 8);
 		CPU_Push16(static_cast<uint16_t>(word_0));
 		CPU_Push16(bios_buffer[2]);
 		CPU_Push16(bios_buffer[3]);
+		break;
+	}
+	default: assert(false); break;
 	}
 	CPU_Push16(0u);
 
@@ -861,6 +925,17 @@ void MOUSEBIOS_DoCallback()
 	CPU_Push16(RealOffset(ps2_callback));
 	SegSet16(cs, callback_seg);
 	reg_ip = callback_ofs;
+}
+
+void MOUSEBIOS_FinalizeInterrupt()
+{
+	// It is possible that before our interrupt got handled, another full
+	// packet arrived from the simulated PS/2 hardware
+	if (MOUSEBIOS_CheckCallback()) {
+		bios_maybe_start_delay_timer();
+	} else {
+		bios_cancel_delay_timer();
+	}
 }
 
 void MOUSEBIOS_Subfunction_C2() // INT 15h, AH = 0xc2
@@ -898,7 +973,7 @@ void MOUSEBIOS_Subfunction_C2() // INT 15h, AH = 0xc2
 		break;
 	case 0x01: // reset
 		// VBADOS seems to expect VMware interface to get dectivated
-		MOUSEVMM_Deactivate();
+		MOUSEVMM_DeactivateAll();
 		cmd_reset();
 		bios_disable();
 		cmd_set_defaults();
@@ -926,7 +1001,10 @@ void MOUSEBIOS_Subfunction_C2() // INT 15h, AH = 0xc2
 		set_return_value(BiosRetVal::Success);
 		break;
 	case 0x05: // initialize
-		if (reg_bh == 3 || reg_bh == 4) {
+		if (is_bios_frame_size_supported(reg_bh)) {
+			// NOTE: if you want to support more frame sizes, do not
+			// forget to update 'max_buffer_size' constant in
+			// 'MOUSEBIOS_CheckCallback' routine!
 			bios_frame_size = reg_bh;
 			bios_disable();
 			cmd_set_defaults();

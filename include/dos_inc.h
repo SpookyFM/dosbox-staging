@@ -175,15 +175,18 @@ constexpr uint16_t DOS_PackDate(const struct tm &datetime) noexcept
 
 /* Routines for Drive Class */
 bool DOS_OpenFile(const char* name, uint8_t flags, uint16_t* entry, bool fcb = false);
-bool DOS_OpenFileExtended(const char* name, uint16_t flags, uint16_t createAttr,
-                          uint16_t action, uint16_t* entry, uint16_t* status);
-bool DOS_CreateFile(const char* name, uint16_t attribute, uint16_t* entry,
-                    bool fcb = false);
+bool DOS_OpenFileExtended(const char* name, uint16_t flags,
+                          FatAttributeFlags createAttr, uint16_t action,
+                          uint16_t* entry, uint16_t* status);
+bool DOS_CreateFile(const char* name, FatAttributeFlags attribute,
+                    uint16_t* entry, bool fcb = false);
 bool DOS_UnlinkFile(const char* const name);
-bool DOS_FindFirst(const char *search, uint16_t attr, bool fcb_findfirst = false);
+bool DOS_FindFirst(const char* search, FatAttributeFlags attr,
+                   bool fcb_findfirst = false);
 bool DOS_FindNext(void);
-bool DOS_Canonicalize(const char* const name, char* const big);
-bool DOS_CreateTempFile(char * const name,uint16_t * entry);
+bool DOS_Canonicalize(const char* const name, char* const canonicalized);
+std::string DOS_Canonicalize(const char* const name);
+bool DOS_CreateTempFile(char* const name, uint16_t* entry);
 bool DOS_FileExists(const char* const name);
 
 /* Helper Functions */
@@ -199,8 +202,8 @@ bool DOS_MakeDir(const char* const dir);
 bool DOS_RemoveDir(const char* const dir);
 bool DOS_Rename(const char* const oldname, const char* const newname);
 bool DOS_GetFreeDiskSpace(uint8_t drive,uint16_t * bytes,uint8_t * sectors,uint16_t * clusters,uint16_t * free);
-bool DOS_GetFileAttr(const char* const name, uint16_t* attr);
-bool DOS_SetFileAttr(const char* const name, uint16_t attr);
+bool DOS_GetFileAttr(const char* const name, FatAttributeFlags* attr);
+bool DOS_SetFileAttr(const char* const name, FatAttributeFlags attr);
 
 /* IOCTL Stuff */
 bool DOS_IOCTL(void);
@@ -587,9 +590,9 @@ class DOS_DTA final : public MemStruct {
 public:
 	DOS_DTA(RealPt addr) : MemStruct(addr) {}
 
-	void SetupSearch(uint8_t drive, uint8_t attr, char *pattern);
+	void SetupSearch(uint8_t drive, FatAttributeFlags attr, char* pattern);
 	uint8_t GetSearchDrive() const { return SGET_BYTE(sDTA, sdrive); }
-	void GetSearchParams(uint8_t &attr, char *pattern) const;
+	void GetSearchParams(FatAttributeFlags& attr, char* pattern) const;
 
 	struct Result {
 		std::string name = {};
@@ -617,14 +620,21 @@ public:
 		{
 			return attr.directory && (name == "." || name == "..");
 		}
+
+		bool IsDevice() const
+		{
+			return attr.device;
+		}
+
+		bool IsReadOnly() const
+		{
+			return attr.read_only;
+		}
 	};
 
 	void SetResult(const char* name, uint32_t size, uint16_t date,
-	               uint16_t time, uint8_t attr);
+	               uint16_t time, FatAttributeFlags attr);
 	void GetResult(Result& result) const;
-	// obsolete - TODO: remove
-	void GetResult(char* name, uint32_t& size, uint16_t& date,
-	               uint16_t& time, uint8_t& attr) const;
 
 	void SetDirID(uint16_t id) { SSET_WORD(sDTA, dirID, id); }
 	uint16_t GetDirID() const { return SGET_WORD(sDTA, dirID); }
@@ -701,10 +711,11 @@ public:
 	void SetRandom(uint32_t random) { SSET_DWORD(sFCB, rndm, random); }
 	uint32_t GetRandom() const { return SGET_DWORD(sFCB, rndm); }
 
-	void SetAttr(uint8_t attr);
-	void GetAttr(uint8_t &attr) const;
+	void SetAttr(FatAttributeFlags attr);
+	void GetAttr(FatAttributeFlags& attr) const;
 
-	void SetResult(uint32_t size,uint16_t date,uint16_t time,uint8_t attr);
+	void SetResult(uint32_t size, uint16_t date, uint16_t time,
+	               FatAttributeFlags attr);
 
 	uint8_t GetDrive() const;
 
@@ -875,74 +886,120 @@ static inline uint8_t RealHandle(uint16_t handle) {
 #define DOS_THOUSANDS_SEPARATOR_OFS 7
 #define DOS_DECIMAL_SEPARATOR_OFS   9
 
+// Sources of the country numbers:
+// - MS-DOS 6.22, COUNTRY.TXT file
+// - PC-DOS 2000, HELP COUNTRY command, information table
+// - DR-DOS 7.03, HELP, Table 9-2: Country Codes and Code Pages
+// - FreeDOS 1.3, country.asm (source code)
+// - Paragon PTS DOS 2000 Pro manual
+// - https://en.wikipedia.org/wiki/List_of_country_calling_codes
+//   (used for remaining countries, especially where we have keyboard layout)
 enum class Country : uint16_t {
-	United_States  = 1,
-	Candian_French = 2,
-	Latin_America  = 3,
-	Russia         = 7,
-	Greece         = 30,
-	Netherlands    = 31,
-	Belgium        = 32,
-	France         = 33,
-	Spain          = 34,
-	Hungary        = 36,
-	Yugoslavia     = 38,
-	Italy          = 39,
-	Romania        = 40,
-	Switzerland    = 41,
-	Czech_Slovak   = 42,
-	Austria        = 43,
-	United_Kingdom = 44,
-	Denmark        = 45,
-	Sweden         = 46,
-	Norway         = 47,
-	Poland         = 48,
-	Germany        = 49,
-	Argentina      = 54,
-	Brazil         = 55,
-	Malaysia       = 60,
-	Australia      = 61,
-	Philippines    = 63,
-	Singapore      = 65,
-	Kazakhstan     = 77,
-	Japan          = 81,
-	South_Korea    = 82,
-	Vietnam        = 84,
-	China          = 86,
-	Turkey         = 90,
-	India          = 91,
-	Niger          = 227,
-	Benin          = 229,
-	Nigeria        = 234,
-	Faeroe_Islands = 298,
-	Portugal       = 351,
-	Iceland        = 354,
-	Albania        = 355,
-	Malta          = 356,
-	Finland        = 358,
-	Bulgaria       = 359,
-	Lithuania      = 370,
-	Latvia         = 371,
-	Estonia        = 372,
-	Armenia        = 374,
-	Belarus        = 375,
-	Ukraine        = 380,
-	Serbia         = 381,
-	Montenegro     = 382,
-	Croatia        = 384,
-	Slovenia       = 386,
-	Bosnia         = 387,
-	Macedonia      = 389,
-	Taiwan         = 886,
-	Arabic         = 785,
-	Israel         = 972,
-	Mongolia       = 976,
-	Tadjikistan    = 992,
-	Turkmenistan   = 993,
-	Azerbaijan     = 994,
-	Georgia        = 995,
-	Kyrgyzstan     = 996,
-	Uzbekistan     = 998,
+	United_States      = 1,   // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Canada_French      = 2,   // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Latin_America      = 3,   // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Canada_English     = 4,   // MS-DOS
+	Russia             = 7,   // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	South_Africa       = 27,  // MS-DOS
+	Greece             = 30,  // MS-DOS, PC-DOS,         FreeDOS
+	Netherlands        = 31,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Belgium            = 32,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	France             = 33,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Spain              = 34,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Hungary            = 36,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS
+	Yugoslavia         = 38,  // MS-DOS, PC-DOS,         FreeDOS
+	Italy              = 39,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Romania            = 40,  // MS-DOS, PC-DOS,         FreeDOS
+	Switzerland        = 41,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Czechia            = 42,  // MS-DOS                                   (*)
+	Austria            = 43,  // MS-DOS                  FreeDOS
+	United_Kingdom     = 44,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Denmark            = 45,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Sweden             = 46,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Norway             = 47,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Poland             = 48,  // MS-DOS, PC-DOS,         FreeDOS
+	Germany            = 49,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Mexico             = 52,  // MS-DOS
+	Argentina          = 54,  // MS-DOS,                 FreeDOS
+	Brazil             = 55,  // MS-DOS, PC-DOS,         FreeDOS
+	Chile              = 56,  // MS-DOS
+	Colombia           = 57,  // MS-DOS
+	Venezuela          = 58,  // MS-DOS
+	Malaysia           = 60,  // MS-DOS,                 FreeDOS
+	Australia          = 61,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS          (*)
+	Philippines        = 63,
+	New_Zealand        = 64,  // MS-DOS
+	Singapore          = 65,  // MS-DOS,                 FreeDOS
+	Kazakhstan         = 77,
+	Japan              = 81,  // MS-DOS, PC-DOS,         FreeDOS, Paragon
+	Korea              = 82,  // MS-DOS,                 FreeDOS, Paragon (*)
+	Vietnam            = 84,
+	China              = 86,  // MS-DOS,                 FreeDOS, Paragon
+	Turkey             = 90,  // MS-DOS, PC-DOS, DR-DOS, FreeDOS
+	India              = 91,  // MS-DOS,                 FreeDOS
+	Niger              = 227,
+	Benin              = 229,
+	Nigeria            = 234,
+	Faroe_Islands      = 298,
+	Portugal           = 351, // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Ireland            = 353, // MS-DOS
+	Iceland            = 354, // MS-DOS, PC-DOS
+	Albania            = 355, // MS-DOS, PC-DOS
+	Malta              = 356,
+	Finland            = 358, // MS-DOS, PC-DOS, DR-DOS, FreeDOS, Paragon
+	Bulgaria           = 359, // MS-DOS, PC-DOS,         FreeDOS
+	Lithuania          = 370,
+	Latvia             = 371,
+	Estonia            = 372,
+	Armenia            = 374,
+	Belarus            = 375, //                         FreeDOS
+	Ukraine            = 380, //                         FreeDOS
+	Serbia             = 381, // MS-DOS, PC-DOS,         FreeDOS          (*)
+	Montenegro         = 382,
+	Croatia            = 384, // MS-DOS,                 FreeDOS          (*)
+	Slovenia           = 386, // MS-DOS, PC-DOS,         FreeDOS
+	Bosnia_Herzegovina = 387, //         PC-DOS,         FreeDOS
+	Macedonia          = 389, // MS-DOS, PC-DOS,         FreeDOS
+	Slovakia           = 421, // MS-DOS                                   (*)
+	Ecuador            = 593, // MS-DOS
+	Arabic             = 785, // MS-DOS,                 FreeDOS, Paragon (*)
+	Hong_Kong          = 852, // MS-DOS
+	Taiwan             = 886, // MS-DOS
+	Israel             = 972, // MS-DOS,                 FreeDOS, Paragon
+	Mongolia           = 976,
+	Tadjikistan        = 992,
+	Turkmenistan       = 993,
+	Azerbaijan         = 994,
+	Georgia            = 995,
+	Kyrgyzstan         = 996,
+	Uzbekistan         = 998,
+
+	// (*) Remarks:
+	// - MS-DOS and PC-DOS use country code 381 for both Serbia and Montenegro
+	// - MS-DOS and PC-DOS use country code 61 also for International English
+	// - PC-DOS uses country code 381 also for Yugoslavia Cyrillic
+	// - PC-DOS uses country code 385 (not 386) for Croatia
+	// - PC-DOS uses country code 388 for Bosna/Herzegovina Cyrillic
+	// - PC-DOS uses country code 421 for Czechia and 422 for Slovakia
+	// - FreeDOS uses country code 042 for Czechoslovakia
+	// - FreeDOS calls country code 785 Middle-East,
+	//   MS-DOS calls it Arabic South
+	// - Paragon PTS DOS uses country code 61 only for Australia
+	// - Paragon PTS DOS uses country code 88 for Taiwan
+	// - DOSes use country code 82 for Korea, despite country calling code
+	//   82 is assigned to South Korea
+
+	// FreeDOS also supports the following, not yet handled here:
+	// - Belgium/Dutch        40032
+	// - Belgium/French       41032
+	// - Belgium/German       42032
+	// - Spain/Spanish        40034
+	// - Spain/Catalan        41034
+	// - Spain/Gallegan       42034
+	// - Spain/Basque         43034
+	// - Switzerland/German   40041
+	// - Switzerland/French   41041
+	// - Switzerland/Italian  42041
 };
 
 #endif

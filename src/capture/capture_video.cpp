@@ -40,12 +40,12 @@ static constexpr auto AviHeaderSize = 500;
 static struct {
 	FILE* handle = nullptr;
 
-	uint32_t frames         = 0;
-	VideoCodec* codec       = nullptr;
-	int width               = 0;
-	int height              = 0;
-	int bits_per_pixel      = 0;
-	float frames_per_second = 0.0f;
+	uint32_t frames          = 0;
+	VideoCodec* codec        = nullptr;
+	int width                = 0;
+	int height               = 0;
+	PixelFormat pixel_format = {};
+	float frames_per_second  = 0.0f;
 
 	uint32_t written           = 0;
 	uint32_t buf_size          = 0;
@@ -286,7 +286,7 @@ void capture_video_add_audio_data(const uint32_t sample_rate,
 }
 
 static void create_avi_file(const uint16_t width, const uint16_t height,
-                            const uint8_t bits_per_pixel,
+                            const PixelFormat pixel_format,
                             const float frames_per_second, ZMBV_FORMAT format)
 {
 	video.handle = CAPTURE_CreateFile(CaptureType::Video);
@@ -306,7 +306,7 @@ static void create_avi_file(const uint16_t width, const uint16_t height,
 
 	video.width             = width;
 	video.height            = height;
-	video.bits_per_pixel    = bits_per_pixel;
+	video.pixel_format      = pixel_format;
 	video.frames_per_second = frames_per_second;
 
 	for (auto i = 0; i < AviHeaderSize; ++i) {
@@ -321,40 +321,40 @@ static void create_avi_file(const uint16_t width, const uint16_t height,
 
 void capture_video_add_frame(const RenderedImage& image, const float frames_per_second)
 {
-	assert(image.width <= SCALER_MAXWIDTH);
+	const auto& src = image.params;
+	assert(src.width <= SCALER_MAXWIDTH);
 
-	const auto video_width = image.double_width ? image.width * 2 : image.width;
-	const auto video_height = image.double_height ? image.height * 2
-	                                              : image.height;
+	const auto video_width = src.double_width ? src.width * 2 : src.width;
+	const auto video_height = src.double_height ? src.height * 2 : src.height;
 
 	// Disable capturing if any of the test fails
 	if (video.handle && (video.width != video_width || video.height != video_height ||
-	                     video.bits_per_pixel != image.bits_per_pixel ||
+	                     video.pixel_format != src.pixel_format ||
 	                     video.frames_per_second != frames_per_second)) {
 		capture_video_finalise();
 	}
 
 	ZMBV_FORMAT format;
 
-	switch (image.bits_per_pixel) {
-	case 8: format = ZMBV_FORMAT::BPP_8; break;
-	case 15: format = ZMBV_FORMAT::BPP_15; break;
-	case 16: format = ZMBV_FORMAT::BPP_16; break;
+	switch (src.pixel_format) {
+	case PixelFormat::Indexed8: format = ZMBV_FORMAT::BPP_8; break;
+	case PixelFormat::RGB555_Packed16: format = ZMBV_FORMAT::BPP_15; break;
+	case PixelFormat::RGB565_Packed16: format = ZMBV_FORMAT::BPP_16; break;
 
 	// ZMBV is "the DOSBox capture format" supported by external
 	// tools such as VLC, MPV, and ffmpeg. Because DOSBox originally
 	// didn't have 24-bit color, the format itself doesn't support
 	// it. I this case we tell ZMBV the data is 32-bit and let the
 	// rgb24's int() cast operator up-convert.
-	case 24: format = ZMBV_FORMAT::BPP_32; break;
-	case 32: format = ZMBV_FORMAT::BPP_32; break;
-	default: assertm(false, "Invalid bits_per_pixel value"); return;
+	case PixelFormat::BGR24_ByteArray: format = ZMBV_FORMAT::BPP_32; break;
+	case PixelFormat::XRGB8888_Packed32: format = ZMBV_FORMAT::BPP_32; break;
+	default: assertm(false, "Invalid pixel_format value"); return;
 	}
 
 	if (!video.handle) {
 		create_avi_file(video_width,
 		                video_height,
-		                image.bits_per_pixel,
+		                src.pixel_format,
 		                frames_per_second,
 		                format);
 	}
@@ -376,27 +376,24 @@ void capture_video_add_frame(const RenderedImage& image, const float frames_per_
 
 	auto src_row = image.image_data;
 
-	for (auto i = 0; i < image.height; ++i) {
+	for (auto i = 0; i < src.height; ++i) {
 		const uint8_t* row_pointer = row_buffer;
 
 		// TODO This all assumes little-endian byte order; should be
 		// made endianness-aware like capture_image.cpp
-		if (image.double_width) {
-			switch (image.bits_per_pixel) {
-			// Indexed8
-			case 8:
-				for (auto x = 0; x < image.width; ++x) {
+		if (src.double_width) {
+			switch (src.pixel_format) {
+			case PixelFormat::Indexed8:
+				for (auto x = 0; x < src.width; ++x) {
 					const auto pixel      = src_row[x];
 					row_buffer[x * 2 + 0] = pixel;
 					row_buffer[x * 2 + 1] = pixel;
 				}
 				break;
 
-			// BGR555
-			case 15:
-			// BGR565
-			case 16:
-				for (auto x = 0; x < image.width; ++x) {
+			case PixelFormat::RGB555_Packed16:
+			case PixelFormat::RGB565_Packed16:
+				for (auto x = 0; x < src.width; ++x) {
 					const auto pixel = ((uint16_t*)src_row)[x];
 
 					((uint16_t*)row_buffer)[x * 2 + 0] = pixel;
@@ -404,9 +401,8 @@ void capture_video_add_frame(const RenderedImage& image, const float frames_per_
 				}
 				break;
 
-			// BGR888
-			case 24:
-				for (auto x = 0; x < image.width; ++x) {
+			case PixelFormat::BGR24_ByteArray:
+				for (auto x = 0; x < src.width; ++x) {
 					const auto pixel = reinterpret_cast<const Rgb888*>(
 					        src_row)[x];
 
@@ -417,9 +413,8 @@ void capture_video_add_frame(const RenderedImage& image, const float frames_per_
 				}
 				break;
 
-			// BGRX8888
-			case 32:
-				for (auto x = 0; x < image.width; ++x) {
+			case PixelFormat::XRGB8888_Packed32:
+				for (auto x = 0; x < src.width; ++x) {
 					const auto pixel = ((uint32_t*)src_row)[x];
 
 					((uint32_t*)row_buffer)[x * 2 + 0] = pixel;
@@ -430,8 +425,8 @@ void capture_video_add_frame(const RenderedImage& image, const float frames_per_
 			row_pointer = row_buffer;
 
 		} else {
-			if (image.bits_per_pixel == 24) {
-				for (auto x = 0; x < image.width; ++x) {
+			if (src.pixel_format == PixelFormat::BGR24_ByteArray) {
+				for (auto x = 0; x < src.width; ++x) {
 					const auto pixel = reinterpret_cast<const Rgb888*>(
 					        src_row)[x];
 
@@ -444,7 +439,7 @@ void capture_video_add_frame(const RenderedImage& image, const float frames_per_
 			}
 		}
 
-		auto lines_to_write = image.double_height ? 2 : 1;
+		auto lines_to_write = src.double_height ? 2 : 1;
 		while (lines_to_write--) {
 			video.codec->CompressLines(1, &row_pointer);
 		}

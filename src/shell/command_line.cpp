@@ -106,8 +106,8 @@ bool CommandLine::FindCommand(unsigned int which, std::string& value) const
 		return false;
 	}
 	auto it = cmds.begin();
-	for (; which > 1; which--) {
-		it++;
+	for (; which > 1; --which) {
+		++it;
 	}
 	value = (*it);
 	return true;
@@ -242,19 +242,21 @@ unsigned int CommandLine::GetCount(void)
 	return (unsigned int)cmds.size();
 }
 
-void CommandLine::FillVector(std::vector<std::string>& vector)
+std::vector<std::string> CommandLine::GetArguments()
 {
-	for (cmd_it it = cmds.begin(); it != cmds.end(); ++it) {
-		vector.push_back((*it));
+	std::vector<std::string> args;
+	for (const auto& cmd : cmds) {
+		args.emplace_back(cmd);
 	}
 #ifdef WIN32
 	// Add back the \" if the parameter contained a space
-	for (Bitu i = 0; i < vector.size(); i++) {
-		if (vector[i].find(' ') != std::string::npos) {
-			vector[i] = "\"" + vector[i] + "\"";
+	for (auto& arg : args) {
+		if (arg.find(' ') != std::string::npos) {
+			arg = "\"" + arg + "\"";
 		}
 	}
 #endif
+	return args;
 }
 
 int CommandLine::GetParameterFromList(const char* const params[],
@@ -373,4 +375,83 @@ void CommandLine::Shift(unsigned int amount)
 			cmds.erase(cmds.begin());
 		}
 	}
+}
+
+bool CommandLine::FindBoolArgument(const std::string& name, bool remove,
+                                   char short_letter)
+{
+	const std::string double_dash = "--" + name;
+	const std::string dash        = '-' + name;
+	char short_name[3]            = {};
+	short_name[0]                 = '-';
+	short_name[1]                 = short_letter;
+	return FindExist(double_dash.c_str(), remove) ||
+	       FindExist(dash.c_str(), remove) ||
+	       (short_letter && FindExist(short_name, remove));
+}
+
+bool CommandLine::FindRemoveBoolArgument(const std::string& name, char short_letter)
+{
+	constexpr bool remove_arg = true;
+	return FindBoolArgument(name, remove_arg, short_letter);
+}
+
+std::string CommandLine::FindRemoveSingleString(const char* name)
+{
+	cmd_it it                    = {};
+	constexpr bool need_next_arg = true;
+	while (FindEntry(name, it, need_next_arg)) {
+		cmd_it it_next = it;
+		++it_next;
+		std::string value = *it_next;
+		bool is_valid     = !value.empty() && value[0] != '-';
+		if (is_valid) {
+			++it_next;
+		}
+		cmds.erase(it, it_next);
+		if (is_valid) {
+			return value;
+		}
+	}
+	return {};
+}
+
+std::string CommandLine::FindRemoveStringArgument(const std::string& name)
+{
+	const std::string double_dash = "--" + name;
+	const std::string dash        = '-' + name;
+
+	std::string ret = FindRemoveSingleString(double_dash.c_str());
+	if (!ret.empty()) {
+		return ret;
+	}
+	return FindRemoveSingleString(dash.c_str());
+}
+
+std::vector<std::string> CommandLine::FindRemoveVectorArgument(const std::string& name)
+{
+	std::vector<std::string> arg = {};
+	for (;;) {
+		std::string str = FindRemoveStringArgument(name);
+		if (str.empty()) {
+			break;
+		}
+		arg.emplace_back(std::move(str));
+	}
+	return arg;
+}
+
+std::optional<std::vector<std::string>> CommandLine::FindRemoveOptionalArgument(
+        const std::string& name)
+{
+	constexpr bool remove_arg = false;
+	if (!FindBoolArgument(name, remove_arg)) {
+		return {};
+	}
+	return FindRemoveVectorArgument(name);
+}
+
+std::optional<int> CommandLine::FindRemoveIntArgument(const std::string& name)
+{
+	return parse_int(FindRemoveStringArgument(name));
 }

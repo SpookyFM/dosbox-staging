@@ -26,21 +26,13 @@ public:
 		// Create DOSBox Staging's config directory, which is a
 		// pre-requisite that's asserted during the Init process.
 		//
-		CROSS_DetermineConfigPaths();
-		const auto config_path = get_platform_config_dir();
-		SETUP_ParseConfigFiles(config_path);
+		InitConfigDir();
+		const auto config_path = GetConfigDir();
+		control->ParseConfigFiles(config_path);
 
 		Section *_sec;
 		// This will register all the init functions, but won't run them
 		DOSBOX_Init();
-
-		for (auto section_name : sections) {
-			_sec = control->GetSection(section_name);
-			// NOTE: Some of the sections will return null pointers,
-			// if you add a section below, make sure to test for
-			// nullptr before executing early init.
-			_sec->ExecuteEarlyInit();
-		}
 
 		for (auto section_name : sections) {
 			_sec = control->GetSection(section_name);

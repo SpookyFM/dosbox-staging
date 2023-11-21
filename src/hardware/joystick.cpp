@@ -268,7 +268,7 @@ static void write_p201(io_port_t, io_val_t, io_width_t)
 }
 static void write_p201_timed(io_port_t, io_val_t, io_width_t)
 {
-	// Convert the the joystick's instantaneous position to activation duration in ticks
+	// Convert the joystick's instantaneous position to activation duration in ticks
 
 	/*
 	// Original calculation
@@ -392,7 +392,7 @@ void JOYSTICK_ParseConfiguredType()
 {
 	const auto conf = control->GetSection("joystick");
 	const auto section = static_cast<Section_prop *>(conf);
-	const auto type = std::string(section->Get_string("joysticktype"));
+	const auto type = section->Get_string("joysticktype");
 
 	if (type == "disabled")
 		joytype = JOY_DISABLED;
@@ -534,8 +534,8 @@ static void configure_calibration(const Section_prop &settings)
 			return parsed_rates;
 		}
 		if (pref != "auto" && pref.length() != 0)
-			LOG_WARNING("JOYSTICK: Invalid %c_calibration parameters: %s."
-			            " Must be auto or number,number.",
+			LOG_WARNING("JOYSTICK: Invalid '%c_calibration' setting: '%s', "
+			            "using 'auto'",
 			            default_rates.axis,
 			            pref.data());
 		return default_rates;

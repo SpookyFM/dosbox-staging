@@ -22,15 +22,12 @@
 #include "callback.h"
 #include "cpu.h"
 #include "dosbox.h"
-#include "inout.h"
-#include "math_utils.h"
-#include "pic.h"
 #include "hardware.h"
 #include "inout.h"
 #include "joystick.h"
+#include "math_utils.h"
 #include "mem.h"
 #include "mouse.h"
-#include "pci_bus.h"
 #include "pic.h"
 #include "regs.h"
 #include "serialport.h"
@@ -47,6 +44,8 @@
 // - Ralf Brown's Interrupt List
 // - https://www.stanislavs.org/helppc/idx_interrupt.html
 // - http://www2.ift.ulaval.ca/~marchand/ift17583/dosints.pdf
+
+void INT1AB1_Handler(); // PCI BIOS calls
 
 /* if mem_systems 0 then size_extended is reported as the real size else
  * zero is reported. ems and xms can increase or decrease the other_memsystems
@@ -369,125 +368,8 @@ static Bitu INT1A_Handler(void) {
 	case 0x85:	/* Tandy sound system reset */
 		TandyDAC_Handler(reg_ah);
 		break;
-	case 0xb1:		/* PCI Bios Calls */
-		LOG(LOG_BIOS,LOG_WARN)("INT1A:PCI bios call %2X",reg_al);
-#if defined(PCI_FUNCTIONALITY_ENABLED)
-		switch (reg_al) {
-		case 0x01: // installation check
-			if (PCI_IsInitialized()) {
-				reg_ah = 0x00;
-				reg_al = 0x01; // cfg space mechanism 1 supported
-				reg_bx = 0x0210; // ver 2.10
-				reg_cx = 0x0000; // only one PCI bus
-				reg_edx = 0x20494350;
-				reg_edi = PCI_GetPModeInterface();
-				CALLBACK_SCF(false);
-			} else {
-				CALLBACK_SCF(true);
-			}
-			break;
-		case 0x02: { // find device
-			Bitu devnr = 0;
-			Bitu count = 0x100;
-			uint32_t devicetag = (reg_cx << 16) | reg_dx;
-			Bits found = -1;
-			for (Bitu i = 0; i <= count; i++) {
-				IO_WriteD(0xcf8, 0x80000000 | (i << 8)); // query
-				                                         // unique
-				                                         // device/subdevice
-				                                         // entries
-				if (IO_ReadD(0xcfc) == devicetag) {
-					if (devnr == reg_si) {
-						found = i;
-						break;
-					} else {
-						// device found, but not the
-						// SIth device
-						devnr++;
-					}
-				}
-			}
-			if (found >= 0) {
-				reg_ah = 0x00;
-				reg_bh = 0x00; // bus 0
-				reg_bl = (uint8_t)(found & 0xff);
-				CALLBACK_SCF(false);
-			} else {
-				reg_ah = 0x86; // device not found
-				CALLBACK_SCF(true);
-			}
-				}
-				break;
-			case 0x03: {	// find device by class code
-				Bitu devnr=0;
-				Bitu count=0x100;
-				uint32_t classtag=reg_ecx&0xffffff;
-				Bits found=-1;
-				for (Bitu i=0; i<=count; i++) {
-					IO_WriteD(0xcf8,0x80000000|(i<<8));	// query unique device/subdevice entries
-					if (IO_ReadD(0xcfc)!=0xffffffff) {
-						IO_WriteD(0xcf8,0x80000000|(i<<8)|0x08);
-						if ((IO_ReadD(0xcfc)>>8)==classtag) {
-							if (devnr==reg_si) {
-								found=i;
-								break;
-							} else {
-								// device found, but not the SIth device
-								devnr++;
-							}
-						}
-					}
-				}
-				if (found>=0) {
-					reg_ah=0x00;
-					reg_bh=0x00;	// bus 0
-					reg_bl=(uint8_t)(found&0xff);
-					CALLBACK_SCF(false);
-				} else {
-					reg_ah=0x86;	// device not found
-					CALLBACK_SCF(true);
-				}
-				}
-				break;
-			case 0x08:	// read configuration byte
-				IO_WriteD(0xcf8,0x80000000|(reg_bx<<8)|(reg_di&0xfc));
-				reg_cl=IO_ReadB(0xcfc+(reg_di&3));
-				CALLBACK_SCF(false);
-				break;
-			case 0x09:	// read configuration word
-				IO_WriteD(0xcf8,0x80000000|(reg_bx<<8)|(reg_di&0xfc));
-				reg_cx=IO_ReadW(0xcfc+(reg_di&2));
-				CALLBACK_SCF(false);
-				break;
-			case 0x0a:	// read configuration dword
-				IO_WriteD(0xcf8,0x80000000|(reg_bx<<8)|(reg_di&0xfc));
-				reg_ecx=IO_ReadD(0xcfc+(reg_di&3));
-				CALLBACK_SCF(false);
-				break;
-			case 0x0b:	// write configuration byte
-				IO_WriteD(0xcf8,0x80000000|(reg_bx<<8)|(reg_di&0xfc));
-				IO_WriteB(0xcfc+(reg_di&3),reg_cl);
-				CALLBACK_SCF(false);
-				break;
-			case 0x0c:	// write configuration word
-				IO_WriteD(0xcf8,0x80000000|(reg_bx<<8)|(reg_di&0xfc));
-				IO_WriteW(0xcfc+(reg_di&2),reg_cx);
-				CALLBACK_SCF(false);
-				break;
-			case 0x0d:	// write configuration dword
-				IO_WriteD(0xcf8,0x80000000|(reg_bx<<8)|(reg_di&0xfc));
-				IO_WriteD(0xcfc+(reg_di&3),reg_ecx);
-				CALLBACK_SCF(false);
-				break;
-			default:
-				LOG(LOG_BIOS,LOG_ERROR)("INT1A:PCI BIOS: unknown function %x (%x %x %x)",
-					reg_ax,reg_bx,reg_cx,reg_dx);
-				CALLBACK_SCF(true);
-				break;
-		        }
-#else
-		CALLBACK_SCF(true);
-#endif
+	case 0xb1: // PCI_FUNCTION_ID - PCI BIOS calls
+		INT1AB1_Handler();
 		break;
 	default:
 		LOG(LOG_BIOS,LOG_ERROR)("INT1A:Undefined call %2X",reg_ah);
@@ -647,20 +529,21 @@ static Bitu INT14_Handler(void) {
 		//							AH: line status
 
 		// set baud rate
-		Bitu baudrate = 9600;
-		uint16_t baudresult;
-		Bitu rawbaud=reg_al>>5;
-		
-		if (rawbaud==0){ baudrate=110;}
-		else if (rawbaud==1){ baudrate=150;}
-		else if (rawbaud==2){ baudrate=300;}
-		else if (rawbaud==3){ baudrate=600;}
-		else if (rawbaud==4){ baudrate=1200;}
-		else if (rawbaud==5){ baudrate=2400;}
-		else if (rawbaud==6){ baudrate=4800;}
-		else if (rawbaud==7){ baudrate=9600;}
+		Bitu baudrate = {};
+		switch (reg_al >> 5) {
+		case 0: baudrate = 110; break;
+		case 1: baudrate = 150; break;
+		case 2: baudrate = 300; break;
+		case 3: baudrate = 600; break;
+		case 4: baudrate = 1200; break;
+		case 5: baudrate = 2400; break;
+		case 6: baudrate = 4800; break;
+		case 7: baudrate = 9600; break;
+		default: assert(false); return CBRET_NONE;
+		}
 
-		baudresult = (uint16_t)(115200 / baudrate);
+		const auto baudresult = static_cast<uint16_t>(
+		        SerialMaxBaudRate / baudrate);
 
 		IO_WriteB(port+3, 0x80);	// enable divider access
 		IO_WriteB(port, (uint8_t)baudresult&0xff);
@@ -1129,7 +1012,7 @@ static Bitu Reboot_Handler(void) {
 		reg_al = static_cast<uint8_t>(c);
 		CALLBACK_RunRealInt(0x10);
 	}
-	LOG_MSG(text);
+	LOG_MSG("BIOS: Reboot requested, quitting");
 	const auto start = PIC_FullIndex();
 	while ((PIC_FullIndex() - start) < 3000.0)
 		CALLBACK_Idle();
@@ -1149,6 +1032,106 @@ void BIOS_ZeroExtendedSize(bool in) {
 	if(other_memsystems < 0) other_memsystems=0;
 }
 
+static void shutdown_tandy_sb_dac_callbacks()
+{
+	// Abort DAC playing
+	if (tandy_sb.port) {
+		IO_Write(tandy_sb.port + 0xc, 0xd3);
+		IO_Write(tandy_sb.port + 0xc, 0xd0);
+	}
+	real_writeb(0x40, 0xd4, 0x00);
+	if (tandy_DAC_callback[0]) {
+		uint32_t orig_vector = real_readd(0x40, 0xd6);
+		if (orig_vector == tandy_DAC_callback[0]->Get_RealPointer()) {
+			// Set IRQ vector to old value
+			uint8_t tandy_irq = 7;
+			if (tandy_sb.port) {
+				tandy_irq = tandy_sb.irq;
+			} else if (tandy_dac.port) {
+				tandy_irq = tandy_dac.irq;
+			}
+			uint8_t tandy_irq_vector = tandy_irq;
+			if (tandy_irq_vector < 8) {
+				tandy_irq_vector += 8;
+			} else {
+				tandy_irq_vector += (0x70 - 8);
+			}
+
+			RealSetVec(tandy_irq_vector, real_readd(0x40, 0xd6));
+			real_writed(0x40, 0xd6, 0x00000000);
+		}
+		delete tandy_DAC_callback[0];
+		delete tandy_DAC_callback[1];
+		tandy_DAC_callback[0] = nullptr;
+		tandy_DAC_callback[1] = nullptr;
+	}
+	tandy_sb.port  = 0;
+	tandy_dac.port = 0;
+}
+
+void BIOS_SetupTandySbDacCallbacks()
+{
+	// Tandy DAC can be requested in tandy_sound.cpp by initializing this field
+	const bool use_tandy_dac = (real_readb(0x40, 0xd4) == 0xff);
+
+	shutdown_tandy_sb_dac_callbacks();
+
+	if (use_tandy_dac) {
+		// Tandy DAC sound requested, see if soundblaster device is available
+		Bitu tandy_dac_type = 0;
+		if (Tandy_InitializeSB()) {
+			tandy_dac_type = 1;
+		} else if (Tandy_InitializeTS()) {
+			tandy_dac_type = 2;
+		}
+		if (tandy_dac_type) {
+			real_writew(0x40, 0xd0, 0x0000);
+			real_writew(0x40, 0xd2, 0x0000);
+			real_writeb(0x40, 0xd4, 0xff); // Tandy DAC init value
+			real_writed(0x40, 0xd6, 0x00000000);
+			// Install the DAC callback handler
+			tandy_DAC_callback[0] = new CALLBACK_HandlerObject();
+			tandy_DAC_callback[1] = new CALLBACK_HandlerObject();
+			tandy_DAC_callback[0]->Install(&IRQ_TandyDAC,
+			                               CB_IRET,
+			                               "Tandy DAC IRQ");
+			tandy_DAC_callback[1]->Install(nullptr,
+			                               CB_TDE_IRET,
+			                               "Tandy DAC end transfer");
+			// pseudocode for CB_TDE_IRET:
+			//	push ax
+			//	mov ax, 0x91fb
+			//	int 15
+			//	cli
+			//	mov al, 0x20
+			//	out 0x20, al
+			//	pop ax
+			//	iret
+
+			uint8_t tandy_irq = 7;
+			if (tandy_dac_type == 1) {
+				tandy_irq = tandy_sb.irq;
+			} else if (tandy_dac_type == 2) {
+				tandy_irq = tandy_dac.irq;
+			}
+			uint8_t tandy_irq_vector = tandy_irq;
+			if (tandy_irq_vector < 8) {
+				tandy_irq_vector += 8;
+			} else {
+				tandy_irq_vector += (0x70 - 8);
+			}
+
+			RealPt current_irq = RealGetVec(tandy_irq_vector);
+			real_writed(0x40, 0xd6, current_irq);
+			for (auto i = 0; i < 0x10; i++) {
+				phys_writeb(PhysicalMake(0xf000, 0xa084 + i), 0x80);
+			}
+		} else {
+			real_writeb(0x40, 0xd4, 0x00);
+		}
+	}
+}
+
 void BIOS_SetupKeyboard(void);
 void BIOS_SetupDisks(void);
 
@@ -1156,10 +1139,8 @@ class BIOS final : public Module_base{
 private:
 	CALLBACK_HandlerObject callback[11];
 public:
-	BIOS(Section* configuration):Module_base(configuration){
-		/* tandy DAC can be requested in tandy_sound.cpp by initializing this field */
-		bool use_tandyDAC=(real_readb(0x40,0xd4)==0xff);
-
+	BIOS(Section* configuration) : Module_base(configuration)
+	{
 		/* Clear the Bios Data Area (0x400-0x5ff, 0x600- is accounted to DOS) */
 		for (uint16_t i=0;i<0x200;i++) real_writeb(0x40,i,0);
 
@@ -1304,51 +1285,8 @@ public:
 		const uint8_t machine_signature = (machine == MCH_TANDY) ? 0xff : 0x55;
 		phys_writeb(machine_signature_location, machine_signature);
 
-		tandy_sb.port=0;
-		tandy_dac.port=0;
-		if (use_tandyDAC) {
-			/* tandy DAC sound requested, see if soundblaster device is available */
-			Bitu tandy_dac_type = 0;
-			if (Tandy_InitializeSB()) {
-				tandy_dac_type = 1;
-			} else if (Tandy_InitializeTS()) {
-				tandy_dac_type = 2;
-			}
-			if (tandy_dac_type) {
-				real_writew(0x40,0xd0,0x0000);
-				real_writew(0x40,0xd2,0x0000);
-				real_writeb(0x40,0xd4,0xff);	/* tandy DAC init value */
-				real_writed(0x40,0xd6,0x00000000);
-				/* install the DAC callback handler */
-				tandy_DAC_callback[0]=new CALLBACK_HandlerObject();
-				tandy_DAC_callback[1]=new CALLBACK_HandlerObject();
-				tandy_DAC_callback[0]->Install(&IRQ_TandyDAC,CB_IRET,"Tandy DAC IRQ");
-				tandy_DAC_callback[1]->Install(nullptr,CB_TDE_IRET,"Tandy DAC end transfer");
-				// pseudocode for CB_TDE_IRET:
-				//	push ax
-				//	mov ax, 0x91fb
-				//	int 15
-				//	cli
-				//	mov al, 0x20
-				//	out 0x20, al
-				//	pop ax
-				//	iret
+		BIOS_SetupTandySbDacCallbacks();
 
-				uint8_t tandy_irq = 7;
-				if (tandy_dac_type==1) tandy_irq = tandy_sb.irq;
-				else if (tandy_dac_type==2) tandy_irq = tandy_dac.irq;
-				uint8_t tandy_irq_vector = tandy_irq;
-				if (tandy_irq_vector<8) tandy_irq_vector += 8;
-				else tandy_irq_vector += (0x70-8);
-
-				RealPt current_irq=RealGetVec(tandy_irq_vector);
-				real_writed(0x40,0xd6,current_irq);
-				for (i = 0; i < 0x10; i++)
-					phys_writeb(PhysicalMake(0xf000, 0xa084 + i),
-					            0x80);
-			} else real_writeb(0x40,0xd4,0x00);
-		}
-	
 		/* Setup some stuff in 0x40 bios segment */
 		
 		// port timeouts
@@ -1418,9 +1356,11 @@ public:
 			//Startup monochrome
 			config|=0x30;
 			break;
-		case EGAVGA_ARCH_CASE:
 		case MCH_CGA:
-		case TANDY_ARCH_CASE:
+		case MCH_PCJR:
+		case MCH_TANDY:
+		case MCH_EGA:
+		case MCH_VGA:
 			//Startup 80x25 color
 			config|=0x20;
 			break;
@@ -1444,31 +1384,7 @@ public:
 		BIOS_HostTimeSync();
 	}
 	~BIOS(){
-		/* abort DAC playing */
-		if (tandy_sb.port) {
-			IO_Write(tandy_sb.port+0xc,0xd3);
-			IO_Write(tandy_sb.port+0xc,0xd0);
-		}
-		real_writeb(0x40,0xd4,0x00);
-		if (tandy_DAC_callback[0]) {
-			uint32_t orig_vector=real_readd(0x40,0xd6);
-			if (orig_vector==tandy_DAC_callback[0]->Get_RealPointer()) {
-				/* set IRQ vector to old value */
-				uint8_t tandy_irq = 7;
-				if (tandy_sb.port) tandy_irq = tandy_sb.irq;
-				else if (tandy_dac.port) tandy_irq = tandy_dac.irq;
-				uint8_t tandy_irq_vector = tandy_irq;
-				if (tandy_irq_vector<8) tandy_irq_vector += 8;
-				else tandy_irq_vector += (0x70-8);
-
-				RealSetVec(tandy_irq_vector,real_readd(0x40,0xd6));
-				real_writed(0x40,0xd6,0x00000000);
-			}
-			delete tandy_DAC_callback[0];
-			delete tandy_DAC_callback[1];
-			tandy_DAC_callback[0]=nullptr;
-			tandy_DAC_callback[1]=nullptr;
-		}
+		shutdown_tandy_sb_dac_callbacks();
 	}
 };
 

@@ -1,4 +1,7 @@
 /*
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ *  Copyright (C) 2020-2023  The DOSBox Staging Team
  *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -15,8 +18,6 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
-
-
 
 #include "dosbox.h"
 
@@ -395,7 +396,7 @@ void DetermineMode_ET4K() {
 	// Close replica from the base implementation. It will stay here
 	// until I figure a way to either distinguish M_VGA and M_LIN8 or
 	// merge them.
-	if (vga.attr.mode_control & 1) {
+	if (vga.attr.mode_control.is_graphics_enabled) {
 		if (vga.gfx.mode & 0x40) VGA_SetMode((et4k.biosMode<=0x13)?M_VGA:M_LIN8); // Ugly...
 		else if (vga.gfx.mode & 0x20) VGA_SetMode(M_CGA4);
 		else if ((vga.gfx.miscellaneous & 0x0c)==0x0c) VGA_SetMode(M_CGA2);
@@ -763,7 +764,7 @@ void DetermineMode_ET3K() {
 	// Close replica from the base implementation. It will stay here
 	// until I figure a way to either distinguish M_VGA and M_LIN8 or
 	// merge them.
-	if (vga.attr.mode_control & 1) {
+	if (vga.attr.mode_control.is_graphics_enabled) {
 		if (vga.gfx.mode & 0x40) VGA_SetMode((et3k.biosMode<=0x13)?M_VGA:M_LIN8); // Ugly...
 		else if (vga.gfx.mode & 0x20) VGA_SetMode(M_CGA4);
 		else if ((vga.gfx.miscellaneous & 0x0c)==0x0c) VGA_SetMode(M_CGA2);

@@ -18,7 +18,9 @@
 
 #include <assert.h>
 #include <string.h>
+
 #include "cdrom.h"
+#include "channel_names.h"
 #include "support.h"
 
 #if defined(LINUX)
@@ -30,7 +32,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-constexpr auto MixerChannelNamePrefix = "CDAUDIO_";
 // ioctl cannot be read more than 75 redbook frames at a time (one second of audio)
 constexpr int InputBufferMaxRedbookFrames = 25;
 constexpr size_t PcmSamplesPerRedbookFrame = BYTES_PER_RAW_REDBOOK_FRAME / REDBOOK_BPS;
@@ -340,7 +341,7 @@ void CDROM_Interface_Ioctl::InitAudio(const int device_number)
 		return;
 	}
 
-	std::string name = std::string(MixerChannelNamePrefix) +
+	std::string name = std::string(ChannelName::CdAudio) + "_" +
 	                   std::to_string(device_number);
 
 	// Input buffer is used as a C-style buffer passed to an ioctl.
@@ -461,13 +462,14 @@ void CDROM_Interface_Ioctl::ChannelControl(TCtrl ctrl)
 
 	constexpr float MaxVolume = 255.0f;
 	// Adjust the volume of our mixer channel as defined by the application
-	mixer_channel->SetAppVolume(ctrl.vol[0] / MaxVolume, ctrl.vol[1] / MaxVolume);
+	mixer_channel->SetAppVolume(
+	        {ctrl.vol[0] / MaxVolume, ctrl.vol[1] / MaxVolume});
 
 	// Map the audio channels in our mixer channel as defined by the
 	// application
-	const auto left_mapped  = static_cast<LINE_INDEX>(ctrl.out[0]);
-	const auto right_mapped = static_cast<LINE_INDEX>(ctrl.out[1]);
-	mixer_channel->ChangeChannelMap(left_mapped, right_mapped);
+	const auto left_mapped  = static_cast<LineIndex>(ctrl.out[0]);
+	const auto right_mapped = static_cast<LineIndex>(ctrl.out[1]);
+	mixer_channel->SetChannelMap({left_mapped, right_mapped});
 #ifdef DEBUG_IOCTL
 	LOG_INFO("CDROM_IOCTL: ChannelControl => volumes %d/255 and %d/255, "
 	         "and left-right map %d, %d",

@@ -76,6 +76,8 @@
 #include <cmath>
 #include <climits>
 
+#include "mixer.h"
+
 #define LEFT    0x00
 #define RIGHT   0x01
 
@@ -169,10 +171,10 @@ constexpr uint8_t envelope[8][64] = {
 
 #define FILL_ARRAY( _FILL_ ) memset( _FILL_, 0, sizeof( _FILL_ ) )
 
-saa1099_device::saa1099_device(const machine_config &mconfig, const char *tag, device_t *owner,
+saa1099_device::saa1099_device(const char *tag, device_t *owner,
                                const uint32_t clock, const int rate_divisor)
-        : device_t(mconfig, SAA1099, tag, owner, clock),
-          device_sound_interface(mconfig, *this),
+        : device_t(tag, owner, clock),
+          device_sound_interface(),
           m_stream(nullptr),
           m_noise_freqs{2 * clock / 256.0, 2 * clock / 512.0, 2 * clock / 1024.0},
 
@@ -349,11 +351,13 @@ void saa1099_device::sound_stream_update([[maybe_unused]] sound_stream &stream,
 		}
 		/* write sound data to the buffer */
 		const auto left_sample = output_l / 6;
-		assert(left_sample >= INT16_MIN && left_sample <= INT16_MAX);
+		assert(left_sample >= Min16BitSampleValue &&
+		       left_sample <= Max16BitSampleValue);
 		outputs[LEFT][j] = static_cast<int16_t>(left_sample);
 
 		const auto right_sample = output_r / 6;
-		assert(right_sample >= INT16_MIN && right_sample <= INT16_MAX);
+		assert(right_sample >= Min16BitSampleValue &&
+		       right_sample <= Max16BitSampleValue);
 		outputs[RIGHT][j] = static_cast<int16_t>(right_sample);
 	}
 }

@@ -42,6 +42,7 @@ void INT10_SetSinglePaletteRegister(uint8_t reg, uint8_t val)
 		WriteTandyACTL(reg+0x10,val);
 		IO_Write(0x3da,0x0); // palette back on
 		break;
+
 	case MCH_TANDY:
 		// TODO waits for vertical retrace
 		switch(vga.mode) {
@@ -75,7 +76,9 @@ void INT10_SetSinglePaletteRegister(uint8_t reg, uint8_t val)
 		}
 		IO_Write(0x3da,0x0); // palette back on
 		break;
-	case EGAVGA_ARCH_CASE:
+
+	case MCH_EGA:
+	case MCH_VGA:
 		if (!IS_VGA_ARCH) reg&=0x1f;
 		if(reg<=ACTL_MAX_REG) {
 			ResetACTL();
@@ -84,36 +87,46 @@ void INT10_SetSinglePaletteRegister(uint8_t reg, uint8_t val)
 		}
 		IO_Write(VGAREG_ACTL_ADDRESS,32);		//Enable output and protect palette
 		break;
+
 	case MCH_HERC:
 	case MCH_CGA:
 		break;
+
+	default: assertm(false, "Invalid MachineType value");
 	}
 }
 
 void INT10_SetOverscanBorderColor(uint8_t val)
 {
 	switch (machine) {
-	case TANDY_ARCH_CASE:
+	case MCH_PCJR:
+	case MCH_TANDY:
 		IO_Read(VGAREG_TDY_RESET);
 		WriteTandyACTL(0x02,val);
 		IO_Write(VGAREG_TDY_ADDRESS, 0); // enable the screen
 		break;
-	case EGAVGA_ARCH_CASE:
+
+	case MCH_EGA:
+	case MCH_VGA:
 		ResetACTL();
 		IO_Write(VGAREG_ACTL_ADDRESS,0x11);
 		IO_Write(VGAREG_ACTL_WRITE_DATA,val);
 		IO_Write(VGAREG_ACTL_ADDRESS,32);		//Enable output and protect palette
 		break;
+
 	case MCH_HERC:
 	case MCH_CGA:
 		break;
+
+	default: assertm(false, "Invalid MachineType value");
 	}
 }
 
 void INT10_SetAllPaletteRegisters(PhysPt data)
 {
 	switch (machine) {
-	case TANDY_ARCH_CASE:
+	case MCH_PCJR:
+	case MCH_TANDY:
 		IO_Read(VGAREG_TDY_RESET);
 		// First the colors
 		for(uint8_t i=0;i<0x10;i++) {
@@ -123,7 +136,9 @@ void INT10_SetAllPaletteRegisters(PhysPt data)
 		// Then the border
 		WriteTandyACTL(0x02,mem_readb(data));
 		break;
-	case EGAVGA_ARCH_CASE:
+
+	case MCH_EGA:
+	case MCH_VGA:
 		ResetACTL();
 		// First the colors
 		for(uint8_t i=0;i<0x10;i++) {
@@ -136,9 +151,12 @@ void INT10_SetAllPaletteRegisters(PhysPt data)
 		IO_Write(VGAREG_ACTL_WRITE_DATA,mem_readb(data));
 		IO_Write(VGAREG_ACTL_ADDRESS,32);		//Enable output and protect palette
 		break;
+
 	case MCH_HERC:
 	case MCH_CGA:
 		break;
+
+	default: assertm(false, "Invalid MachineType value");
 	}
 }
 
@@ -327,6 +345,7 @@ void INT10_SetBackgroundBorder(uint8_t val)
 		// only write the color select register
 		IO_Write(0x3d9,color_select);
 		break;
+
 	case MCH_TANDY:
 		// TODO handle val == 0x1x, wait for retrace
 		switch(CurMode->mode) {
@@ -352,6 +371,7 @@ void INT10_SetBackgroundBorder(uint8_t val)
 			break;
 		}
 		break;
+
 	case MCH_PCJR:
 		IO_Read(VGAREG_TDY_RESET); // reset the flipflop
 		if (vga.mode!=M_TANDY_TEXT) {
@@ -361,7 +381,9 @@ void INT10_SetBackgroundBorder(uint8_t val)
 		IO_Write(VGAREG_TDY_ADDRESS, 0x2); // border color
 		IO_Write(VGAREG_PCJR_DATA, color_select&0xf);
 		break;
-	case EGAVGA_ARCH_CASE:
+
+	case MCH_EGA:
+	case MCH_VGA:
 		val = ((val << 1) & 0x10) | (val & 0x7);
 		/* Always set the overscan color */
 		INT10_SetSinglePaletteRegister( 0x11, val );
@@ -376,8 +398,11 @@ void INT10_SetBackgroundBorder(uint8_t val)
 		val+=2;
 		INT10_SetSinglePaletteRegister( 3, val );
 		break;
+
 	case MCH_HERC:
 		break;
+
+	default: assertm(false, "Invalid MachineType value");
 	}
 }
 

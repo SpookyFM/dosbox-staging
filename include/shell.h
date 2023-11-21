@@ -42,8 +42,8 @@ extern DOS_Shell* first_shell;
 
 class ByteReader {
 public:
-	virtual void Reset()               = 0;
-	virtual std::optional<char> Read() = 0;
+	virtual void Reset()                  = 0;
+	virtual std::optional<uint8_t> Read() = 0;
 
 	ByteReader()                             = default;
 	ByteReader(const ByteReader&)            = delete;
@@ -134,11 +134,13 @@ public:
 	void InputCommand(char* line);
 	void ShowPrompt();
 	void DoCommand(char* cmd);
-	bool Execute(std::string_view name, std::string_view args);
-	/* Checks if it matches a hardware-property */
-	bool CheckConfig(char* cmd_in, char* line);
-	/* Internal utilities for testing */
-	virtual bool execute_shell_cmd(char* name, char* arguments);
+
+	// Execute external shell command / program / configuration change
+	// 'virtual' needed for unit tests
+	virtual bool ExecuteShellCommand(const char* const name, char* arguments);
+	bool ExecuteProgram(std::string_view name, std::string_view args);
+	bool ExecuteConfigChange(const char* const cmd_in, const char* const line);
+
 	void ReadShellHistory();
 	void WriteShellHistory();
 
@@ -157,6 +159,7 @@ public:
 	void CMD_DELETE(char* args);
 	void CMD_ECHO(char* args);
 	void CMD_EXIT(char* args);
+	void CMD_FOR(char* args);
 	void CMD_MKDIR(char* args);
 	void CMD_CHDIR(char* args);
 	void CMD_RMDIR(char* args);
@@ -186,8 +189,10 @@ public:
 	bool call                     = false;
 };
 
-std::tuple<std::string, std::string, std::string> parse_drive_conf(
+std::tuple<std::string, std::string, std::string, bool> parse_drive_conf(
         std::string drive_letter, const std_fs::path& conf_path);
+
+std::string to_search_pattern(const char* arg);
 
 // Localized output
 

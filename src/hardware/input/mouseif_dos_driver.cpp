@@ -404,8 +404,8 @@ static void draw_cursor_text()
 		state.background.enabled = true;
 
 		// Write Cursor
-		result &= state.text_and_mask;
-		result ^= state.text_xor_mask;
+		result = result & state.text_and_mask;
+		result = result ^ state.text_xor_mask;
 
 		WriteChar(state.background.pos_x,
 		          state.background.pos_y,
@@ -554,7 +554,7 @@ static void draw_cursor()
 	INT10_SetCurMode();
 
 	// In Textmode ?
-	if (CurMode->type & M_TEXT_MODES) {
+	if (INT10_IsTextMode(*CurMode)) {
 		draw_cursor_text();
 		return;
 	}
@@ -850,7 +850,7 @@ void MOUSEDOS_NotifyMinRate(const uint16_t value_hz)
 
 void MOUSEDOS_BeforeNewVideoMode()
 {
-	if (CurMode->type & M_TEXT_MODES) {
+	if (INT10_IsTextMode(*CurMode)) {
 		restore_cursor_background_text();
 	} else {
 		restore_cursor_background();
@@ -863,16 +863,15 @@ void MOUSEDOS_BeforeNewVideoMode()
 
 void MOUSEDOS_AfterNewVideoMode(const bool is_mode_changing)
 {
+	constexpr uint8_t last_non_svga_mode = 0x13;
+
 	// Gather screen mode information
 
-	INT10_SetCurMode();
 	const uint8_t bios_screen_mode = mem_readb(BIOS_VIDEO_MODE);
-
-	constexpr uint8_t last_non_svga_mode = 0x13;
 
 	const bool is_svga_mode = IS_VGA_ARCH &&
 	                          (bios_screen_mode > last_non_svga_mode);
-	const bool is_svga_text = is_svga_mode && (CurMode->type & M_TEXT_MODES);
+	const bool is_svga_text = is_svga_mode && INT10_IsTextMode(*CurMode);
 
 	// Perform common actions - clear pending mouse events, etc.
 
@@ -1125,7 +1124,7 @@ static void move_cursor_seamless(const float x_rel, const float y_rel,
 
 	// TODO: this is probably overcomplicated, especially
 	// the usage of relative movement - to be investigated
-	if (CurMode->type & M_TEXT_MODES) {
+	if (INT10_IsTextMode(*CurMode)) {
 		pos_x = x * 8;
 		pos_x *= INT10_GetTextColumns();
 		pos_y = y * 8;
@@ -1178,24 +1177,27 @@ static uint8_t move_cursor()
 	const bool rel_changed = (old_mickey_x != state.mickey_counter_x) ||
 	                         (old_mickey_y != state.mickey_counter_y);
 
-	if (abs_changed || rel_changed)
+	if (abs_changed || rel_changed) {
 		return static_cast<uint8_t>(MouseEventId::MouseHasMoved);
-	else
+	} else {
 		return 0;
+	}
 }
 
 static uint8_t update_moved()
 {
-	if (mouse_config.dos_immediate)
+	if (mouse_config.dos_immediate) {
 		return static_cast<uint8_t>(MouseEventId::MouseHasMoved);
-	else
+	} else {
 		return move_cursor();
+	}
 }
 
 static uint8_t update_buttons(const MouseButtons12S new_buttons_12S)
 {
-	if (buttons._data == new_buttons_12S._data)
+	if (buttons._data == new_buttons_12S._data) {
 		return 0;
+	}
 
 	auto mark_pressed = [](const uint8_t idx) {
 		state.last_pressed_x[idx] = get_pos_x();
@@ -1355,7 +1357,7 @@ static Bitu int33_handler()
 		draw_cursor();
 		break;
 	case 0x02: // MS MOUSE v1.0+ - hide mouse cursor
-		if (CurMode->type & M_TEXT_MODES) {
+		if (INT10_IsTextMode(*CurMode)) {
 			restore_cursor_background_text();
 		} else {
 			restore_cursor_background();
@@ -1775,13 +1777,16 @@ static Bitu int33_handler()
 		SegSet16(es, info_segment);
 		reg_di = info_offset_version;
 		break;
-	case 0x70: // Mouse Systems - installation check
-	case 0x72: // Mouse Systems 7.01+, Genius Mouse 9.06+ - unknown
-	case 0x73: // Mouse Systems 7.01+ - get button assignments
-		LOG_WARNING("MOUSE (DOS): Mouse Sytems extensions not implemented");
-		break;
-	case 0x53C1: // Logitech CyberMan
-		LOG_WARNING("MOUSE (DOS): Logitech CyberMan function 0x53c1 not implemented");
+	case 0x70:   // Mouse Systems       - installation check
+	case 0x72:   // Mouse Systems 7.01+ - unknown functionality
+	             // Genius Mouse 9.06+  - unknown functionality
+	case 0x73:   // Mouse Systems 7.01+ - get button assignments
+	             // VBADOS              - get driver info
+	case 0x53c1: // Logitech CyberMan   - unknown functionality
+		// Do not print out any warnings for known 3rd party oem driver
+		// extensions - every software (except the one bound to the
+		// particular driver) should continue working correctly even if
+		// we completely ignore the call
 		break;
 	default:
 		LOG_WARNING("MOUSE (DOS): Function 0x%04x not implemented", reg_ax);
@@ -2006,8 +2011,7 @@ void MOUSEDOS_FinalizeInterrupt()
 	}
 }
 
-void MOUSEDOS_NotifyInputType(const bool new_use_relative,
-	                      const bool new_is_input_raw)
+void MOUSEDOS_NotifyInputType(const bool new_use_relative, const bool new_is_input_raw)
 {
 	use_relative = new_use_relative;
 	is_input_raw = new_is_input_raw;

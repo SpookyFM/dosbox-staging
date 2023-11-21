@@ -63,6 +63,20 @@ test(
     is_parallel: false,
 )
 
+program_mixer = executable(
+    'program_mixer',
+    ['program_mixer_tests.cpp'],
+    dependencies: [gmock_dep, dosbox_dep, libiir_dep],
+    include_directories: incdir,
+    cpp_args: cpp_args,
+)
+test(
+    'gtest program_mixer',
+    program_mixer,
+    workdir: project_source_root,
+    is_parallel: false,
+)
+
 # other unit tests
 
 unit_tests = [
@@ -77,6 +91,7 @@ unit_tests = [
     {'name': 'int10_modes', 'deps': [dosbox_dep], 'extra_cpp': []},
     {'name': 'iohandler_containers', 'deps': [libmisc_stubs_dep]},
     {'name': 'math_utils', 'deps': [libmisc_stubs_dep]},
+    {'name': 'mixer', 'deps': [dosbox_dep, libiir_dep], 'extra_cpp': []},
     {'name': 'rgb', 'deps': []},
     {'name': 'rwqueue', 'deps': [libmisc_stubs_dep]},
     {'name': 'semaphore', 'deps': [libmisc_stubs_dep]},

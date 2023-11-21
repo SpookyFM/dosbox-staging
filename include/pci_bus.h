@@ -24,11 +24,15 @@
 
 #include "mem.h"
 
-#if C_VOODOO
-#define PCI_FUNCTIONALITY_ENABLED 1
-#endif
-
-#if defined PCI_FUNCTIONALITY_ENABLED
+// Start of PCI address space
+constexpr uint32_t PciMemoryBase     = 0xc000'0000; // gives 3072 MB max RAM
+// Graphics card
+constexpr uint32_t PciGfxLfbBase     = 0xc000'0000;
+constexpr uint32_t PciGfxLfbLimit    = 0xc100'0000; // 16 MB max
+constexpr uint32_t PciGfxMmioBase    = 0xc100'0000;
+// 3dfx Voodoo 3D accelerator
+constexpr uint32_t PciVoodooLfbBase  = 0xd000'0000;
+constexpr uint32_t PciVoodooLfbLimit = 0xd100'0000; // 16 MB max
 
 #define PCI_MAX_PCIDEVICES   10
 #define PCI_MAX_PCIFUNCTIONS 8
@@ -113,8 +117,8 @@ RealPt PCI_GetPModeInterface();
 
 void PCI_AddDevice(PCI_Device* dev);
 
-uint8_t PCI_GetCFGData(Bits pci_id, Bits pci_subfunction, uint8_t regnum);
+void PCI_RemoveDevice(uint16_t vendor_id, uint16_t device_id);
 
-#endif
+uint8_t PCI_GetCFGData(Bits pci_id, Bits pci_subfunction, uint8_t regnum);
 
 #endif

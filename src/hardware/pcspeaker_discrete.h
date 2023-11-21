@@ -23,6 +23,7 @@
 #include <queue>
 #include <string>
 
+#include "channel_names.h"
 #include "mixer.h"
 #include "pic.h"
 #include "setup.h"
@@ -38,7 +39,7 @@ public:
 	bool TryParseAndSetCustomFilter(const std::string_view filter_choice) final;
 	void SetCounter(const int cntr, const PitMode m) final;
 	void SetPITControl(const PitMode) final {}
-	void SetType(const PpiPortB &b) final;
+	void SetType(const PpiPortB& b) final;
 
 private:
 	void ChannelCallback(const uint16_t len);
@@ -49,18 +50,18 @@ private:
 	float NeutralLastPitOr(const float fallback) const;
 
 	// Constants
-	static constexpr char device_name[] = "PCSPEAKER";
-	static constexpr char model_name[]  = "discrete";
+	static constexpr auto device_name = ChannelName::PcSpeaker;
+	static constexpr auto model_name  = "discrete";
 
-	// The discrete PWM scalar was manually adjusted to roughly match voltage
-	// levels recorded from a hardware PC Speaker 
+	// The discrete PWM scalar was manually adjusted to roughly match
+	// voltage levels recorded from a hardware PC Speaker
 	// Ref:https://github.com/dosbox-staging/dosbox-staging/files/9494469/3.audio.samples.zip
 	static constexpr float pwm_scalar = 0.75f;
 	static constexpr float sqw_scalar = pwm_scalar / 2.0f;
 
 	// Amplitude constants
-	static constexpr float amp_positive = MAX_AUDIO * pwm_scalar;
-	static constexpr float amp_negative = MIN_AUDIO * pwm_scalar;
+	static constexpr float amp_positive = Max16BitSampleValue * pwm_scalar;
+	static constexpr float amp_negative = Min16BitSampleValue * pwm_scalar;
 	static constexpr float amp_neutral = (amp_positive + amp_negative) / 2.0f;
 
 	struct DelayEntry {

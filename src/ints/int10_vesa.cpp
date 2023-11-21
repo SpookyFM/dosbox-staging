@@ -23,11 +23,12 @@
 #include <stddef.h>
 
 #include "callback.h"
-#include "regs.h"
+#include "dos_inc.h"
+#include "inout.h"
 #include "math_utils.h"
 #include "mem.h"
-#include "inout.h"
-#include "dos_inc.h"
+#include "pci_bus.h"
+#include "regs.h"
 #include "string_utils.h"
 
 #define VESA_SUCCESS          0x00
@@ -44,10 +45,10 @@ static struct {
 	callback_number_t pmPalette = 0;
 } callback;
 
-static char string_oem[]="S3 Incorporated. Trio64";
-static char string_vendorname[]="DOSBox Development Team";
-static char string_productname[]="DOSBox - The DOS Emulator";
-static char string_productrev[]="DOSBox " VERSION;
+static const std::string string_oem         = "S3 Incorporated. Trio64";
+static const std::string string_vendorname  = DOSBOX_TEAM;
+static const std::string string_productname = DOSBOX_NAME;
+static const std::string string_productrev  = VERSION;
 
 #ifdef _MSC_VER
 #pragma pack (1)
@@ -91,41 +92,84 @@ struct MODE_INFO{
 #pragma pack()
 #endif
 
+uint8_t VESA_GetSVGAInformation(const uint16_t segment, const uint16_t offset)
+{
+	// Fill buffer with VESA information
+	PhysPt buffer = PhysicalMake(segment, offset);
+	const auto id = mem_readd(buffer);
 
+	const auto vbe2 = (((id == 0x56424532) || (id == 0x32454256)) &&
+	                   !int10.vesa_oldvbe);
 
-uint8_t VESA_GetSVGAInformation(uint16_t seg,uint16_t off) {
-	/* Fill 256 byte buffer with VESA information */
-	PhysPt buffer=PhysicalMake(seg,off);
-	Bitu i;
-	bool vbe2=false;uint16_t vbe2_pos=256+off;
-	Bitu id=mem_readd(buffer);
-	if (((id==0x56424532)||(id==0x32454256)) && (!int10.vesa_oldvbe)) vbe2=true;
-	if (vbe2) {
-		for (i=0;i<0x200;i++) mem_writeb(buffer+i,0);		
-	} else {
-		for (i=0;i<0x100;i++) mem_writeb(buffer+i,0);
+	const auto vbe_bufsize = vbe2 ? 0x200 : 0x100;
+	for (auto i = 0; i < vbe_bufsize; i++) {
+		mem_writeb(buffer + i, 0);
 	}
-	/* Fill common data */
-	MEM_BlockWrite(buffer,(void *)"VESA",4);				//Identification
-	if (!int10.vesa_oldvbe) mem_writew(buffer+0x04,0x200);	//Vesa version 2.0
-	else mem_writew(buffer+0x04,0x102);						//Vesa version 1.2
+
+	// Identification
+	auto vesa_string = "VESA";
+	MEM_BlockWrite(buffer, static_cast<const void*>(vesa_string), 4);
+
+	// VESA version
+	constexpr auto vesa_v1_2 = 0x0102;
+	constexpr auto vesa_v2_0 = 0x0200;
+
+	const auto vesa_version  = int10.vesa_oldvbe ? vesa_v1_2 : vesa_v2_0;
+	mem_writew(buffer + 0x04, vesa_version);
+
 	if (vbe2) {
-		mem_writed(buffer+0x06,RealMake(seg,vbe2_pos));
-		for (i=0;i<sizeof(string_oem);i++) real_writeb(seg,vbe2_pos++,string_oem[i]);
-		mem_writew(buffer+0x14,0x200);					//VBE 2 software revision
-		mem_writed(buffer+0x16,RealMake(seg,vbe2_pos));
-		for (i=0;i<sizeof(string_vendorname);i++) real_writeb(seg,vbe2_pos++,string_vendorname[i]);
-		mem_writed(buffer+0x1a,RealMake(seg,vbe2_pos));
-		for (i=0;i<sizeof(string_productname);i++) real_writeb(seg,vbe2_pos++,string_productname[i]);
-		mem_writed(buffer+0x1e,RealMake(seg,vbe2_pos));
-		for (i=0;i<sizeof(string_productrev);i++) real_writeb(seg,vbe2_pos++,string_productrev[i]);
+		uint16_t vbe2_pos = 256 + offset;
+
+		auto write_string = [&](const std::string& str, uint16_t& pos) {
+			for (const char& c : str) {
+				real_writeb(segment, pos++, c);
+			}
+			real_writeb(segment, pos++, 0);
+		};
+
+		// OEM string
+		mem_writed(buffer + 0x06, RealMake(segment, vbe2_pos));
+		write_string(string_oem, vbe2_pos);
+
+		// VBE 2 software revision
+		mem_writew(buffer + 0x14, 0x200);
+
+		// Vendor name
+		mem_writed(buffer + 0x16, RealMake(segment, vbe2_pos));
+		write_string(string_vendorname, vbe2_pos);
+
+		// Product name
+		mem_writed(buffer + 0x1a, RealMake(segment, vbe2_pos));
+		write_string(string_productname, vbe2_pos);
+
+		// Product revision
+		mem_writed(buffer + 0x1e, RealMake(segment, vbe2_pos));
+		write_string(string_productrev, vbe2_pos);
 	} else {
-		mem_writed(buffer+0x06,int10.rom.oemstring);	//Oemstring
+		// OEM string
+		mem_writed(buffer + 0x06, int10.rom.oemstring);
 	}
-	mem_writed(buffer+0x0a,0x0);					//Capabilities and flags
-	mem_writed(buffer+0x0e,int10.rom.vesa_modes);	//VESA Mode list
-	mem_writew(buffer+0x12,(uint16_t)(vga.vmemsize/(64*1024))); // memory size in 64kb blocks
+
+	// Capabilities and flags
+	mem_writed(buffer + 0x0a, 0x0);
+
+	// VESA mode list
+	mem_writed(buffer + 0x0e, int10.rom.vesa_modes);
+
+	// Memory size in 64KB blocks
+	mem_writew(buffer + 0x12, (uint16_t)(vga.vmemsize / (64 * 1024)));
+
 	return VESA_SUCCESS;
+}
+
+// Ref: https://android.googlesource.com/kernel/msm/+/android-msm-bullhead-3.10-marshmallow-dr/Documentation/svga.txt
+//
+// "2.7 (09-Apr-96) Accepted all VESA modes in range 0x100 to 0x7ff, because some
+// cards use very strange mode numbers.'
+bool VESA_IsVesaMode(const uint16_t bios_mode_number)
+{
+	return (bios_mode_number >= MinVesaBiosModeNumber &&
+	        bios_mode_number <= MaxVesaBiosModeNumber);
 }
 
 // Build-engine games have problem timing some non-standard,
@@ -157,7 +201,9 @@ uint8_t VESA_GetSVGAModeInformation(uint16_t mode,uint16_t seg,uint16_t off) {
 	uint8_t modeAttributes;
 
 	mode&=0x3fff;	// vbe2 compatible, ignore lfb and keep screen content bits
-	if (mode<0x100) return 0x01;
+	if (mode < MinVesaBiosModeNumber) {
+		return 0x01;
+	}
 	if (svga.accepts_mode) {
 		if (!svga.accepts_mode(mode)) return 0x01;
 	}
@@ -329,7 +375,7 @@ uint8_t VESA_GetSVGAModeInformation(uint16_t mode,uint16_t seg,uint16_t off) {
 	minfo.XCharSize = mblock.cwidth;
 	minfo.YCharSize = mblock.cheight;
 	if (!int10.vesa_nolfb)
-		minfo.PhysBasePtr = host_to_le32(S3_LFB_BASE);
+		minfo.PhysBasePtr = host_to_le32(PciGfxLfbBase);
 
 	MEM_BlockWrite(buf,&minfo,sizeof(MODE_INFO));
 	return VESA_SUCCESS;
@@ -418,7 +464,7 @@ uint8_t VESA_ScanLineLength(uint8_t subcall,
 	auto new_offset = static_cast<int>(vga.config.scan_len);
 	auto screen_height = CurMode->sheight;
 	auto usable_vmem_bytes = vga.vmemsize;
-	uint8_t bits_per_pixel = 8;
+	uint8_t bits_per_pixel = 0;
 	uint8_t bytes_per_offset = 8;
 	bool align_to_nearest_4th_pixel = false;
 
@@ -653,7 +699,7 @@ void INT10_SetupVESA(void) {
 		else {
 			if (svga.accepts_mode(ModeList_VGA[i].mode)) canuse_mode=true;
 		}
-		if (ModeList_VGA[i].mode>=0x100 && canuse_mode) {
+		if (ModeList_VGA[i].mode >= MinVesaBiosModeNumber && canuse_mode) {
 			if (!int10.vesa_oldvbe || ModeList_VGA[i].mode < 0x120) {
 				phys_writew(PhysicalMake(0xc000, int10.rom.used), ModeList_VGA[i].mode);
 				int10.rom.used += 2;
@@ -663,11 +709,13 @@ void INT10_SetupVESA(void) {
 	}
 	phys_writew(PhysicalMake(0xc000,int10.rom.used),0xffff);
 	int10.rom.used+=2;
-	int10.rom.oemstring=RealMake(0xc000,int10.rom.used);
-	const auto len = safe_strlen(string_oem) + 1;
-	for (i=0;i<len;i++) {
-		phys_writeb(0xc0000+int10.rom.used++,string_oem[i]);
+
+	int10.rom.oemstring = RealMake(0xc000, int10.rom.used);
+	for (const char& c : string_oem) {
+		phys_writeb(0xc0000 + int10.rom.used++, c);
 	}
+	phys_writeb(0xc0000 + int10.rom.used++, 0);
+
 	/* Prepare the real mode interface */
 	int10.rom.wait_retrace=RealMake(0xc000,int10.rom.used);
 	int10.rom.used += (uint16_t)CALLBACK_Setup(0, nullptr, CB_VESA_WAIT, PhysicalMake(0xc000,int10.rom.used), "");

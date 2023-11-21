@@ -30,12 +30,13 @@
 
 #include <SDL.h>
 
-#include "ansi_code_markup.h"
 #include "../capture/capture.h"
+#include "ansi_code_markup.h"
 #include "control.h"
 #include "cross.h"
 #include "mapper.h"
 #include "midi_handler.h"
+#include "mpu401.h"
 #include "pic.h"
 #include "programs.h"
 #include "setup.h"
@@ -76,8 +77,8 @@ uint8_t MIDI_message_len_by_status[256] = {
 #include "midi_mt32.h"
 
 #if defined(MACOSX)
-#	include "midi_coremidi.h"
-#	include "midi_coreaudio.h"
+#include "midi_coreaudio.h"
+#include "midi_coremidi.h"
 
 #elif defined(WIN32)
 #include "midi_win32.h"
@@ -98,7 +99,7 @@ static void deregister_handlers()
 static void register_handlers()
 {
 	deregister_handlers();
-	
+
 #if C_FLUIDSYNTH
 	handlers.emplace_back(std::make_unique<MidiHandlerFluidsynth>());
 #endif
@@ -131,7 +132,6 @@ MidiHandler* get_handler(const std::string_view name)
 	}
 	return nullptr;
 }
-
 
 struct Midi {
 	uint8_t status = 0;
@@ -470,8 +470,9 @@ void MIDI_RawOutByte(uint8_t data)
 			midi_state.UpdateState(midi.message.msg);
 
 			// 2. Sanitise the MIDI stream unless raw output is
-			// enabled. Currently, this can result in the emission of extra
-			// MIDI Note Off events only, and updating the MIDI state.
+			// enabled. Currently, this can result in the emission
+			// of extra MIDI Note Off events only, and updating the
+			// MIDI state.
 			//
 			// `sanitise_midi_stream` also captures these extra
 			// events if MIDI capture is enabled and sends them to
@@ -594,7 +595,7 @@ public:
 	{
 		Section_prop* section = static_cast<Section_prop*>(configuration);
 
-		const std::string_view device_choice = section->Get_string("mididevice");
+		const std::string device_choice = section->Get_string("mididevice");
 
 		midi = Midi{};
 
@@ -673,9 +674,10 @@ void MIDI_ListAll(Program* caller)
 	constexpr auto msg_indent = "  ";
 
 	for (const auto& handler : handlers) {
-		std::string name_format = msg_indent;
-		name_format.append(convert_ansi_markup("[color=white]%s:[reset]\n"));
-		caller->WriteOut(name_format.c_str(), handler->GetName().data());
+		const auto device_name = convert_ansi_markup(
+		        "[color=white]%s:[reset]\n");
+
+		caller->WriteOut(device_name.c_str(), handler->GetName().data());
 
 		const auto err = handler->ListAll(caller);
 		if (err == MIDI_RC::ERR_DEVICE_NOT_CONFIGURED) {
@@ -695,8 +697,8 @@ void MIDI_ListAll(Program* caller)
 
 static void register_midi_text_messages()
 {
-	MSG_Add("MIDI_DEVICE_LIST_NOT_SUPPORTED", "listing not supported");
-	MSG_Add("MIDI_DEVICE_NOT_CONFIGURED", "device not configured");
+	MSG_Add("MIDI_DEVICE_LIST_NOT_SUPPORTED", "Listing not supported");
+	MSG_Add("MIDI_DEVICE_NOT_CONFIGURED", "Device not configured");
 }
 
 static MIDI* test;
@@ -726,12 +728,12 @@ void init_midi_dosbox_settings(Section_prop& secprop)
 	const char* midi_devices[] =
 	{ "auto",
 #if defined(MACOSX)
-#	if C_COREMIDI
+#if C_COREMIDI
 	  "coremidi",
-#	endif
-#	if C_COREAUDIO
+#endif
+#if C_COREAUDIO
 	  "coreaudio",
-#	endif
+#endif
 #elif defined(WIN32)
 	  "win32",
 #else
@@ -754,13 +756,13 @@ void init_midi_dosbox_settings(Section_prop& secprop)
 	        "Set where MIDI data from the emulated MPU-401 MIDI interface is sent\n"
 	        "('auto' by default):\n"
 #if defined(MACOSX)
-#	if C_COREMIDI
+#if C_COREMIDI
 	        "  coremidi:    Any device that has been configured in the macOS\n"
 	        "               Audio MIDI Setup.\n"
-#	endif
-#	if C_COREAUDIO
+#endif
+#if C_COREAUDIO
 	        "  coreaudio:   Use the built-in macOS MIDI synthesiser.\n"
-#	endif
+#endif
 #elif defined(WIN32)
 	        "  win32:       Use the Win32 MIDI playback interface.\n"
 #else
@@ -789,21 +791,21 @@ void init_midi_dosbox_settings(Section_prop& secprop)
 	        "This is usually the ID or name of the MIDI synthesizer you want\n"
 	        "to use (find the ID/name with the DOS command 'MIXER /LISTMIDI').\n"
 #if (C_FLUIDSYNTH == 1 || C_MT32EMU == 1)
-	        "Notes: - This option has no effect when using the built-in synthesizers\n"
-	        "         ('mididevice = fluidsynth' or 'mididevice = mt32').\n"
+	        "Notes:\n"
+	        "  - This option has no effect when using the built-in synthesizers\n"
+	        "    ('mididevice = fluidsynth' or 'mididevice = mt32').\n"
 #endif
 #if C_COREAUDIO
-	        "       - When using 'coreaudio', you can specify a SoundFont here.\n"
+	        "  - When using 'coreaudio', you can specify a SoundFont here.\n"
 #endif
 #if C_ALSA
-	        "       - When using ALSA, use the Linux command 'aconnect -l' to list all open\n"
-	        "         MIDI ports and select one (e.g. 'midiconfig = 14:0' for sequencer\n"
-	        "         client 14, port 0).\n"
+	        "  - When using ALSA, use the Linux command 'aconnect -l' to list all open\n"
+	        "    MIDI ports and select one (e.g. 'midiconfig = 14:0' for sequencer\n"
+	        "    client 14, port 0).\n"
 #endif
-	        "       - If you're using a physical Roland MT-32 with revision 0 PCB, the\n"
-	        "         hardware may require a delay in order to prevent its buffer from\n"
-	        "         overflowing. In that case, add 'delaysysex', e.g:\n"
-	        "         'midiconfig = 2 delaysysex'.");
+	        "  - If you're using a physical Roland MT-32 with revision 0 PCB, the hardware\n"
+	        "    may require a delay in order to prevent its buffer from overflowing.\n"
+	        "    In that case, add 'delaysysex' (e.g. 'midiconfig = 2 delaysysex').");
 
 	str_prop = secprop.Add_string("mpu401", when_idle, "intelligent");
 	const char* mputypes[] = {"intelligent", "uart", "none", nullptr};
@@ -823,8 +825,6 @@ void init_midi_dosbox_settings(Section_prop& secprop)
 	        "the raw, unaltered MIDI output of a program, e.g. when working with music\n"
 	        "applications, or when debugging MIDI issues.");
 }
-
-void MPU401_Init(Section*);
 
 void MIDI_AddConfigSection(const config_ptr_t& conf)
 {

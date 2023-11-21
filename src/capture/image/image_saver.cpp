@@ -68,16 +68,15 @@ void ImageSaver::Close()
 }
 
 void ImageSaver::QueueImage(const RenderedImage& image, const CapturedImageType type,
-                            const std::optional<std_fs::path>& path,
-                            const std::optional<ImageInfo>& source_image_info_override)
+                            const std::optional<std_fs::path>& path)
 {
 	if (!image_fifo.IsRunning()) {
-		LOG_WARNING("CAPTURE: Cannot create screenshots while image capturer"
+		LOG_WARNING("CAPTURE: Cannot capture image while image capturer "
 		            "is shutting down");
 		return;
 	}
 
-	SaveImageTask task = {image, type, path, source_image_info_override};
+	SaveImageTask task = {image, type, path};
 	image_fifo.Enqueue(std::move(task));
 }
 
@@ -111,33 +110,33 @@ void ImageSaver::SaveImage(const SaveImageTask& task)
 	switch (task.image_type) {
 	case CapturedImageType::Raw: SaveRawImage(task.image); break;
 	case CapturedImageType::Upscaled: SaveUpscaledImage(task.image); break;
-	case CapturedImageType::Rendered:
-		assertm(task.source_image_info_override,
-		        "source_image_info_override must be provided for rendered images");
-		if (task.source_image_info_override) {
-			SaveRenderedImage(task.image,
-			                  *task.source_image_info_override);
-		}
-		break;
+	case CapturedImageType::Rendered: SaveRenderedImage(task.image); break;
 	}
 
 	CloseOutFile();
 }
 
 static void write_upscaled_png(FILE* outfile, PngWriter& png_writer,
-                               ImageScaler& image_scaler, const ImageInfo& image_info,
-                               const std::optional<ImageInfo>& source_image_info,
+                               ImageScaler& image_scaler, const uint16_t width,
+                               const uint16_t height,
+                               const Fraction& pixel_aspect_ratio,
+                               const VideoMode& video_mode,
                                const uint8_t* palette_data)
 {
 	switch (image_scaler.GetOutputPixelFormat()) {
-	case PixelFormat::Indexed8:
-		if (!png_writer.InitIndexed8(
-		            outfile, image_info, source_image_info, palette_data)) {
+	case OutputPixelFormat::Indexed8:
+		if (!png_writer.InitIndexed8(outfile,
+		                             width,
+		                             height,
+		                             pixel_aspect_ratio,
+		                             video_mode,
+		                             palette_data)) {
 			return;
 		}
 		break;
-	case PixelFormat::Rgb888:
-		if (!png_writer.InitRgb888(outfile, image_info, source_image_info)) {
+	case OutputPixelFormat::Rgb888:
+		if (!png_writer.InitRgb888(
+		            outfile, width, height, pixel_aspect_ratio, video_mode)) {
 			return;
 		}
 		break;
@@ -150,72 +149,124 @@ static void write_upscaled_png(FILE* outfile, PngWriter& png_writer,
 	}
 }
 
+// to avoid circular dependency
+uint8_t get_double_scan_row_skip_count(const RenderedImage&);
+
 void ImageSaver::SaveRawImage(const RenderedImage& image)
 {
 	PngWriter png_writer = {};
 
-	image_scaler.Init(image, ScalingMode::DoublingOnly);
+	auto row_skip_count = get_double_scan_row_skip_count(image);
+	image_decoder.Init(image, row_skip_count);
 
-	const ImageInfo image_info = {image_scaler.GetOutputWidth(),
-	                              image_scaler.GetOutputHeight(),
-	                              image.pixel_aspect_ratio};
+	const auto& src = image.params;
 
-	constexpr std::optional<ImageInfo> no_source_image_info = {};
+	const auto raw_image_height = src.video_mode.height;
 
-	write_upscaled_png(outfile,
-	                   png_writer,
-	                   image_scaler,
-	                   image_info,
-	                   no_source_image_info,
-	                   image.palette_data);
+	// Write the pixel aspect ratio of the video mode into the PNG pHYs
+	// chunk for raw images
+	const auto pixel_aspect_ratio = src.video_mode.pixel_aspect_ratio;
+
+	if (image.is_paletted()) {
+		if (!png_writer.InitIndexed8(outfile,
+		                             src.width,
+		                             raw_image_height,
+		                             pixel_aspect_ratio,
+		                             src.video_mode,
+		                             image.palette_data)) {
+			return;
+		};
+	} else {
+		if (!png_writer.InitRgb888(outfile,
+		                           src.width,
+		                           raw_image_height,
+		                           pixel_aspect_ratio,
+		                           src.video_mode)) {
+			return;
+		};
+	}
+
+	constexpr uint8_t MaxBytesPerPixel = 3;
+	row_buf.resize(static_cast<size_t>(src.width) *
+	               static_cast<size_t>(MaxBytesPerPixel));
+
+	auto rows_to_write = raw_image_height;
+	while (rows_to_write--) {
+		auto out = row_buf.begin();
+
+		auto pixels_to_write = src.width;
+		if (image.is_paletted()) {
+			while (pixels_to_write--) {
+				const auto pixel = image_decoder.GetNextIndexed8Pixel();
+
+				*out++ = pixel;
+			}
+		} else {
+			while (pixels_to_write--) {
+				const auto pixel = image_decoder.GetNextPixelAsRgb888();
+
+				*out++ = pixel.red;
+				*out++ = pixel.green;
+				*out++ = pixel.blue;
+			}
+		}
+		png_writer.WriteRow(row_buf.begin());
+		image_decoder.AdvanceRow();
+	}
 }
+
+static constexpr auto square_pixel_aspect_ratio = Fraction{1};
 
 void ImageSaver::SaveUpscaledImage(const RenderedImage& image)
 {
 	PngWriter png_writer = {};
 
-	image_scaler.Init(image, ScalingMode::AspectRatioPreservingUpscale);
+	image_scaler.Init(image);
 
-	const auto square_pixel_aspect_ratio = Fraction{1};
-
-	const ImageInfo image_info = {image_scaler.GetOutputWidth(),
-	                              image_scaler.GetOutputHeight(),
-	                              square_pixel_aspect_ratio};
-
-	const ImageInfo source_image_info = {image.width,
-	                                     image.height,
-	                                     image.pixel_aspect_ratio};
+	// Always write 1:1 pixel aspect ratio into the PNG pHYs chunk for
+	// upscaled images as the "non-squaredness" is "baked into" the image
+	// data.
 	write_upscaled_png(outfile,
 	                   png_writer,
 	                   image_scaler,
-	                   image_info,
-	                   source_image_info,
+	                   image_scaler.GetOutputWidth(),
+	                   image_scaler.GetOutputHeight(),
+	                   square_pixel_aspect_ratio,
+	                   image.params.video_mode,
 	                   image.palette_data);
 }
 
-void ImageSaver::SaveRenderedImage(const RenderedImage& image,
-                                   const ImageInfo& source_image_info)
+void ImageSaver::SaveRenderedImage(const RenderedImage& image)
 {
 	PngWriter png_writer = {};
 
-	const ImageInfo image_info = {image.width, image.height, image.pixel_aspect_ratio};
+	const auto& src = image.params;
 
-	if (!png_writer.InitRgb888(outfile, image_info, source_image_info)) {
+	// Always write 1:1 pixel aspect ratio into the PNG pHYs chunk for
+	// rendered images as the "non-squaredness" is "baked into" the image
+	// data.
+	if (!png_writer.InitRgb888(outfile,
+	                           src.width,
+	                           src.height,
+	                           square_pixel_aspect_ratio,
+	                           src.video_mode)) {
 		return;
 	};
 
-	image_decoder.Init(image);
+	const auto row_skip_count = 0;
+	image_decoder.Init(image, row_skip_count);
 
 	constexpr uint8_t BytesPerPixel = 3;
-	row_buf.resize(static_cast<size_t>(image.width) *
+	row_buf.resize(static_cast<size_t>(src.width) *
 	               static_cast<size_t>(BytesPerPixel));
 
-	auto rows_to_write = image.height;
+	auto rows_to_write = src.height;
 	while (rows_to_write--) {
 		auto out = row_buf.begin();
 
-		for (auto x = 0; x < image.width; ++x) {
-			const auto pixel = image_decoder.GetNextRgb888Pixel();
+		auto pixels_to_write = src.width;
+		while (pixels_to_write--) {
+			const auto pixel = image_decoder.GetNextPixelAsRgb888();
 
 			*out++ = pixel.red;
 			*out++ = pixel.green;

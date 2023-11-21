@@ -84,8 +84,12 @@ void DOS_Shell::InputCommand(char* line)
 
 	const auto* const dos_section = dynamic_cast<Section_prop*>(
 	        control->GetSection("dos"));
-	assert(dos_section != nullptr);
-	const std::string_view expand_shell_variable_pref = dos_section->Get_string(
+	if (dos_section == nullptr) {
+		assert(false);
+		return;
+	}
+
+	const std::string expand_shell_variable_pref = dos_section->Get_string(
 	        "expand_shell_variable");
 
 	const auto expand_shell_pref_has_bool = parse_bool_setting(
@@ -307,7 +311,7 @@ static std::vector<std::string> get_completions(const std::string_view command)
 	dos.dta(dos.tables.tempdta);
 	const auto dta = DOS_DTA(dos.dta());
 
-	bool res = DOS_FindFirst(search.c_str(), ~DOS_ATTR_VOLUME);
+	bool res = DOS_FindFirst(search.c_str(), FatAttributeFlags::NotVolume);
 
 	std::vector<std::string> files           = {};
 	std::vector<std::string> non_executables = {};
@@ -440,7 +444,7 @@ void CommandPrompt::SetCursor(const std::string::size_type index)
 	                   position_zero.page);
 }
 
-bool DOS_Shell::Execute(std::string_view name, std::string_view args)
+bool DOS_Shell::ExecuteProgram(std::string_view name, std::string_view args)
 {
 	if (name.size() > 1 && (std::isalpha(name[0]) != 0) &&
 	    (name.substr(1) == ":" || name.substr(1) == ":\\")) {
@@ -495,7 +499,7 @@ std::string DOS_Shell::Which(const std::string_view name) const
 
 	if (have_path_env && path_equals != std::string::npos) {
 		path_environment = path_environment.substr(path_equals + 1);
-		auto path_directories = split(path_environment, ';');
+		auto path_directories = split_with_empties(path_environment, ';');
 
 		remove_empties(path_directories);
 
@@ -620,6 +624,7 @@ bool DOS_Shell::GetEnvStr(const char* entry, std::string& result) const
 	if (!entry[0]) {
 		return false;
 	}
+	const auto entry_length = strlen(entry);
 	do {
 		MEM_StrCopy(env_read, env_string, 1024);
 		if (!env_string[0]) {
@@ -632,7 +637,7 @@ bool DOS_Shell::GetEnvStr(const char* entry, std::string& result) const
 		}
 		/* replace the = with \0 to get the length */
 		*equal = 0;
-		if (strlen(env_string) != strlen(entry)) {
+		if (strlen(env_string) != entry_length) {
 			continue;
 		}
 		if (strcasecmp(entry, env_string) != 0) {
@@ -689,6 +694,7 @@ bool DOS_Shell::SetEnv(const char* entry, const char* new_string)
 	PhysPt env_write          = env_read;
 	PhysPt env_write_start    = env_read;
 	char env_string[1024 + 1] = {0};
+	const auto entry_length = strlen(entry);
 	do {
 		MEM_StrCopy(env_read, env_string, 1024);
 		if (!env_string[0]) {
@@ -698,8 +704,8 @@ bool DOS_Shell::SetEnv(const char* entry, const char* new_string)
 		if (!strchr(env_string, '=')) {
 			continue; /* Remove corrupt entry? */
 		}
-		if ((strncasecmp(entry, env_string, strlen(entry)) == 0) &&
-		    env_string[strlen(entry)] == '=') {
+		if ((strncasecmp(entry, env_string, entry_length) == 0) &&
+		    env_string[entry_length] == '=') {
 			continue;
 		}
 		MEM_BlockWrite(env_write,

@@ -23,6 +23,7 @@
 
 #include "dos_inc.h"
 #include "fraction.h"
+#include "render.h"
 
 //
 // video mixer stuff
@@ -36,13 +37,15 @@ struct ReelMagic_VideoMixerMPEGProvider {
 	virtual const ReelMagic_PlayerAttributes& GetAttrs() const     = 0;
 };
 
-void ReelMagic_RENDER_SetPal(uint8_t entry, uint8_t red, uint8_t green, uint8_t blue);
+void ReelMagic_RENDER_SetPalette(const uint8_t entry, const uint8_t red,
+                                 const uint8_t green, const uint8_t blue);
 
-void ReelMagic_RENDER_SetSize(const uint32_t width, const uint32_t height,
+void ReelMagic_RENDER_SetSize(const uint16_t width, const uint16_t height,
                               const bool double_width, const bool double_height,
-                              const Fraction& pixel_aspect_ratio,
-                              const uint32_t bits_per_pixel,
-                              const double frames_per_second);
+                              const Fraction& render_pixel_aspect_ratio,
+                              const PixelFormat pixel_format,
+                              const double frames_per_second,
+                              const VideoMode& video_mode);
 
 bool ReelMagic_RENDER_StartUpdate(void);
 
@@ -58,7 +61,6 @@ void ReelMagic_ClearVideoMixerMPEGProvider();
 void ReelMagic_InitVideoMixer(Section* /*sec*/);
 
 // audio mixer related
-constexpr auto reelmagic_channel_name = "REELMAGIC";
 void ReelMagic_EnableAudioChannel(const bool should_enable);
 
 //

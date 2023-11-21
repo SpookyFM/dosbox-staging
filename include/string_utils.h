@@ -203,6 +203,7 @@ bool is_hex_digits(const std::string_view s) noexcept;
 bool is_digits(const std::string_view s) noexcept;
 
 void strreplace(char* str, char o, char n);
+void ltrim(std::string& str);
 char* ltrim(char* str);
 char* rtrim(char* str);
 char* trim(char* str);
@@ -246,7 +247,8 @@ constexpr bool iequals(T1&& a, T2&& b)
 // - ("abc123", "abc123=") -> true, simply because the first is shorter.
 bool natural_compare(const std::string& a, const std::string& b);
 
-char* strip_word(char*& cmd);
+char* strip_word(char*& line);
+std::string strip_word(std::string& line);
 
 std::string replace(const std::string& str, char old_char, char new_char) noexcept;
 void trim(std::string& str, const char trim_chars[] = " \r\t\f\n");
@@ -260,9 +262,10 @@ void strip_punctuation(std::string& str);
 //   split(":def", ':') returns {"", "def"}
 //   split(":", ':') returns {"", ""}
 //   split("::", ':') returns {"", "", ""}
-std::vector<std::string> split(std::string_view seq, char delim);
+std::vector<std::string> split_with_empties(std::string_view seq, char delim);
 
-// Split a string on whitespace, where whitespace can be any of the following:
+// Split a string on any character found in delim.
+// Delim defaults to all whitespace characters:
 // ' '    (0x20)  space (SPC)
 // '\t'   (0x09)  horizontal tab (TAB)
 // '\n'   (0x0a)  newline (LF)
@@ -276,7 +279,8 @@ std::vector<std::string> split(std::string_view seq, char delim);
 //   split("a\tb\nc\vd e\rf") returns {"a", "b", "c", "d", "e", "f"}
 //   split("  ") returns {}
 //   split(" ") returns {}
-std::vector<std::string> split(std::string_view seq);
+std::vector<std::string> split(std::string_view seq,
+                               std::string_view delims = " \f\n\r\t\v");
 
 std::string join_with_commas(const std::vector<std::string>& items,
                              const std::string_view and_conjunction = "and",
@@ -329,78 +333,29 @@ void lowercase_dos(std::string& in_str, const uint16_t code_page);
 void uppercase_dos(std::string& in_str);
 void uppercase_dos(std::string& in_str, const uint16_t code_page);
 
-// Parse a value from the string, clamp the result within the given min and max
-// values, and return it as a float. This API should give us enough numerical
-// range and accuracy for any text-based inputs.
+// Parse the string as an integer or decimal value and return it as a float.
+// This API should give us enough numerical range and accuracy for any
+// text-based inputs.
 //
 // For example:
-//  - parse_value("101", 0, 100) return 100.0f.
-//  - parse_value("x10", 0, 100) return empty.
-//  - parse_value("txt", 0, 100) return empty.
-//  - parse_value("", 0, 100) return empty.
+//  - parse_value("100")  returns 100.0f
+//  - parse_value("100a") returns empty
+//  - parse_value("x10")  returns empty
+//  - parse_value("txt")  returns empty
 //
-// To use it, check if the result then access it:
-//   const auto val = parse_value(s, ...);
-//   if (val)
-//       do_something(*val)
-//   else
-//       log_warning("%s was invalid", s.c_str());
-//
-// Alternatively, scope the value inside the if/else
-//   if (const auto v = parse_value(s, ...); v)
-//       do_something(*v)
-//   else
-//       log_warning("%s was invalid", s.c_str());
-//
-std::optional<float> parse_value(const std::string_view s,
-                                 const float min_value, const float max_value);
+std::optional<float> parse_float(const std::string& s);
 
-// parse_value clamped between 0 and 100
-std::optional<float> parse_percentage(const std::string_view s);
-
-// Parse a value from a character-prefixed string, clamp the result within the
-// given min and max values, and return it as a float. This API should give us
-// enough numerical range and accuracy for any text-based inputs.
+// Parse the string as an integer and return it as a integer.
 //
 // For example:
-//  - parse_prefixed_value('x', "x101", 0, 100) return 100.0f.
-//  - parse_prefixed_value('X', "x101", 0, 100) return 100.0f.
-//  - parse_prefixed_value('y', "x101", 0, 100) return empty.
-//  - parse_prefixed_value('y', "1000", 0, 100) return empty.
-//  - parse_prefixed_value('y', "text", 0, 100) return empty.
+//  - parse_value("100")  returns 100
+//  - parse_value("100a") returns empty
+//  - parse_value("x10")  returns empty
+//  - parse_value("txt")  returns empty
 //
-// To use it, check if the result then access it:
-//   const auto val = parse_prefixed_value(...);
-//   if (val)
-//       do_something(*val);
-//   else
-//       log_warning("%s was invalid", s.c_str());
-//
-// Alternatively, scope the value inside the if/else
-//   if (const auto v = parse_prefixed_value(...); v)
-//       do_something(*v)
-//   else
-//       log_warning("%s was invalid", s.c_str());
-//
-std::optional<float> parse_prefixed_value(const char prefix, const std::string& s,
-                                          const float min_value,
-                                          const float max_value);
+std::optional<int> parse_int(const std::string& s, const int base = 10);
 
-// parse_prefixed_value clamped between 0 and 100
-std::optional<float> parse_prefixed_percentage(const char prefix,
-                                               const std::string& s);
-
-// tries to convert string to integer,
-// returns value only if succeeded
-std::optional<int> to_int(const std::string& value);
-
-#if defined(__GNUC__) || defined(__clang__)
-// Disable generic "format string is not a string literal (potentially
-// insecure)" warning on GCC/Clang. Of course, it's not a security issue for
-// us; we know what we're doing.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-security"
-#endif
+std::optional<float> parse_percentage(const std::string& s);
 
 template <typename... Args>
 std::string format_string(const std::string& format, const Args&... args) noexcept
@@ -429,9 +384,5 @@ std::string format_string(const std::string& format, const Args&... args) noexce
 	result.pop_back();
 	return result;
 }
-
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
 #endif

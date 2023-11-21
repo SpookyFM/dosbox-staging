@@ -25,6 +25,7 @@
 #include <sys/types.h>
 
 #include "../capture/capture.h"
+#include "channel_names.h"
 #include "cpu.h"
 #include "mapper.h"
 #include "mem.h"
@@ -161,7 +162,7 @@ public:
 			// if ( passed > 0 ) LOG_MSG( "Delay %d", passed ) ;
 
 			// If we passed more than 30 seconds since the last
-			// command, we'll restart the the capture
+			// command, we'll restart the capture
 			if (passed > 30000) {
 				CloseFile();
 				goto skipWrite;
@@ -530,6 +531,7 @@ void OPL::RenderUpToNow()
 	const auto now = PIC_FullIndex();
 
 	// Wake up the channel and update the last rendered time datum.
+	assert(channel);
 	if (channel->WakeUp()) {
 		last_rendered_ms = now;
 		return;
@@ -634,8 +636,8 @@ void OPL::AdlibGoldControlWrite(const uint8_t val)
 			// Dune CD version uses 32 volume steps in an apparent
 			// mistake, should be 128
 			channel->SetAppVolume(
-			        static_cast<float>(ctrl.lvol & 0x1f) / 31.0f,
-			        static_cast<float>(ctrl.rvol & 0x1f) / 31.0f);
+			        {static_cast<float>(ctrl.lvol & 0x1f) / 31.0f,
+			         static_cast<float>(ctrl.rvol & 0x1f) / 31.0f});
 		}
 		break;
 
@@ -887,6 +889,7 @@ OPL::OPL(Section *configuration, const OplMode oplmode)
 	ctrl.mixer = section->Get_bool("sbmixer");
 
 	std::set channel_features = {ChannelFeature::Sleep,
+	                             ChannelFeature::FadeOut,
 	                             ChannelFeature::ReverbSend,
 	                             ChannelFeature::ChorusSend,
 	                             ChannelFeature::Synthesizer};
@@ -900,8 +903,11 @@ OPL::OPL(Section *configuration, const OplMode oplmode)
 	                                      this,
 	                                      std::placeholders::_1);
 
-	// Register the Audio channel
-	channel = MIXER_AddChannel(mixer_callback, use_mixer_rate, "OPL", channel_features);
+	// Register the audio channel
+	channel = MIXER_AddChannel(mixer_callback,
+	                           use_mixer_rate,
+	                           ChannelName::Opl,
+	                           channel_features);
 
 	// Used to be 2.0, which was measured to be too high. Exact value
 	// depends on card/clone.
@@ -913,6 +919,9 @@ OPL::OPL(Section *configuration, const OplMode oplmode)
 	// existence.
 	constexpr auto opl_volume_scale_factor = 1.5f;
 	channel->Set0dbScalar(opl_volume_scale_factor);
+
+	// Setup fadeout
+	channel->ConfigureFadeOut(section->Get_string("opl_fadeout"));
 
 	Init(check_cast<uint16_t>(channel->GetSampleRate()));
 

@@ -10,11 +10,17 @@
 
 #define VERSION "0.81.0-alpha"
 
-/* Copyright string - to be returned by virtual drivers, etc. */
-#define DOSBOX_COPYRIGHT "(C) The DOSBox Staging Team"
-
 /* This macro is going to be overriden via CI */
 #define DOSBOX_DETAILED_VERSION "git"
+
+/* Strings to be returned by virtual drivers, etc. */
+
+// Name of the emulator
+#define DOSBOX_NAME "DOSBox Staging"
+// Development team name
+#define DOSBOX_TEAM "The " DOSBOX_NAME " Team"
+// Copyright string
+#define DOSBOX_COPYRIGHT "(C) " DOSBOX_TEAM
 
 /* Define to 1 to enable internal debugger, requires libcurses */
 #define C_DEBUG 1
@@ -58,9 +64,6 @@
 
 // Define to 1 to enable MT-32 emulator
 #define C_MT32EMU 1
-
-// Define to 1 to enable 3dfx Voodoo card emulation
-#define C_VOODOO 0
 
 /* Enable the FPU module, still only for beta testing */
 #define C_FPU 1
@@ -110,7 +113,7 @@
 // https://github.com/dosbox-staging/dosbox-staging/issues/1314)
 //
 // Because the recommendations in these warnings will not be acted
-// upon given the planned direction of the the project, they
+// upon given the planned direction of the project, they
 // therefore provide no value and are being silenced.
 
 #ifndef _CRT_SECURE_NO_WARNINGS

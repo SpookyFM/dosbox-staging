@@ -46,39 +46,53 @@
 #include "cross.h"
 #include "inout.h"
 
-bool localDrive::FileCreate(DOS_File * * file,char * name,uint16_t /*attributes*/) {
-//TODO Maybe care for attributes but not likely
+bool localDrive::FileCreate(DOS_File** file, char* name, FatAttributeFlags attributes)
+{
+	// Don't allow overwriting read-only files.
+	FatAttributeFlags test_attr = {};
+	if (GetFileAttr(name, &test_attr) && test_attr.read_only) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
+	const bool file_exists = FileExists(name);
+
 	char newname[CROSS_LEN];
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	char* temp_name = dirCache.GetExpandName(newname); //Can only be used in till a new drive_cache action is preformed */
-	/* Test if file exists (so we need to truncate it). don't add to dirCache then */
-	bool existing_file = false;
-	
-	FILE * test = fopen_wrap(temp_name,"rb+");
-	if (test) {
-		fclose(test);
-		existing_file=true;
 
-	}
-	
-	FILE * hand = fopen_wrap(temp_name,"wb+");
-	if (!hand) {
-		LOG_MSG("Warning: file creation failed: %s",newname);
+	// GetExpandNameAndNormaliseCase returns a pointer to a static local
+	// string. Make a copy to ensure it doesn't get overwritten by future
+	// calls.
+	char expanded_name[CROSS_LEN];
+	safe_strcpy(expanded_name, dirCache.GetExpandNameAndNormaliseCase(newname));
+
+	attributes.archive = true;
+	FILE* file_pointer = local_drive_create_file(expanded_name, attributes);
+
+	if (!file_pointer) {
+		LOG_MSG("Warning: file creation failed: %s", expanded_name);
+		DOS_SetError(DOSERR_ACCESS_DENIED);
 		return false;
 	}
-   
-	if (!existing_file) dirCache.AddEntry(newname, true);
-	/* Make the 16 bit device information */
-	*file = new localFile(name, hand, basedir);
-	(*file)->flags=OPEN_READWRITE;
+
+	if (!file_exists) {
+		dirCache.AddEntry(newname, true);
+	}
+
+	// Make the 16 bit device information
+	*file = new localFile(name, expanded_name, file_pointer, basedir);
+
+	(*file)->flags = OPEN_READWRITE;
 
 	return true;
 }
 
-bool localDrive::IsFirstEncounter(const std::string& filename) {
+bool localDrive::IsFirstEncounter(const std::string& filename)
+{
 	const auto ret = write_protected_files.insert(filename);
+
 	const bool was_inserted = ret.second;
 	return was_inserted;
 }
@@ -121,11 +135,22 @@ bool localDrive::FileOpen(DOS_File **file, char *name, uint32_t flags)
 		DOS_SetError(DOSERR_ACCESS_CODE_INVALID);
 		return false;
 	}
+
+	// Don't allow opening read-only files in write mode,
+	// unless configured otherwise
+	FatAttributeFlags test_attr = {};
+	if (!always_open_ro_files &&
+	    ((flags & 0xf) == OPEN_WRITE || (flags & 0xf) == OPEN_READWRITE) &&
+	    (GetFileAttr(name, &test_attr) && test_attr.read_only)) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
 	char newname[CROSS_LEN];
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	dirCache.ExpandName(newname);
+	dirCache.ExpandNameAndNormaliseCase(newname);
 
 	// If the file's already open then flush it before continuing
 	// (Betrayal in Antara)
@@ -204,7 +229,7 @@ bool localDrive::FileOpen(DOS_File **file, char *name, uint32_t flags)
 		return false;
 	}
 
-	*file = new localFile(name, fhandle, basedir);
+	*file = new localFile(name, newname, fhandle, basedir);
 	(*file)->flags = flags;  // for the inheritance flag and maybe check for others.
 
 	return true;
@@ -216,7 +241,7 @@ FILE* localDrive::GetSystemFilePtr(const char* const name, const char* const typ
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	dirCache.ExpandName(newname);
+	dirCache.ExpandNameAndNormaliseCase(newname);
 
 	return fopen_wrap(newname,type);
 }
@@ -226,16 +251,24 @@ bool localDrive::GetSystemFilename(char* sysName, const char* const dosName)
 	strcpy(sysName, basedir);
 	strcat(sysName, dosName);
 	CROSS_FILENAME(sysName);
-	dirCache.ExpandName(sysName);
+	dirCache.ExpandNameAndNormaliseCase(sysName);
 	return true;
 }
 
 // Attempt to delete the file name from our local drive mount
-bool localDrive::FileUnlink(char * name) {
+bool localDrive::FileUnlink(char* name)
+{
 	if (!FileExists(name)) {
-		DEBUG_LOG_MSG("FS: Skipping removal of %s because it doesn't exist",
-		              name);
+		LOG_DEBUG("FS: Skipping removal of '%s' because it doesn't exist",
+		          name);
 		DOS_SetError(DOSERR_FILE_NOT_FOUND);
+		return false;
+	}
+
+	// Don't allow deleting read-only files.
+	FatAttributeFlags test_attr = {};
+	if (GetFileAttr(name, &test_attr) && test_attr.read_only) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
 		return false;
 	}
 
@@ -243,7 +276,7 @@ bool localDrive::FileUnlink(char * name) {
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	const char *fullname = dirCache.GetExpandName(newname);
+	const char* fullname = dirCache.GetExpandNameAndNormaliseCase(newname);
 
 	// Can we remove the file without issue?
 	if (remove(fullname) == 0) {
@@ -268,18 +301,19 @@ bool localDrive::FileUnlink(char * name) {
 			return true;
 		}
 	}
-	DEBUG_LOG_MSG("FS: Unable to remove file %s", fullname);
+	LOG_DEBUG("FS: Unable to remove file '%s'", fullname);
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
 
-bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
+bool localDrive::FindFirst(char* _dir, DOS_DTA& dta, bool fcb_findfirst)
+{
 	char tempDir[CROSS_LEN];
 	safe_strcpy(tempDir, basedir);
 	safe_strcat(tempDir, _dir);
 	CROSS_FILENAME(tempDir);
 
-	if (allocation.mediaid==0xF0) {
+	if (allocation.mediaid == 0xF0) {
 		EmptyCache(); //rescan floppie-content on each findfirst
 	}
 
@@ -297,32 +331,37 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	}
 	safe_strcpy(srchInfo[id].srch_dir, tempDir);
 	dta.SetDirID(id);
-	
-	uint8_t sAttr;
-	dta.GetSearchParams(sAttr,tempDir);
+
+	FatAttributeFlags search_attr = {};
+	dta.GetSearchParams(search_attr, tempDir);
 
 	if (this->isRemote() && this->isRemovable()) {
 		// cdroms behave a bit different than regular drives
-		if (sAttr == DOS_ATTR_VOLUME) {
-			dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
+		if (search_attr == FatAttributeFlags::Volume) {
+			dta.SetResult(dirCache.GetLabel(), 0, 0, 0, FatAttributeFlags::Volume);
 			return true;
 		}
 	} else {
-		if (sAttr == DOS_ATTR_VOLUME) {
+		if (search_attr == FatAttributeFlags::Volume) {
 			if (is_empty(dirCache.GetLabel())) {
-//				LOG(LOG_DOSMISC,LOG_ERROR)("DRIVELABEL REQUESTED: none present, returned  NOLABEL");
-//				dta.SetResult("NO_LABEL",0,0,0,DOS_ATTR_VOLUME);
-//				return true;
+				// LOG(LOG_DOSMISC,LOG_ERROR)("DRIVELABEL REQUESTED: none present, returned  NOLABEL");
+				// dta.SetResult("NO_LABEL",0,0,0,FatAttributeFlags::Volume);
+				// return true;
 				DOS_SetError(DOSERR_NO_MORE_FILES);
 				return false;
 			}
-			dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
+			dta.SetResult(dirCache.GetLabel(), 0, 0, 0, FatAttributeFlags::Volume);
 			return true;
-		} else if ((sAttr & DOS_ATTR_VOLUME)  && (*_dir == 0) && !fcb_findfirst) { 
-		//should check for a valid leading directory instead of 0
-		//exists==true if the volume label matches the searchmask and the path is valid
-			if (WildFileCmp(dirCache.GetLabel(),tempDir)) {
-				dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
+		} else if (search_attr.volume && (*_dir == 0) && !fcb_findfirst) {
+			// should check for a valid leading directory instead of
+			// 0 exists==true if the volume label matches the
+			// searchmask and the path is valid
+			if (WildFileCmp(dirCache.GetLabel(), tempDir)) {
+				dta.SetResult(dirCache.GetLabel(),
+				              0,
+				              0,
+				              0,
+				              FatAttributeFlags::Volume);
 				return true;
 			}
 		}
@@ -330,17 +369,17 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	return FindNext(dta);
 }
 
-bool localDrive::FindNext(DOS_DTA & dta) {
-
-	char * dir_ent;
+bool localDrive::FindNext(DOS_DTA& dta)
+{
+	char* dir_ent;
 	struct stat stat_block;
 	char full_name[CROSS_LEN];
 	char dir_entcopy[CROSS_LEN];
 
-	uint8_t srch_attr;char srch_pattern[DOS_NAMELENGTH_ASCII];
-	uint8_t find_attr;
+	FatAttributeFlags search_attr = {};
+	char search_pattern[DOS_NAMELENGTH_ASCII];
 
-	dta.GetSearchParams(srch_attr,srch_pattern);
+	dta.GetSearchParams(search_attr, search_pattern);
 	uint16_t id = dta.GetDirID();
 
 	while (true) {
@@ -348,18 +387,19 @@ bool localDrive::FindNext(DOS_DTA & dta) {
 			DOS_SetError(DOSERR_NO_MORE_FILES);
 			return false;
 		}
-		if (!WildFileCmp(dir_ent, srch_pattern)) {
+		if (!WildFileCmp(dir_ent, search_pattern)) {
 			continue;
 		}
 
 		safe_strcpy(full_name, srchInfo[id].srch_dir);
 		safe_strcat(full_name, dir_ent);
 
-		// GetExpandName might indirectly destroy dir_ent (by caching in
-		// a new directory and due to its design dir_ent might be lost.)
-		// Copying dir_ent first
+		// GetExpandNameAndNormaliseCase might indirectly destroy
+		// dir_ent (by caching in a new directory and due to its design
+		// dir_ent might be lost.) Copying dir_ent first
 		safe_strcpy(dir_entcopy, dir_ent);
-		const char* temp_name = dirCache.GetExpandName(full_name);
+		const char* temp_name = dirCache.GetExpandNameAndNormaliseCase(
+		        full_name);
 		if (stat(temp_name, &stat_block) != 0) {
 			continue; // No symlinks and such
 		}
@@ -368,28 +408,14 @@ bool localDrive::FindNext(DOS_DTA & dta) {
 			continue; // No host-only hidden files
 		}
 
-		if (stat_block.st_mode & S_IFDIR) {
-			find_attr = DOS_ATTR_DIRECTORY;
-		} else {
-			find_attr = 0;
+		FatAttributeFlags find_attr = {};
+		if (DOSERR_NONE != local_drive_get_attributes(temp_name, find_attr)) {
+			continue;
 		}
-#if defined(WIN32)
-		constexpr int8_t maximum_attribs = 0x3f;
 
-		Bitu attribs = GetFileAttributes(temp_name);
-		if (attribs != INVALID_FILE_ATTRIBUTES) {
-			find_attr |= attribs & maximum_attribs;
-		}
-#else
-		if (!(find_attr & DOS_ATTR_DIRECTORY)) {
-			find_attr |= DOS_ATTR_ARCHIVE;
-		}
-		if (!(stat_block.st_mode & S_IWUSR)) {
-			find_attr |= DOS_ATTR_READ_ONLY;
-		}
-#endif
-		if (~srch_attr & find_attr &
-		    (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM)) {
+		if ((find_attr.directory && !search_attr.directory) ||
+		    (find_attr.hidden && !search_attr.hidden) ||
+		    (find_attr.system && !search_attr.system)) {
 			continue;
 		}
 
@@ -413,109 +439,86 @@ bool localDrive::FindNext(DOS_DTA & dta) {
 			find_time = 6;
 			find_date = 4;
 		}
-		dta.SetResult(find_name, find_size, find_date, find_time, find_attr);
+		dta.SetResult(find_name,
+		              find_size,
+		              find_date,
+		              find_time,
+		              find_attr._data);
 		return true;
 	}
 	return false;
 }
 
-bool localDrive::GetFileAttr(char *name, uint16_t *attr)
+bool localDrive::GetFileAttr(char* name, FatAttributeFlags* attr)
 {
 	char newname[CROSS_LEN];
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	dirCache.ExpandName(newname);
+	dirCache.ExpandNameAndNormaliseCase(newname);
 
-#if defined(WIN32)
-	Bitu attribs = GetFileAttributes(newname);
-	if (attribs == INVALID_FILE_ATTRIBUTES) {
-		DOS_SetError((uint16_t)GetLastError());
+	if (local_drive_get_attributes(newname, *attr) != DOSERR_NONE) {
+		// The caller is responsible to act accordingly, possibly
+		// it should set DOS error code (setting it here is not allowed)
+		*attr = 0;
 		return false;
 	}
-	*attr = attribs & 0x3f;
+
 	return true;
-#else
-	struct stat status;
-	if (stat(newname, &status) == 0) {
-		*attr = status.st_mode & S_IFDIR ? 0 : DOS_ATTR_ARCHIVE;
-		if (status.st_mode & S_IFDIR)
-			*attr |= DOS_ATTR_DIRECTORY;
-		if (!(status.st_mode & S_IWUSR))
-			*attr |= DOS_ATTR_READ_ONLY;
-		return true;
-	}
-	*attr = 0;
-	return false;
-#endif
 }
 
-bool localDrive::SetFileAttr(const char *name, const uint16_t attr)
+bool localDrive::SetFileAttr(const char* name, const FatAttributeFlags attr)
 {
 	char newname[CROSS_LEN];
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	dirCache.ExpandName(newname);
+	dirCache.ExpandNameAndNormaliseCase(newname);
 
-#if defined(WIN32)
-	if (!SetFileAttributes(newname, attr)) {
-		DOS_SetError((uint16_t)GetLastError());
-		return false;
-	}
-#else
-	const auto f = std_fs::path(newname);
+	const auto result = local_drive_set_attributes(newname, attr);
+	dirCache.CacheOut(newname);
 
-	if (!path_exists(f)) {
-		DOS_SetError(DOSERR_FILE_NOT_FOUND);
+	if (result != DOSERR_NONE) {
+		DOS_SetError(result);
 		return false;
 	}
 
-	if (attr & (DOS_ATTR_SYSTEM | DOS_ATTR_HIDDEN))
-		LOG_WARNING("FILESYSTEM: Application attempted to set system or hidden"
-		            " attributes for '%s', which is ignored for local drives",
-		            newname);
-
-	const auto result = attr & DOS_ATTR_READ_ONLY ? make_readonly(f)
-	                                              : make_writable(f);
-	if (!result) {
-		DOS_SetError(DOSERR_ACCESS_DENIED);
-		return false;
-	}
-#endif
-
-	// If we made it here, the attributes were applied successfully
-	dirCache.EmptyCache();
 	return true;
 }
 
-bool localDrive::MakeDir(char * dir) {
+bool localDrive::MakeDir(char* dir)
+{
 	char newdir[CROSS_LEN];
 	safe_strcpy(newdir, basedir);
 	safe_strcat(newdir, dir);
 	CROSS_FILENAME(newdir);
-	const int temp = create_dir(dirCache.GetExpandName(newdir), 0775);
-	if (temp == 0)
+
+	const auto result = local_drive_create_dir(
+	        dirCache.GetExpandNameAndNormaliseCase(newdir));
+	if (result == DOSERR_NONE) {
 		dirCache.CacheOut(newdir, true);
-	return (temp==0);// || ((temp!=0) && (errno==EEXIST));
+	}
+	return (result == DOSERR_NONE);
 }
 
-bool localDrive::RemoveDir(char * dir) {
+bool localDrive::RemoveDir(char* dir)
+{
 	char newdir[CROSS_LEN];
 	safe_strcpy(newdir, basedir);
 	safe_strcat(newdir, dir);
 	CROSS_FILENAME(newdir);
-	int temp=rmdir(dirCache.GetExpandName(newdir));
+	int temp = rmdir(dirCache.GetExpandNameAndNormaliseCase(newdir));
 	if (temp==0) dirCache.DeleteEntry(newdir,true);
 	return (temp==0);
 }
 
-bool localDrive::TestDir(char * dir) {
+bool localDrive::TestDir(char* dir)
+{
 	char newdir[CROSS_LEN];
 	safe_strcpy(newdir, basedir);
 	safe_strcat(newdir, dir);
 	CROSS_FILENAME(newdir);
-	dirCache.ExpandName(newdir);
+	dirCache.ExpandNameAndNormaliseCase(newdir);
 	// Skip directory test, if "\"
 	size_t len = safe_strlen(newdir);
 	if (len && (newdir[len-1]!='\\')) {
@@ -527,52 +530,63 @@ bool localDrive::TestDir(char * dir) {
 	return path_exists(newdir);
 }
 
-bool localDrive::Rename(char * oldname,char * newname) {
+bool localDrive::Rename(char* oldname, char* newname)
+{
 	char newold[CROSS_LEN];
 	safe_strcpy(newold, basedir);
 	safe_strcat(newold, oldname);
 	CROSS_FILENAME(newold);
-	dirCache.ExpandName(newold);
-	
+	dirCache.ExpandNameAndNormaliseCase(newold);
+
 	char newnew[CROSS_LEN];
 	safe_strcpy(newnew, basedir);
 	safe_strcat(newnew, newname);
 	CROSS_FILENAME(newnew);
-	int temp=rename(newold,dirCache.GetExpandName(newnew));
+	int temp = rename(newold, dirCache.GetExpandNameAndNormaliseCase(newnew));
 	if (temp==0) dirCache.CacheOut(newnew);
-	return (temp==0);
-
+	return (temp == 0);
 }
 
-bool localDrive::AllocationInfo(uint16_t * _bytes_sector,uint8_t * _sectors_cluster,uint16_t * _total_clusters,uint16_t * _free_clusters) {
-	*_bytes_sector=allocation.bytes_sector;
-	*_sectors_cluster=allocation.sectors_cluster;
-	*_total_clusters=allocation.total_clusters;
-	*_free_clusters=allocation.free_clusters;
+bool localDrive::AllocationInfo(uint16_t* _bytes_sector, uint8_t* _sectors_cluster,
+                                uint16_t* _total_clusters, uint16_t* _free_clusters)
+{
+	*_bytes_sector    = allocation.bytes_sector;
+	*_sectors_cluster = allocation.sectors_cluster;
+	*_total_clusters  = allocation.total_clusters;
+	*_free_clusters   = allocation.free_clusters;
 	return true;
 }
 
-bool localDrive::FileExists(const char* name) {
+bool localDrive::FileExists(const char* name)
+{
 	char newname[CROSS_LEN];
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	dirCache.ExpandName(newname);
+	dirCache.ExpandNameAndNormaliseCase(newname);
 	struct stat temp_stat;
 	if (stat(newname,&temp_stat)!=0) return false;
 	if (temp_stat.st_mode & S_IFDIR) return false;
 	return true;
 }
 
-bool localDrive::FileStat(const char* name, FileStat_Block * const stat_block) {
+bool localDrive::FileStat(const char* name, FileStat_Block* const stat_block)
+{
 	char newname[CROSS_LEN];
 	safe_strcpy(newname, basedir);
 	safe_strcat(newname, name);
 	CROSS_FILENAME(newname);
-	dirCache.ExpandName(newname);
+	dirCache.ExpandNameAndNormaliseCase(newname);
 	struct stat temp_stat;
-	if (stat(newname,&temp_stat)!=0) return false;
+
+	FatAttributeFlags attributes = {};
+	if (stat(newname, &temp_stat) != 0 ||
+	    local_drive_get_attributes(newname, attributes) != DOSERR_NONE) {
+		return false;
+	}
+
 	/* Convert the stat to a FileStat */
+	stat_block->attr = attributes._data;
 	struct tm datetime;
 	if (cross::localtime_r(&temp_stat.st_mtime, &datetime)) {
 		stat_block->time = DOS_PackTime(datetime);
@@ -584,16 +598,18 @@ bool localDrive::FileStat(const char* name, FileStat_Block * const stat_block) {
 	return true;
 }
 
-
-uint8_t localDrive::GetMediaByte(void) {
+uint8_t localDrive::GetMediaByte(void)
+{
 	return allocation.mediaid;
 }
 
-bool localDrive::isRemote(void) {
+bool localDrive::isRemote(void)
+{
 	return false;
 }
 
-bool localDrive::isRemovable(void) {
+bool localDrive::isRemovable(void)
+{
 	return false;
 }
 
@@ -626,7 +642,7 @@ bool localFile::ftell_and_check()
 	if (stream_pos >= 0)
 		return true;
 
-	DEBUG_LOG_MSG("FS: Failed obtaining position in file %s", name.c_str());
+	LOG_DEBUG("FS: Failed obtaining position in file '%s'", name.c_str());
 	return false;
 }
 
@@ -640,7 +656,9 @@ bool localFile::fseek_to_and_check(long pos, int whence)
 		stream_pos = pos;
 		return true;
 	}
-	DEBUG_LOG_MSG("FS: Failed seeking to byte %ld in file %s", stream_pos, name.c_str());
+	LOG_DEBUG("FS: Failed seeking to byte %ld in file '%s'",
+	          stream_pos,
+	          name.c_str());
 	return false;
 }
 
@@ -660,20 +678,20 @@ bool localFile::Read(uint8_t *data, uint16_t *size)
 	}
 
 	// Seek if we last wrote
-	if (last_action == WRITE)
+	if (last_action == LastAction::Write)
 		if (ftell_and_check())
 			fseek_and_check(SEEK_SET);
 
-	last_action = READ;
+	last_action = LastAction::Read;
 	const auto requested = *size;
 	const auto actual = static_cast<uint16_t>(fread(data, 1, requested, fhandle));
 	*size = actual; // always save the actual
 
 	if (actual != requested) {
-		//DEBUG_LOG_MSG("FS: Only read %u of %u requested bytes from file %s",
-		//              actual,
-		//              requested,
-		//              name.c_str());
+		// LOG_DEBUG("FS: Only read %u of %u requested bytes from file '%s'",
+		//           actual,
+		//           requested,
+		//           name.c_str());
 
 		// Check for host read error
 		if (ferror(fhandle)) {
@@ -702,24 +720,26 @@ bool localFile::Write(uint8_t *data, uint16_t *size)
 	}
 
 	// Seek if we last read
-	if (last_action == READ)
+	if (last_action == LastAction::Read)
 		if (ftell_and_check())
 			fseek_and_check(SEEK_SET);
 
-	last_action = WRITE;
+	last_action = LastAction::Write;
+	set_archive_on_close = true;
 
 	// Truncate the file
 	if (*size == 0) {
 		const auto file = cross_fileno(fhandle);
 		if (file == -1) {
-			DEBUG_LOG_MSG("FS: Could not resolve file number for %s", name.c_str());
+			LOG_DEBUG("FS: Could not resolve file number for '%s'",
+			          name.c_str());
 			return false;
 		}
 		if (!ftell_and_check()) {
 			return false;
 		}
 		if (ftruncate(file, stream_pos) != 0) {
-			DEBUG_LOG_MSG("FS: Failed truncating file %s", name.c_str());
+			LOG_DEBUG("FS: Failed truncating file '%s'", name.c_str());
 			return false;
 		}
 		// Truncation succeeded if we made it here
@@ -730,8 +750,10 @@ bool localFile::Write(uint8_t *data, uint16_t *size)
 	const auto requested = *size;
 	const auto actual = static_cast<uint16_t>(fwrite(data, 1, requested, fhandle));
 	if (actual != requested) {
-		DEBUG_LOG_MSG("FS: Only wrote %u of %u requested bytes to file %s",
-		              actual, requested, name.c_str());
+		LOG_DEBUG("FS: Only wrote %u of %u requested bytes to file '%s'",
+		          actual,
+		          requested,
+		          name.c_str());
 
 		// Check for host write error
 		if (ferror(fhandle)) {
@@ -783,14 +805,34 @@ bool localFile::Seek(uint32_t *pos_addr, uint32_t type)
 	       stream_pos <= std::numeric_limits<int32_t>::max());
 	*reinterpret_cast<int32_t *>(pos_addr) = static_cast<int32_t>(stream_pos);
 
-	last_action = NONE;
+	last_action = LastAction::None;
 	return true;
 }
 
-bool localFile::Close() {
+bool localFile::Close()
+{
+	bool result = true;
+
 	// only close if one reference left
-	if (refCtr==1) {
-		if (fhandle) fclose(fhandle);
+	if (refCtr == 1) {
+		if (set_archive_on_close) {
+			FatAttributeFlags attributes = {};
+			if (DOSERR_NONE !=
+			    local_drive_get_attributes(path, attributes)) {
+				result = false;
+			} else if (!attributes.archive) {
+				attributes.archive = true;
+				if (DOSERR_NONE !=
+				    local_drive_set_attributes(path, attributes)) {
+					result = false;
+				}
+			}
+			set_archive_on_close = false;
+		}
+
+		if (fhandle) {
+			fclose(fhandle);
+		}
 		fhandle = nullptr;
 		open = false;
 	};
@@ -820,27 +862,27 @@ bool localFile::Close() {
 		// FIXME: utime is deprecated, need a modern cross-platform
 		// implementation.
 		if (utime(fullname, &ftim)) {
-			return false;
+			result = false;
 		}
 	}
 
-	return true;
+	return result;
 }
 
-uint16_t localFile::GetInformation(void) {
-	return read_only_medium?0x40:0;
-}
-
-localFile::localFile(const char *_name, FILE *handle, const char *_basedir)
-        : fhandle(handle),
-          basedir(_basedir),
-          read_only_medium(false),
-          last_action(NONE)
+uint16_t localFile::GetInformation(void)
 {
-	open=true;
-	UpdateDateTimeFromHost();
+	return read_only_medium ? 0x40 : 0;
+}
 
-	attr=DOS_ATTR_ARCHIVE;
+localFile::localFile(const char* _name, const std_fs::path& path, FILE* handle,
+                     const char* _basedir)
+        : fhandle(handle),
+          path(path),
+          basedir(_basedir)
+{
+	open = true;
+	UpdateDateTimeFromHost();
+	attr = FatAttributeFlags::Archive;
 
 	SetName(_name);
 }
@@ -873,14 +915,14 @@ bool localFile::UpdateDateTimeFromHost()
 
 void localFile::Flush()
 {
-	if (last_action != WRITE)
+	if (last_action != LastAction::Write)
 		return;
 
 	if (ftell_and_check())
 		fseek_and_check(SEEK_SET);
 
 	// Always reset the state even if the file is broken
-	last_action = NONE;
+	last_action = LastAction::None;
 }
 
 // ********************************************
@@ -913,10 +955,11 @@ cdromDrive::cdromDrive(const char _driveLetter,
 	if (MSCDEX_GetVolumeName(subUnit,name)) dirCache.SetLabel(name,true,true);
 }
 
-bool cdromDrive::FileOpen(DOS_File * * file,char * name,uint32_t flags) {
-	if ((flags&0xf)==OPEN_READWRITE) {
+bool cdromDrive::FileOpen(DOS_File** file, char* name, uint32_t flags)
+{
+	if ((flags & 0xf) == OPEN_READWRITE) {
 		flags &= ~static_cast<unsigned>(OPEN_READWRITE);
-	} else if ((flags&0xf)==OPEN_WRITE) {
+	} else if ((flags & 0xf) == OPEN_WRITE) {
 		DOS_SetError(DOSERR_ACCESS_DENIED);
 		return false;
 	}
@@ -926,38 +969,50 @@ bool cdromDrive::FileOpen(DOS_File * * file,char * name,uint32_t flags) {
 	return success;
 }
 
-bool cdromDrive::FileCreate(DOS_File * * /*file*/,char * /*name*/,uint16_t /*attributes*/) {
+bool cdromDrive::FileCreate(DOS_File** /*file*/, char* /*name*/,
+                            FatAttributeFlags /*attributes*/)
+{
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
 
-bool cdromDrive::FileUnlink(char * /*name*/) {
+bool cdromDrive::FileUnlink(char* /*name*/)
+{
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
 
-bool cdromDrive::RemoveDir(char * /*dir*/) {
+bool cdromDrive::RemoveDir(char* /*dir*/)
+{
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
 
-bool cdromDrive::MakeDir(char * /*dir*/) {
+bool cdromDrive::MakeDir(char* /*dir*/)
+{
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
 
-bool cdromDrive::Rename(char * /*oldname*/,char * /*newname*/) {
+bool cdromDrive::Rename(char* /*oldname*/, char* /*newname*/)
+{
 	DOS_SetError(DOSERR_ACCESS_DENIED);
 	return false;
 }
 
-bool cdromDrive::GetFileAttr(char * name, uint16_t * attr) {
-	bool result = localDrive::GetFileAttr(name,attr);
-	if (result) *attr |= DOS_ATTR_READ_ONLY;
+bool cdromDrive::GetFileAttr(char* name, FatAttributeFlags* attr)
+{
+	const bool result = localDrive::GetFileAttr(name, attr);
+	if (result) {
+		attr->archive   = false;
+		attr->system    = false;
+		attr->read_only = true;
+	}
 	return result;
 }
 
-bool cdromDrive::FindFirst(char * _dir,DOS_DTA & dta,bool /*fcb_findfirst*/) {
+bool cdromDrive::FindFirst(char* _dir, DOS_DTA& dta, bool /*fcb_findfirst*/)
+{
 	// If media has changed, reInit drivecache.
 	if (MSCDEX_HasMediaChanged(subUnit)) {
 		dirCache.EmptyCache();
@@ -968,7 +1023,8 @@ bool cdromDrive::FindFirst(char * _dir,DOS_DTA & dta,bool /*fcb_findfirst*/) {
 	return localDrive::FindFirst(_dir,dta);
 }
 
-void cdromDrive::SetDir(const char* path) {
+void cdromDrive::SetDir(const char* path)
+{
 	// If media has changed, reInit drivecache.
 	if (MSCDEX_HasMediaChanged(subUnit)) {
 		dirCache.EmptyCache();
@@ -979,15 +1035,18 @@ void cdromDrive::SetDir(const char* path) {
 	localDrive::SetDir(path);
 }
 
-bool cdromDrive::isRemote(void) {
+bool cdromDrive::isRemote()
+{
 	return true;
 }
 
-bool cdromDrive::isRemovable(void) {
+bool cdromDrive::isRemovable()
+{
 	return true;
 }
 
-Bits cdromDrive::UnMount(void) {
+Bits cdromDrive::UnMount()
+{
 	if (MSCDEX_RemoveDrive(driveLetter)) {
 		return 0;
 	}

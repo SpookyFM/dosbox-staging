@@ -25,6 +25,7 @@
 
 #include "../src/gui/render_scalers.h"
 #include "fraction.h"
+#include "vga.h"
 
 struct RenderPal_t {
 	struct {
@@ -46,16 +47,11 @@ struct RenderPal_t {
 };
 
 struct Render_t {
-	struct {
-		uint32_t width              = 0;
-		uint32_t start              = 0;
-		uint32_t height             = 0;
-		bool double_width           = false;
-		bool double_height          = false;
-		Fraction pixel_aspect_ratio = {};
-		unsigned bpp                = 0;
-		double fps                  = 0;
-	} src = {};
+	ImageInfo src = {};
+	uint32_t src_start   = 0;
+
+	// Frames per second
+	double fps = 0;
 
 	struct {
 		uint32_t size = 0;
@@ -79,38 +75,44 @@ struct Render_t {
 		uint32_t outLine    = 0;
 	} scale = {};
 
-#if C_OPENGL
-	struct {
-		std::string filename      = {};
-		std::string source        = {};
-		bool use_srgb_texture     = false;
-		bool use_srgb_framebuffer = false;
-	} shader = {};
-#endif
-
 	RenderPal_t pal = {};
 
 	bool updating  = false;
 	bool active    = false;
-	bool aspect    = true;
 	bool fullFrame = true;
+
+	std::string current_shader_name = {};
+	bool force_reload_shader        = false;
 };
 
+// A frame of the emulated video output that's passed to the rendering backend
+// or to the image and video capturers.
+//
+// Also used for passing the post-shader output read back from the frame buffer
+// to the image capturer.
+//
 struct RenderedImage {
-	uint16_t width              = 0;
-	uint16_t height             = 0;
-	bool double_width           = false;
-	bool double_height          = false;
-	bool flip_vertical          = false;
-	Fraction pixel_aspect_ratio = {};
-	uint8_t bits_per_pixel      = 0;
-	uint16_t pitch              = 0;
-	uint8_t* image_data         = nullptr;
-	uint8_t* palette_data       = nullptr;
+	ImageInfo params = {};
+
+	// If true, the image is stored flipped vertically, starting from the
+	// bottom row
+	bool is_flipped_vertically = false;
+
+	// Bytes per row
+	uint16_t pitch = 0;
+
+	// (width * height) number of pixels stored in the pixel format defined
+	// by pixel_format
+	uint8_t* image_data = nullptr;
+
+	// Pointer to a (256 * 4) byte long palette data, stored as 8-bit RGB
+	// values with 1 extra padding byte per entry (R0, G0, B0, X0, R1, G1,
+	// B1, X1, etc.)
+	uint8_t* palette_data = nullptr;
 
 	inline bool is_paletted() const
 	{
-		return (bits_per_pixel == 8);
+		return (params.pixel_format == PixelFormat::Indexed8);
 	}
 
 	RenderedImage deep_copy() const
@@ -118,14 +120,13 @@ struct RenderedImage {
 		RenderedImage copy = *this;
 
 		// Deep-copy image and palette data
-		const auto image_data_num_bytes = static_cast<uint32_t>(height * pitch);
+		const auto image_data_num_bytes = static_cast<uint32_t>(
+		        params.height * pitch);
 
 		copy.image_data = new uint8_t[image_data_num_bytes];
 
 		assert(image_data);
-		std::memcpy(copy.image_data,
-		            image_data,
-		            image_data_num_bytes);
+		std::memcpy(copy.image_data, image_data, image_data_num_bytes);
 
 		// TODO it's bad that we need to make this assumption downstream
 		// on the size and alignment of the palette...
@@ -133,9 +134,7 @@ struct RenderedImage {
 			constexpr uint16_t PaletteNumBytes = 256 * 4;
 			copy.palette_data = new uint8_t[PaletteNumBytes];
 
-			std::memcpy(copy.palette_data,
-			            palette_data,
-			            PaletteNumBytes);
+			std::memcpy(copy.palette_data, palette_data, PaletteNumBytes);
 		}
 		return copy;
 	}
@@ -153,21 +152,35 @@ struct RenderedImage {
 extern Render_t render;
 extern ScalerLineHandler_t RENDER_DrawLine;
 
-std::deque<std::string> RENDER_InventoryShaders();
+void RENDER_Init(Section*);
+void RENDER_Reinit();
 
-void RENDER_SetSize(const uint32_t width, const uint32_t height,
+void RENDER_AddConfigSection(const config_ptr_t& conf);
+
+bool RENDER_IsAspectRatioCorrectionEnabled();
+const std::string RENDER_GetCgaColorsSetting();
+
+void RENDER_SyncMonochromePaletteSetting(const enum MonochromePalette palette);
+
+std::deque<std::string> RENDER_GenerateShaderInventoryMessage();
+
+void RENDER_SetSize(const uint16_t width, const uint16_t height,
                     const bool double_width, const bool double_height,
-                    const Fraction& pixel_aspect_ratio,
-                    const unsigned bits_per_pixel, const double frames_per_second);
+                    const Fraction& render_pixel_aspect_ratio,
+                    const PixelFormat pixel_format,
+                    const double frames_per_second, const VideoMode& video_mode);
 
 bool RENDER_StartUpdate(void);
 void RENDER_EndUpdate(bool abort);
-void RENDER_InitShaderSource([[maybe_unused]] Section* sec);
-void RENDER_SetPal(uint8_t entry, uint8_t red, uint8_t green, uint8_t blue);
 
-#if C_OPENGL
-bool RENDER_UseSrgbTexture();
-bool RENDER_UseSrgbFramebuffer();
-#endif
+void RENDER_SetPalette(const uint8_t entry, const uint8_t red,
+                       const uint8_t green, const uint8_t blue);
 
-#endif
+bool RENDER_MaybeAutoSwitchShader([[maybe_unused]] const uint16_t canvas_width_px,
+                                  [[maybe_unused]] const uint16_t canvas_height_px,
+                                  [[maybe_unused]] const VideoMode& video_mode,
+                                  [[maybe_unused]] const bool reinit_render);
+
+void RENDER_NotifyEgaModeWithVgaPalette();
+
+#endif // DOSBOX_RENDER_H

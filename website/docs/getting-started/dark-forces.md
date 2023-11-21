@@ -132,12 +132,12 @@ the slight judder resulting from the 60/70 Hz mismatch.
 
 For reference, these are the refresh rates of all emulated graphics cards:
 
-| Graphics adapter      | Refresh rate
-| ----------------------| -------------
-| SVGA and VESA         | 70 Hz or higher --- 640&times;480 or higher extended and VESA modes
-| VGA                   | 60 Hz --- 640&times;480 standard mode only<br>70 Hz --- all other standard modes
-| CGA, PCjr, Tandy, EGA | 60 Hz
-| Hercules              | 50 Hz
+| Graphics adapter      | Refresh rate                                                                     |
+|-----------------------|----------------------------------------------------------------------------------|
+| SVGA and VESA         | 70 Hz or higher --- 640&times;480 or higher extended and VESA modes              |
+| VGA                   | 60 Hz --- 640&times;480 standard mode only<br>70 Hz --- all other standard modes |
+| CGA, PCjr, Tandy, EGA | 60 Hz                                                                            |
+| Hercules              | 50 Hz                                                                            |
 
 !!! tip "Creating custom 60 and 70 Hz screen modes"
 
@@ -223,7 +223,7 @@ be fast enough to reach the 70 FPS maximum the game supports.
 
 The game prints out the familiar message of the DOS/4GW DOS extender at
 startup, which means this is a
-[protected mode game](../beneath-a-steel-sky/#real-and-protected-mode):
+[protected mode game](beneath-a-steel-sky.md#real-and-protected-mode):
 
 ``` { . .dos-prompt }
 DOS/4GW Protected Mode Run-Time  Version 1.95
@@ -256,7 +256,7 @@ you're using a VRR monitor or a fixed 70 Hz refresh rate, it will never become
 completely smooth). Somewhere around 50&thinsp;000 cycles seems to do the
 trick, which roughly corresponds to a Pentium 90 based on our [table of
 common
-processors](../beneath-a-steel-sky/#finding-the-correct-speed-for-a-game).
+processors](beneath-a-steel-sky.md#finding-the-correct-speed-for-a-game).
 
 So we'll go with that setting. You might need to increase this if later levels
 are more demanding on the CPU, but this is a good starting point:

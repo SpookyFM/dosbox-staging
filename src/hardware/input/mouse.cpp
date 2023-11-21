@@ -59,6 +59,8 @@ static struct {
 	bool gui_has_taken_over     = false; // if a GUI requested to take over the mouse
 	bool is_mapping_in_progress = false; // if interactive mapping is running
 	bool capture_was_requested  = false; // if user requested mouse to be captured
+	bool vmm_wants_pointer      = false; // if virtual machine guest addons wants us
+	                                     // to show the host pointer
 
 	// if we have a desktop environment, then we can support uncaptured and seamless modes
 	const bool have_desktop_environment = GFX_HaveDesktopEnvironment();
@@ -68,7 +70,7 @@ static struct {
 	bool is_input_raw = false; // if GFX was requested to provide raw movements
 	bool is_seamless  = false; // if seamless mouse integration is in effect
 
-	// if mouse events should be ignored, except button release
+	// If mouse events should be ignored, except button release
 	bool should_drop_events = true;
 
 	bool should_capture_on_click  = false; // if any button click should capture the mouse
@@ -138,8 +140,11 @@ static void update_cursor_visibility()
 		// But show it nevertheless if:
 		// - seamless integration is in effect and
 		// - cursor is outside of drawing area
+		// Or if:
+		// - virtual machine guest addons wants us to show the pointer
 		state.is_visible = !(state.is_captured || state.is_seamless) ||
-		                   (state.is_seamless && state.cursor_is_outside);
+		                   (state.is_seamless && state.cursor_is_outside) ||
+		                   state.vmm_wants_pointer;
 	}
 
 	// Apply calculated settings if changed or if this is the first run
@@ -172,16 +177,29 @@ static void update_state() // updates whole 'state' structure, except cursor vis
 		state.capture_was_requested = true;
 	}
 
+	// Virtual machine manager wants us to show mouse pointer if:
+	// - virtual machine guest addons are running and
+	// - they requested to show host mouse pointer
+	state.vmm_wants_pointer = mouse_shared.active_vmm &&
+	                          mouse_shared.vmm_wants_pointer;
+
+	// Discard previous mouse capture request if:
+	// - virtual machine guest addons wants us to show the pointer
+	if (state.vmm_wants_pointer) {
+		state.capture_was_requested = false;
+	}
+
 	// We are running in seamless mode:
 	// - we have a desktop environment, and
-	// - we are in windowed or multi-display mode, and
+	// - we are in windowed or multi-display mode, or
+	//   if virtual machine guest addons wants us to show the pointer, and
 	// - NoMouse is not configured, and
 	// - seamless driver is running or Seamless capture is configured
 	const bool is_seamless_config = (mouse_config.capture == MouseCapture::Seamless);
 	const bool is_seamless_driver = mouse_shared.active_vmm;
 
 	state.is_seamless = state.have_desktop_environment &&
-	                    is_window_or_multi_display &&
+	                    (is_window_or_multi_display || state.vmm_wants_pointer) &&
 	                    !is_config_no_mouse &&
 	                    (is_seamless_driver || is_seamless_config);
 
@@ -213,21 +231,35 @@ static void update_state() // updates whole 'state' structure, except cursor vis
 		// host OS mouse acceleration applied
 		state.is_input_raw = false;
 
+	} else if (is_config_no_mouse) { // NoMouse is configured
+
+		// Capture mouse cursor if:
+		// - we are in fullscreen mode and not in multi-display mode
+		state.is_captured = !is_window_or_multi_display;
+
+		// Drop the user capture request, otherwise runtime mouse
+		// capture configuration change (for example to OnClick) could
+		// have caused the mouse cursor to suddenly disappear
+		state.capture_was_requested = false;
+
 	} else if (state.is_window_active) { // window has focus, no GUI running
 
 		// Capture mouse cursor if any of:
 		// - we lack a desktop environment,
-		// - we are in fullscreen mode and not in multi-display mode
+		// - we are in fullscreen mode and not in multi-display mode and
+		//   virtual machine guest addons did not request us to show
+		//   the mouse cursor, and
 		// - user asked to capture the mouse
 		state.is_captured = !state.have_desktop_environment ||
-		                    !is_window_or_multi_display ||
+		                    (!is_window_or_multi_display && !state.vmm_wants_pointer) ||
 		                    state.capture_was_requested;
 	}
 
 	// Drop mouse events (except for button release) if any of:
 	// - GUI has taken over the mouse
 	// - capture type is NoMouse
-	state.should_drop_events = state.gui_has_taken_over || is_config_no_mouse;
+	state.should_drop_events = state.gui_has_taken_over ||
+	                           is_config_no_mouse;
 	if (!state.is_seamless) {
 
 		// If not Seamless mode, also drop events if any of:
@@ -249,6 +281,8 @@ static void update_state() // updates whole 'state' structure, except cursor vis
 	// Use any mouse click to capture the mouse if:
 	// - we have a desktop environment, and
 	// - we are in windowed or multi-display mode, and
+	// - virtual machine guest addons did not request us to show
+	//   the mous cursor, and
 	// - mouse is not captured, and
 	// - we are not in seamless mode, and
 	// - no GUI has taken over the mouse, and
@@ -256,6 +290,7 @@ static void update_state() // updates whole 'state' structure, except cursor vis
 	// - capture on start/click was configured or mapping is in effect
 	state.should_capture_on_click = state.have_desktop_environment &&
 	                                is_window_or_multi_display &&
+	                                !state.vmm_wants_pointer &&
 	                                !state.is_captured &&
 	                                !state.is_seamless &&
 	                                !state.gui_has_taken_over &&
@@ -265,6 +300,8 @@ static void update_state() // updates whole 'state' structure, except cursor vis
 	// Use a middle click to capture the mouse if:
 	// - we have a desktop environment, and
 	// - we are in windowed or multi-display mode, and
+	// - virtual machine guest addons did not request us to show
+	//   the mous cursor, and
 	// - mouse is not captured, and
 	// - no GUI has taken over the mouse, and
 	// - capture type is different than NoMouse, and
@@ -272,6 +309,7 @@ static void update_state() // updates whole 'state' structure, except cursor vis
 	// - middle release was configured
 	state.should_capture_on_middle = state.have_desktop_environment &&
 	                                 is_window_or_multi_display &&
+	                                 !state.vmm_wants_pointer &&
 	                                 !state.is_captured &&
 	                                 !state.gui_has_taken_over &&
 	                                 !is_config_no_mouse &&
@@ -419,7 +457,9 @@ static Bitu int74_handler()
 
 Bitu int74_ret_handler()
 {
+	MOUSEBIOS_FinalizeInterrupt();
 	MOUSEDOS_FinalizeInterrupt();
+	MOUSEBIOS_FinalizeInterrupt();
 	return CBRET_NONE;
 }
 
@@ -464,8 +504,9 @@ void MOUSE_NewScreenParams(const MouseScreenParams &params)
 
 void MOUSE_ToggleUserCapture(const bool pressed)
 {
-	if (!pressed || !state.should_toggle_on_hotkey)
+	if (!pressed || !state.should_toggle_on_hotkey || state.vmm_wants_pointer) {
 		return;
+	}
 
 	state.capture_was_requested = !state.capture_was_requested;
 	MOUSE_UpdateGFX();
@@ -486,14 +527,16 @@ void MOUSE_NotifyWindowActive(const bool is_active)
 void MOUSE_NotifyDisconnect(const MouseInterfaceId interface_id)
 {
 	auto interface = MouseInterface::Get(interface_id);
-	if (interface)
+	if (interface) {
 		interface->NotifyDisconnect();
+	}
 }
 
 void MOUSE_NotifyBooting()
 {
-	for (auto &interface : mouse_interfaces)
+	for (auto& interface : mouse_interfaces) {
 		interface->NotifyBooting();
+	}
 }
 
 void MOUSE_EventMoved(const float x_rel, const float y_rel,
@@ -527,11 +570,16 @@ void MOUSE_EventMoved(const float x_rel, const float y_rel,
 	// so it needs data in both formats.
 
 	// Notify mouse interfaces
-	for (auto &interface : mouse_interfaces)
-		if (interface->IsUsingHostPointer())
-			interface->NotifyMoved(x_rel, y_rel,
+	const float x_scaled = x_rel * mouse_config.sensitivity_coeff_x;
+	const float y_scaled = y_rel * mouse_config.sensitivity_coeff_y;
+	for (auto& interface : mouse_interfaces) {
+		if (interface->IsUsingHostPointer()) {
+			interface->NotifyMoved(x_scaled,
+			                       y_scaled,
 			                       state.cursor_x_abs,
 			                       state.cursor_y_abs);
+		}
+	}
 }
 
 void MOUSE_EventMoved(const float x_rel, const float y_rel,
@@ -547,11 +595,13 @@ void MOUSE_EventMoved(const float x_rel, const float y_rel,
 	// Notify mouse interface
 	auto interface = MouseInterface::Get(interface_id);
 	if (interface && interface->IsUsingEvents()) {
-		interface->NotifyMoved(x_rel, y_rel, 0, 0);
+		const float x_scaled = x_rel * mouse_config.sensitivity_coeff_x;
+		const float y_scaled = y_rel * mouse_config.sensitivity_coeff_y;
+		interface->NotifyMoved(x_scaled, y_scaled, 0, 0);
 	}
 }
 
-void MOUSE_EventButton(const uint8_t idx, const bool pressed)
+void MOUSE_EventButton(const MouseButtonId button_id, const bool pressed)
 {
 	// Event from GFX
 
@@ -566,14 +616,15 @@ void MOUSE_EventButton(const uint8_t idx, const bool pressed)
 			return;
 		}
 
+		const auto is_middle = (button_id == MouseButtonId::Middle);
+
 		// Handle mouse capture toggle by middle click
-		constexpr uint8_t idx_middle = 2;
-		if (idx == idx_middle && state.should_capture_on_middle) {
+		if (is_middle && state.should_capture_on_middle) {
 			state.capture_was_requested = true;
 			MOUSE_UpdateGFX();
 			return;
 		}
-		if (idx == idx_middle && state.should_release_on_middle) {
+		if (is_middle && state.should_release_on_middle) {
 			state.capture_was_requested = false;
 			MOUSE_UpdateGFX();
 			return;
@@ -586,12 +637,14 @@ void MOUSE_EventButton(const uint8_t idx, const bool pressed)
 	}
 
 	// Notify mouse interfaces
-	for (auto &interface : mouse_interfaces)
-		if (interface->IsUsingHostPointer())
-			interface->NotifyButton(idx, pressed);
+	for (auto& interface : mouse_interfaces) {
+		if (interface->IsUsingHostPointer()) {
+			interface->NotifyButton(button_id, pressed);
+		}
+	}
 }
 
-void MOUSE_EventButton(const uint8_t idx, const bool pressed,
+void MOUSE_EventButton(const MouseButtonId button_id, const bool pressed,
                        const MouseInterfaceId interface_id)
 {
 	// Event from ManyMouse
@@ -606,7 +659,7 @@ void MOUSE_EventButton(const uint8_t idx, const bool pressed,
 	// Notify mouse interface
 	auto interface = MouseInterface::Get(interface_id);
 	if (interface && interface->IsUsingEvents()) {
-		interface->NotifyButton(idx, pressed);
+		interface->NotifyButton(button_id, pressed);
 	}
 }
 
@@ -620,9 +673,11 @@ void MOUSE_EventWheel(const int16_t w_rel)
 	}
 
 	// Notify mouse interfaces
-	for (auto &interface : mouse_interfaces)
-		if (interface->IsUsingHostPointer())
+	for (auto& interface : mouse_interfaces) {
+		if (interface->IsUsingHostPointer()) {
 			interface->NotifyWheel(w_rel);
+		}
+	}
 }
 
 void MOUSE_EventWheel(const int16_t w_rel, const MouseInterfaceId interface_id)
@@ -692,6 +747,11 @@ bool MouseControlAPI::IsNoMouseMode()
 	return mouse_config.capture == MouseCapture::NoMouse;
 }
 
+bool MouseControlAPI::IsMappingBlockedByDriver()
+{
+	return state.vmm_wants_pointer;
+}
+
 const std::vector<MouseInterfaceInfoEntry> &MouseControlAPI::GetInfoInterfaces() const
 {
 	return mouse_info.interfaces;
@@ -744,8 +804,9 @@ bool MouseControlAPI::PatternToRegex(const std::string &pattern, std::regex &reg
 bool MouseControlAPI::MapInteractively(const MouseInterfaceId interface_id,
                                        uint8_t &physical_device_idx)
 {
-	if (IsNoMouseMode())
+	if (IsNoMouseMode() || IsMappingBlockedByDriver()) {
 		return false;
+	}
 
 	if (!was_interactive_mapping_started) {
 		// Interactive mapping was started
@@ -763,8 +824,9 @@ bool MouseControlAPI::MapInteractively(const MouseInterfaceId interface_id,
 	}
 
 	manymouse.RescanIfSafe();
-	if (!manymouse.ProbeForMapping(physical_device_idx))
+	if (!manymouse.ProbeForMapping(physical_device_idx)) {
 		return false;
+	}
 
 	return Map(interface_id, physical_device_idx);
 }
@@ -772,25 +834,29 @@ bool MouseControlAPI::MapInteractively(const MouseInterfaceId interface_id,
 bool MouseControlAPI::Map(const MouseInterfaceId interface_id,\
                           const uint8_t physical_device_idx)
 {
-	if (IsNoMouseMode())
+	if (IsNoMouseMode() || IsMappingBlockedByDriver()) {
 		return false;
+	}
 
 	auto mouse_interface = MouseInterface::Get(interface_id);
-	if (!mouse_interface)
+	if (!mouse_interface) {
 		return false;
+	}
 
 	return mouse_interface->ConfigMap(physical_device_idx);
 }
 
 bool MouseControlAPI::Map(const MouseInterfaceId interface_id, const std::regex &regex)
 {
-	if (IsNoMouseMode())
+	if (IsNoMouseMode() || IsMappingBlockedByDriver()) {
 		return false;
+	}
 
 	manymouse.RescanIfSafe();
 	const auto idx = manymouse.GetIdx(regex);
-	if (idx >= mouse_info.physical.size())
+	if (idx >= mouse_info.physical.size()) {
 		return false;
+	}
 	const auto result = Map(interface_id, idx);
 
 	MOUSE_UpdateGFX();

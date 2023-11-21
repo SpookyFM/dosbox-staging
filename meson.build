@@ -86,6 +86,7 @@ extra_flags = [
 
 warnings = []
 
+# Enable additional warnings
 foreach flag : [
     '-Walloca',
     '-Wctor-dtor-privacy',
@@ -104,6 +105,15 @@ foreach flag : [
     '-Wstrict-null-sentinel',
     '-Wsuggest-override',
     '-Wzero-as-null-pointer-constant',
+]
+    if cxx.has_argument(flag)
+       warnings += flag
+    endif
+endforeach
+
+# Ignore some warnings enabled by default
+foreach flag : [
+    '-Wno-format-security'
 ]
     if cxx.has_argument(flag)
        warnings += flag
@@ -180,6 +190,10 @@ endif
 
 if get_option('asm')
     extra_flags += ['--save-temps', '/FAs']
+endif
+
+if get_option('time_trace')
+    extra_flags += ['-ftime-trace']
 endif
 
 # Don't flood us with hundreds of suggestions to use Microsoft-specific calls
@@ -266,7 +280,9 @@ conf_data.set10('C_MT32EMU', get_option('use_mt32emu'))
 conf_data.set10('C_TRACY', get_option('tracy'))
 conf_data.set10('C_FPU', true)
 conf_data.set10('C_FPU_X86', host_machine.cpu_family() in ['x86', 'x86_64'])
-conf_data.set10('C_VOODOO', get_option('experimental_voodoo_support'))
+
+# Default page size is 4K, but not on all platforms.
+pagesize = 4096
 
 if get_option('enable_debugger') != 'none'
     conf_data.set10('C_DEBUG', true)
@@ -372,12 +388,24 @@ if host_machine.endian() == 'big'
     conf_data.set10('WORDS_BIGENDIAN', true)
 endif
 
-# Non-4K memory page size is supported only for ppc64 at the moment.
-# TODO re-enable ppc dynrec while working on W^X stuff
-#      disabled because SVN r4424 broke compilation of ppc backends
-#if host_machine.cpu_family() in ['ppc64', 'ppc64le']
-#  conf_data.set('PAGESIZE', 65536)
-#endif
+# 64-bit Power ISA can run with either 4K or 64K page size.
+# (32-bit Power ISA and PowerPC are always 4K.)
+if host_machine.cpu_family() in ['ppc64', 'ppc64le', 'powerpc64le']
+    pagesize_cmd = run_command('getconf', 'PAGESIZE', check: true)
+    if pagesize_cmd.returncode() != 0
+        error('''error executing getconf: unable to determine host architecture page size for ppc64 dynamic core''')
+    else
+        pagesize = pagesize_cmd.stdout().strip().to_int()
+        if pagesize < 4096
+            # unexpected; did getconf return an empty or bogus string?
+            error('''need at least 4096-byte pages, getconf PAGESIZE returned '''+pagesize_cmd.stdout())
+        else
+            if pagesize != 4096
+                conf_data.set('PAGESIZE', pagesize)
+            endif
+        endif
+    endif
+endif
 
 set_prio_code = '''
 #include <sys/resource.h>
@@ -645,7 +673,7 @@ tracy_dep = optional_dep
 if get_option('tracy')
     tracy_dep = dependency(
         'tracy',
-        # version: ['>= 0.9', '< 1'],
+        version: ['>= 0.10', '< 1'],
         default_options: default_wrap_options,
         static: ('tracy' in static_libs_list or prefers_static_libs),
         not_found_message: msg.format('tracy'),
@@ -791,7 +819,7 @@ endif
 
 # Determine if system is capable of using ManyMouse library
 conf_data.set10('C_MANYMOUSE', true)
-manymouse_summary_msg = 'Enabled'
+manymouse_summary_msg = 'True'
 
 # ManyMouse optionally supports the X Input 2.0 protocol (regardless of OS)
 xinput2_dep = optional_dep
@@ -845,6 +873,10 @@ if host_machine.system() in ['windows', 'cygwin']
     winmm_dep = cxx.find_library('winmm', required: true)
     summary('Windows Multimedia support', winmm_dep.found())
 endif
+
+# Display page size in use (and to alert the user this may be salient).
+summary('Host page size (bytes)', pagesize.to_string())
+
 
 # Setup include directories
 incdir = [

@@ -24,39 +24,40 @@
 
 CHECK_NARROWING();
 
-void ImageDecoder::Init(const RenderedImage& image)
+void ImageDecoder::Init(const RenderedImage& image, const uint8_t row_skip_count)
 {
-	assert(image.width > 0);
-	assert(image.height > 0);
+	assert(image.params.width > 0);
+	assert(image.params.height > 0);
 
-	assert(image.bits_per_pixel == 8 || image.bits_per_pixel == 15 ||
-	       image.bits_per_pixel == 16 || image.bits_per_pixel == 24 ||
-	       image.bits_per_pixel == 32);
-
-	assert(image.pitch >= image.width);
-	assert(image.pixel_aspect_ratio.ToDouble() >= 0.0);
+	assert(image.pitch >= image.params.width);
+	assert(image.params.pixel_aspect_ratio.ToDouble() >= 0.0);
 	assert(image.image_data);
 
 	if (image.is_paletted()) {
 		assert(image.palette_data);
 	}
 
-	if (image.flip_vertical) {
-		curr_row_start = image.image_data + (image.height - 1) * image.pitch;
+	if (image.is_flipped_vertically) {
+		curr_row_start = image.image_data +
+		                 (image.params.height - 1) * image.pitch;
 	} else {
 		curr_row_start = image.image_data;
 	}
 	pos = curr_row_start;
 
-	this->image = image;
+	this->image          = image;
+	this->row_skip_count = row_skip_count;
 }
 
 void ImageDecoder::AdvanceRow()
 {
-	if (image.flip_vertical) {
-		curr_row_start -= image.pitch;
+	auto rows_to_advance = row_skip_count + 1;
+
+	if (image.is_flipped_vertically) {
+		curr_row_start -= image.pitch * rows_to_advance;
 	} else {
-		curr_row_start += image.pitch;
+		curr_row_start += image.pitch * rows_to_advance;
 	}
+
 	pos = curr_row_start;
 }

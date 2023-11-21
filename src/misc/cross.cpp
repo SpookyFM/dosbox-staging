@@ -23,13 +23,12 @@
 
 #include <cerrno>
 #include <clocale>
-#include <string>
-#include <vector>
-
 #include <limits.h>
 #include <stdlib.h>
+#include <string>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
 
 #if C_COREFOUNDATION
 #	include <CoreFoundation/CoreFoundation.h>
@@ -42,11 +41,12 @@
 #		define _WIN32_IE 0x0400
 #	endif
 #	include <shlobj.h>
-#else
+#else // other than Windows
 #	include <libgen.h>
+#include <sys/xattr.h>
 #endif
 
-#if defined HAVE_PWD_H
+#if defined(HAVE_PWD_H)
 #	include <pwd.h>
 #endif
 
@@ -55,38 +55,47 @@
 #include "support.h"
 #include "drives.h"
 
-static std::string GetConfigName()
+std::string GetPrimaryConfigName()
 {
 	return CANONICAL_PROJECT_NAME ".conf";
 }
 
-#ifndef WIN32
-
-std::string cached_conf_path;
+std_fs::path GetPrimaryConfigPath()
+{
+	return GetConfigDir() / GetPrimaryConfigName();
+}
 
 #if defined(MACOSX)
 
-static std::string DetermineConfigPath()
+static std_fs::path get_or_create_config_dir()
 {
 	const auto conf_path = resolve_home("~/Library/Preferences/DOSBox");
-	create_dir(conf_path, 0700);
-	return conf_path.string();
+
+	constexpr auto success = 0;
+	if (create_dir(conf_path, 0700, OK_IF_EXISTS) == success) {
+
+	} else {
+		LOG_ERR("CONFIG: Can't create config directory '%s': %s",
+		        conf_path.string().c_str(),
+		        safe_strerror(errno).c_str());
+	}
+	return conf_path;
 }
 
-#else
+#elif defined(LINUX)
 
-static std::string DetermineConfigPath()
+static std_fs::path get_or_create_config_dir()
 {
 	const auto conf_path = get_xdg_config_home() / "dosbox";
-	std::error_code ec = {};
+	std::error_code ec   = {};
 
-	if (std_fs::exists(conf_path / GetConfigName())) {
+	if (std_fs::exists(conf_path / GetPrimaryConfigName())) {
 		return conf_path;
 	}
 
 	auto fallback_to_deprecated = []() {
-		const std::string old_conf_path = resolve_home("~/.dosbox").string();
-		if (path_exists(old_conf_path + "/" + GetConfigName())) {
+		const auto old_conf_path = resolve_home("~/.dosbox");
+		if (path_exists(old_conf_path / GetPrimaryConfigName())) {
 			LOG_WARNING("CONFIG: Falling back to deprecated path (~/.dosbox) due to errors");
 			LOG_WARNING("CONFIG: Please investigate the problems and try again");
 		}
@@ -113,20 +122,22 @@ static std::string DetermineConfigPath()
 		LOG_ERR("CONFIG: Path '%s' exists, but it's a file",
 		        conf_path.c_str());
 		return fallback_to_deprecated();
-
 	}
 
 	if (std_fs::is_symlink(conf_path, ec)) {
 		auto target_path = std_fs::read_symlink(conf_path, ec);
 
-		// If it's a symlink to a symlink, then keep reading them
-		auto num_symlinks_read = 1; // but bail out if they're circular links
-		while (std_fs::is_symlink(target_path, ec) && num_symlinks_read++ < 100) {
+		// If it's a symlink to a symlink, then keep reading them...
+		auto num_symlinks_read = 1;
+
+		// ...but bail out if they're circular links
+		while (std_fs::is_symlink(target_path, ec) &&
+		       num_symlinks_read++ < 100) {
 			target_path = std_fs::read_symlink(target_path, ec);
 		}
 		// If the last symlink points to a directory, then we'll take it
 		if (std_fs::is_directory(target_path, ec)) {
-			return target_path.string();
+			return target_path;
 		}
 		LOG_ERR("CONFIG: Path '%s' cannot be created because it's symlinked to '%s'",
 		        conf_path.c_str(),
@@ -138,92 +149,75 @@ static std::string DetermineConfigPath()
 	return fallback_to_deprecated();
 }
 
-#endif // !MACOSX
+#elif defined(WIN32)
 
-void CROSS_DetermineConfigPaths()
+static std_fs::path get_or_create_config_dir()
 {
-	if (cached_conf_path.empty())
-		cached_conf_path = DetermineConfigPath();
-}
+	char appdata_path[MAX_PATH] = {0};
 
-#endif // !WIN32
+	const int create = 1;
 
-#ifdef WIN32
+	// CSIDL_LOCAL_APPDATA - The file system directory that serves as a data
+	// repository for local (nonroaming) applications. A typical path is:
+	// C:\Documents and Settings\username\Local Settings\Application Data.
+	//
+	BOOL success = SHGetSpecialFolderPath(nullptr,
+	                                      appdata_path,
+	                                      CSIDL_LOCAL_APPDATA,
+	                                      create);
 
-void CROSS_DetermineConfigPaths() {}
-
-static void W32_ConfDir(std::string& in,bool create) {
-	int c = create?1:0;
-	char result[MAX_PATH] = { 0 };
-	BOOL r = SHGetSpecialFolderPath(nullptr,result,CSIDL_LOCAL_APPDATA,c);
-	if(!r || result[0] == 0) r = SHGetSpecialFolderPath(nullptr,result,CSIDL_APPDATA,c);
-	if(!r || result[0] == 0) {
-		const char* windir = getenv("windir");
-		if(!windir) windir = "c:\\windows";
-		safe_strcpy(result, windir);
-		const char* appdata = "\\Application Data";
-		size_t len = safe_strlen(result);
-		if (len + strlen(appdata) < MAX_PATH)
-			safe_strcat(result, appdata);
-		if (create)
-			mkdir(result);
-	}
-	in = result;
-}
-#endif
-
-std_fs::path get_platform_config_dir()
-{
-	// Cache the result, as this doesn't change
-	static std_fs::path conf_dir = {};
-	if (!conf_dir.empty())
-		return conf_dir;
-
-	// Check if a portable layout exists
-	const auto portable_conf_path = GetExecutablePath() / GetConfigName();
-
-	std::error_code ec = {};
-	if (std_fs::is_regular_file(portable_conf_path, ec)) {
-		conf_dir = portable_conf_path.parent_path();
-		const auto conf_str = conf_dir.string();
-		LOG_MSG("CONFIG: Using portable configuration layout in %s",
-		        conf_str.c_str());
-		return conf_dir;
+	if (!success || appdata_path[0] == 0) {
+		// CSIDL_APPDATA - The file system directory that serves as a data
+		// repository for local (nonroaming) applications. A typical path is
+		// C:\Documents and Settings\username\Local Settings\Application Data.
+		//
+		success = SHGetSpecialFolderPath(nullptr,
+		                                 appdata_path,
+		                                 CSIDL_APPDATA,
+		                                 create);
 	}
 
-	// Otherwise get the OS-specific configuration directory
-#ifdef WIN32
-	std::string win_conf_dir;
-	W32_ConfDir(win_conf_dir, false);
-	conf_dir = std_fs::path(win_conf_dir) / "DOSBox";
-#else
-	assert(!cached_conf_path.empty());
-	conf_dir = cached_conf_path;
-#endif
-	return conf_dir;
-}
+	const auto conf_path = std_fs::path(appdata_path) / "DOSBox";
 
-void Cross::GetPlatformConfigName(std::string &in)
-{
-	in = GetConfigName();
-}
-
-void Cross::CreatePlatformConfigDir(std::string &in)
-{
-#ifdef WIN32
-	W32_ConfDir(in,true);
-	in += "\\DOSBox";
-#else
-	assert(!cached_conf_path.empty());
-	in = cached_conf_path.c_str();
-#endif
-	if (in.back() != CROSS_FILESPLIT)
-		in += CROSS_FILESPLIT;
-
-	if (create_dir(in, 0700, OK_IF_EXISTS) != 0) {
-		LOG_MSG("ERROR: Creation of config directory '%s' failed: %s",
-		        in.c_str(), safe_strerror(errno).c_str());
+	constexpr auto success_result = 0;
+	if (create_dir(conf_path, 0700, OK_IF_EXISTS) != success_result) {
+		LOG_ERR("CONFIG: Can't create config directory '%s': %s",
+		        conf_path.string().c_str(),
+		        safe_strerror(errno).c_str());
 	}
+
+	return conf_path;
+}
+
+#endif // get_or_create_config_dir()
+
+static std_fs::path cached_config_dir = {};
+
+void InitConfigDir()
+{
+	if (cached_config_dir.empty()) {
+		// Check if a portable layout exists
+		const auto portable_conf_path = GetExecutablePath() /
+		                                GetPrimaryConfigName();
+
+		std::error_code ec = {};
+		if (std_fs::is_regular_file(portable_conf_path, ec)) {
+			const auto conf_dir = portable_conf_path.parent_path();
+
+			LOG_MSG("CONFIG: Using portable configuration layout in '%s'",
+			        conf_dir.string().c_str());
+
+			cached_config_dir = conf_dir;
+		} else {
+			cached_config_dir = get_or_create_config_dir();
+		}
+	}
+}
+
+std_fs::path GetConfigDir()
+{
+	assert(!cached_config_dir.empty());
+	return cached_config_dir;
 }
 
 std_fs::path resolve_home(const std::string &str) noexcept
@@ -235,7 +229,8 @@ std_fs::path resolve_home(const std::string &str) noexcept
 	if(temp_line.size() == 1 || temp_line[1] == CROSS_FILESPLIT) { //The ~ and ~/ variant
 		char * home = getenv("HOME");
 		if(home) temp_line.replace(0,1,std::string(home));
-#if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H
+
+#if defined(HAVE_SYS_TYPES_H) && defined(HAVE_PWD_H)
 	} else { // The ~username variant
 		std::string::size_type namelen = temp_line.find(CROSS_FILESPLIT);
 		if(namelen == std::string::npos) namelen = temp_line.size();
@@ -247,21 +242,7 @@ std_fs::path resolve_home(const std::string &str) noexcept
 	return temp_line;
 }
 
-bool Cross::IsPathAbsolute(const std::string& in)
-{
-	// Absolute paths
-#if defined (WIN32)
-	// drive letter
-	if (in.size() > 2 && in[1] == ':' ) return true;
-	// UNC path
-	else if (in.size() > 2 && in[0]=='\\' && in[1]=='\\') return true;
-#else
-	if (in.size() > 1 && in[0] == '/' ) return true;
-#endif
-	return false;
-}
-
-#if defined (WIN32)
+#if defined(WIN32)
 
 dir_information* open_directory(const char* dirname) {
 	if (dirname == nullptr) return nullptr;
@@ -383,10 +364,10 @@ void close_directory(dir_information* dirp) {
 FILE *fopen_wrap(const char *path, const char *mode) {
 #if defined(WIN32)
 	;
-#elif defined (MACOSX)
+#elif defined(MACOSX)
 	;
 #else  
-#if defined (HAVE_REALPATH)
+#if defined(HAVE_REALPATH)
 	char work[CROSS_LEN] = {0};
 	strncpy(work,path,CROSS_LEN-1);
 	char* last = strrchr(work,'/');
@@ -462,7 +443,7 @@ bool wild_match(const char *haystack, const char *needle)
 {
 	assert(haystack);
 	assert(needle);
-	char *p = (char *)needle;
+	const char *p = needle;
 	while(*p != '\0') {
 		switch (*p) {
 		case '?':
@@ -725,7 +706,7 @@ std::string cfstr_to_string(CFStringRef source)
 	};
 #endif
 
-// Lamda helper to extract the language from Windows locale
+// Lambda helper to extract the language from Windows locale
 #if defined(WIN32)
 	auto get_lang_from_windows = []() -> std::string {
 		std::string lang = {};
@@ -759,7 +740,7 @@ std::string cfstr_to_string(CFStringRef source)
 #if C_COREFOUNDATION
 	lang = get_lang_from_macos();
 	if (!lang.empty()) {
-		DEBUG_LOG_MSG("LANG: Got language '%s' from macOS locale", lang.c_str());
+		LOG_DEBUG("LANG: Got language '%s' from macOS locale", lang.c_str());
 		return lang;
 	}
 #endif
@@ -767,20 +748,24 @@ std::string cfstr_to_string(CFStringRef source)
 #if defined(WIN32)
 	lang = get_lang_from_windows();
 	if (!lang.empty()) {
-		DEBUG_LOG_MSG("LANG: Got language '%s' from Windows locale", lang.c_str());
+		LOG_DEBUG("LANG: Got language '%s' from Windows locale", lang.c_str());
 		return lang;
 	}
 #endif
 
 	lang = get_lang_from_posix();
 	if (!lang.empty()) {
-		DEBUG_LOG_MSG("LANG: Got language '%s' from POSIX locale", lang.c_str());
+		LOG_DEBUG("LANG: Got language '%s' from POSIX locale", lang.c_str());
 		return lang;
 	}
 
 	assert(lang.empty());
 	return lang;
 }
+
+// ***************************************************************************
+// Local time support
+// ***************************************************************************
 
 namespace cross {
 

@@ -65,6 +65,7 @@
 #include <thread>
 #include <utility>
 
+#include "channel_names.h"
 #include "control.h"
 #include "dma.h"
 #include "inout.h"
@@ -89,7 +90,7 @@ constexpr uint8_t MaxIrqAddress = 7;
 #if IMFC_VERBOSE_LOGGING
 SDL_mutex* m_loggerMutex = nullptr;
 template <typename... Args>
-void IMF_LOG(std::string format, Args const&... args)
+void IMF_LOG(std::string format, const Args&... args)
 {
 	SDL_LockMutex(m_loggerMutex);
 	printf((format + "\n").c_str(), args...);
@@ -5367,7 +5368,7 @@ private:
 
 	template <typename... Args>
 	void log_debug([[maybe_unused]] std::string format,
-	               [[maybe_unused]] Args const&... args)
+	               [[maybe_unused]] const Args&... args)
 	{
 		// IMF_LOG(("[%s] [DEBUG] " + format).c_str(),
 		// getCurrentThreadName().c_str(), args...);
@@ -5375,7 +5376,7 @@ private:
 
 	template <typename... Args>
 	void log_info([[maybe_unused]] std::string format,
-	              [[maybe_unused]] Args const&... args)
+	              [[maybe_unused]] const Args&... args)
 	{
 		// IMF_LOG(("[%s] [INFO] " + format).c_str(),
 		// getCurrentThreadName().c_str(), args...);
@@ -5383,7 +5384,7 @@ private:
 
 	template <typename... Args>
 	void log_error([[maybe_unused]] const char* format,
-	               [[maybe_unused]] Args const&... args)
+	               [[maybe_unused]] const Args&... args)
 	{
 #if IMFC_VERBOSE_LOGGING
 		static std::string message = {};
@@ -5788,7 +5789,7 @@ private:
 			if (readResult.status == ReadStatus::Success) {
 				send_midi_byte_to_System_in_THRU_mode(readResult.data);
 			}
-			SystemReadResult const systemReadResult =
+			const SystemReadResult systemReadResult =
 			        system_read9BitMidiDataByte();
 			if (systemReadResult.status == SystemDataAvailable) {
 				processIncomingMusicCardMessageByte(
@@ -6009,7 +6010,7 @@ private:
 					        m_actualMidiFlowPath.System_To_MidiOut);
 					return {ReadStatus::Error, 0xF7};
 				case MidiDataAvailable:
-					SystemReadResult const systemReadResult =
+					const SystemReadResult systemReadResult =
 					        system_read9BitMidiDataByte();
 					// log_debug("readMidiDataWithTimeout()
 					// - case MidiDataAvailable (0x%02X)",
@@ -6192,7 +6193,7 @@ private:
 			const ReadResult readResult = readMidiData();
 			if (readResult.status == ReadStatus::Error) {
 				log_debug("MUSIC_MODE_LOOP_read_System_And_Dispatch - system_read9BitMidiDataByte()");
-				SystemReadResult const systemReadResult =
+				const SystemReadResult systemReadResult =
 				        system_read9BitMidiDataByte();
 				if (systemReadResult.status == SystemDataAvailable) {
 					log_debug("PC->IMFC: Found system data [1%02X] in queue",
@@ -13375,34 +13376,41 @@ static void imfc_init(Section* sec)
 	m_loggerMutex = SDL_CreateMutex();
 #endif
 
+	// The emulation requires playback at 44.1 KHz to match the pitch of
+	// original hardware.
+	constexpr uint16_t imfc_sampling_rate_hz = 44100;
+
 	// Register the Audio channel
 	auto channel = MIXER_AddChannel(IMFC_Mixer_Callback,
-	                                use_mixer_rate,
-	                                "IMFC",
+	                                imfc_sampling_rate_hz,
+	                                ChannelName::IbmMusicFeatureCard,
 	                                {ChannelFeature::Stereo,
 	                                 ChannelFeature::ReverbSend,
 	                                 ChannelFeature::ChorusSend,
 	                                 ChannelFeature::Synthesizer});
 
-	// Bring up the volume to get it on-par with line recordings
-	constexpr auto volume_scalar = 4.0f;
+	// Default volume scalar adjusted to match hardware line-out levels
+	// recorded by Pierre: Ref: https://www.youtube.com/watch?v=WHVWDi15AIw
+	constexpr auto volume_scalar = 2.1f;
 	channel->Set0dbScalar(volume_scalar);
 
-	// The filter parameters have been tweaked by analysing real hardware
-	// recordings. The results are virtually indistinguishable from the
-	// real thing by ear only.
-	const std::string_view filter_choice = conf->Get_string("imfc_filter");
+	// The filter parameters have been tweaked by analysing hardware
+	// line-out recordings by Pierre: Ref:
+	// https://www.youtube.com/watch?v=WHVWDi15AIw. The results are
+	// virtually indistinguishable from the real thing by ear and spectrum
+	// analysis.
+	const std::string filter_choice = conf->Get_string("imfc_filter");
 	const auto filter_choice_has_bool = parse_bool_setting(filter_choice);
 
 	if (filter_choice_has_bool && *filter_choice_has_bool == true) {
-		constexpr auto order       = 1;
-		constexpr auto cutoff_freq = 8000;
+		constexpr auto order       = 2;
+		constexpr auto cutoff_freq = 3500;
 		channel->ConfigureLowPassFilter(order, cutoff_freq);
 		channel->SetLowPassFilter(FilterState::On);
 
 	} else if (!channel->TryParseAndSetCustomFilter(filter_choice)) {
 		if (!filter_choice_has_bool) {
-			LOG_WARNING("IMFC: Invalid 'imfc_filter' value: '%s', using 'off'",
+			LOG_WARNING("IMFC: Invalid 'imfc_filter' setting: '%s', using 'off'",
 			            filter_choice.data());
 		}
 
@@ -13443,7 +13451,7 @@ void init_imfc_dosbox_settings(Section_prop& secprop)
 	int_prop->Set_help(
 	        "The IRQ number of the IBM Music Feature Card (3 by default).");
 
-	const auto str_prop = secprop.Add_string("imfc_filter", when_idle, "off");
+	const auto str_prop = secprop.Add_string("imfc_filter", when_idle, "on");
 	assert(str_prop);
 	str_prop->Set_help(
 	        "Filter for the IBM Music Feature Card output:\n"

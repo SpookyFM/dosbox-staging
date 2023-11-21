@@ -41,7 +41,7 @@ void PCSPEAKER_Init(Section *section)
 	const auto prop = static_cast<Section_prop *>(section);
 
 	// Get the user's PC Speaker model choice
-	const auto model_choice = std::string_view(prop->Get_string("pcspeaker"));
+	const std::string model_choice = prop->Get_string("pcspeaker");
 
 	const auto model_choice_has_bool = parse_bool_setting(model_choice);
 
@@ -58,7 +58,7 @@ void PCSPEAKER_Init(Section *section)
 	}
 
 	// Get the user's filering choice
-	const std::string_view filter_choice = prop->Get_string("pcspeaker_filter");
+	const std::string filter_choice = prop->Get_string("pcspeaker_filter");
 
 	assert(pc_speaker);
 
@@ -69,7 +69,7 @@ void PCSPEAKER_Init(Section *section)
 				pc_speaker->SetFilterState(FilterState::On);
 			}
 		} else {
-			LOG_WARNING("PCSPEAKER: Invalid 'pcspeaker_filter' value: '%s', using 'off'",
+			LOG_WARNING("PCSPEAKER: Invalid 'pcspeaker_filter' setting: '%s', using 'off'",
 			            filter_choice.data());
 			pc_speaker->SetFilterState(FilterState::Off);
 		}

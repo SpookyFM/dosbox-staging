@@ -323,7 +323,7 @@ static const std::deque<std_fs::path> &GetResourceParentPaths()
 	add_if_exists(GetExecutablePath() / "../share" / CANONICAL_PROJECT_NAME);
 
 	// Last priority is the user's configuration directory
-	add_if_exists(get_platform_config_dir());
+	add_if_exists(GetConfigDir());
 
 	return paths;
 }
@@ -469,9 +469,9 @@ std::vector<uint8_t> LoadResourceBlob(const std_fs::path &name,
 
 	// non-const to allow movement out of the function
 	std::vector<uint8_t> buffer(std::istreambuf_iterator<char>{file}, {});
-	// DEBUG_LOG_MSG("RESOURCE: Loaded resource '%s' [%d bytes]",
-	//               resource_path.string().c_str(),
-	//               check_cast<int>(buffer.size()));
+	// LOG_DEBUG("RESOURCE: Loaded resource '%s' [%d bytes]",
+	//           resource_path.string().c_str(),
+	//           check_cast<int>(buffer.size()));
 	return buffer;
 }
 

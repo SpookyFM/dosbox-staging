@@ -45,18 +45,18 @@ constexpr auto CurrentDirectory = ".";
 constexpr auto ParentDirectory  = "..";
 constexpr auto DosSeparator     = '\\';
 
-// obsolete - TODO: remove
-enum FatAttributeFlagsValues : uint8_t { // 7-bit
-	DOS_ATTR_READ_ONLY = 0b000'0001,
-	DOS_ATTR_HIDDEN    = 0b000'0010,
-	DOS_ATTR_SYSTEM    = 0b000'0100,
-	DOS_ATTR_VOLUME    = 0b000'1000,
-	DOS_ATTR_DIRECTORY = 0b001'0000,
-	DOS_ATTR_ARCHIVE   = 0b010'0000,
-	DOS_ATTR_DEVICE    = 0b100'0000,
-};
-
 union FatAttributeFlags {
+	enum : uint8_t {
+		ReadOnly  = bit::literals::b0,
+		Hidden    = bit::literals::b1,
+		System    = bit::literals::b2,
+		Volume    = bit::literals::b3,
+		Directory = bit::literals::b4,
+		Archive   = bit::literals::b5,
+		Device    = bit::literals::b6,
+		NotVolume = bit::mask_flip_all(Volume),
+	};
+
 	uint8_t _data = 0;
 
 	bit_view<0, 1> read_only;
@@ -71,10 +71,16 @@ union FatAttributeFlags {
 	FatAttributeFlags() : _data(0) {}
 	FatAttributeFlags(const uint8_t data) : _data(data) {}
 	FatAttributeFlags(const FatAttributeFlags& other) : _data(other._data) {}
+
 	FatAttributeFlags& operator=(const FatAttributeFlags& other)
 	{
 		_data = other._data;
 		return *this;
+	}
+
+	bool operator==(const FatAttributeFlags& other) const
+	{
+		return _data == other._data;
 	}
 };
 
@@ -87,20 +93,14 @@ struct FileStat_Block {
 
 class DOS_DTA;
 
+struct DosFilename {
+	std::string name = {};
+	std::string ext  = {};
+};
+
 class DOS_File {
 public:
-	DOS_File()
-	        : flags(0),
-	          time(0),
-	          date(0),
-	          attr(0),
-	          refCtr(0),
-	          open(false),
-	          name(""),
-	          newtime(false),
-	          hdrive(0xff)
-	{}
-
+	DOS_File() = default;
 	DOS_File(const DOS_File &orig) = default;
 	DOS_File &operator=(const DOS_File &orig);
 
@@ -129,17 +129,17 @@ public:
 
 	void SetDrive(uint8_t drv) { hdrive=drv;}
 	uint8_t GetDrive(void) { return hdrive;}
-	uint32_t flags;
-	uint16_t time;
-	uint16_t date;
-	uint16_t attr;
-	Bits refCtr;
-	bool open;
-	std::string name;
-	bool newtime;
+	uint32_t flags   = 0;
+	uint16_t time    = 0;
+	uint16_t date    = 0;
+	FatAttributeFlags attr = {};
+	Bits refCtr      = 0;
+	bool open        = false;
+	std::string name = {};
+	bool newtime     = false;
 	/* Some Device Specific Stuff */
 private:
-	uint8_t hdrive;
+	uint8_t hdrive = 0xff;
 };
 
 class DOS_Device : public DOS_File {
@@ -182,7 +182,8 @@ private:
 
 class localFile : public DOS_File {
 public:
-	localFile(const char* name, FILE* handle, const char* basedir);
+	localFile(const char* name, const std_fs::path& path, FILE* handle,
+	          const char* basedir);
 	localFile(const localFile&)            = delete; // prevent copying
 	localFile& operator=(const localFile&) = delete; // prevent assignment
 	bool Read(uint8_t* data, uint16_t* size) override;
@@ -200,15 +201,25 @@ public:
 	{
 		return basedir;
 	}
+	std_fs::path GetPath() const
+	{
+		return path;
+	}
 	FILE* fhandle = nullptr; // todo handle this properly
 private:
-	const char *basedir;
-	long stream_pos = 0;
+	const std_fs::path path = {};
+	const char* basedir     = nullptr;
+	long stream_pos         = 0;
+
 	bool ftell_and_check();
 	void fseek_and_check(int whence);
 	bool fseek_to_and_check(long pos, int whence);
-	bool read_only_medium;
-	enum { NONE,READ,WRITE } last_action;
+
+	bool read_only_medium     = false;
+	bool set_archive_on_close = false;
+
+	enum class LastAction : uint8_t { None, Read, Write };
+	LastAction last_action = LastAction::None;
 };
 
 /* The following variable can be lowered to free up some memory.
@@ -232,9 +243,9 @@ public:
 	bool  OpenDir              (const char* path, uint16_t& id);
 	bool  ReadDir              (uint16_t id, char* &result);
 
-	void  ExpandName           (char* path);
-	char* GetExpandName        (const char* path);
-	bool  GetShortName         (const char* fullname, char* shortname);
+	void ExpandNameAndNormaliseCase(char* path);
+	char* GetExpandNameAndNormaliseCase(const char* path);
+	bool GetShortName(const char* fullname, char* shortname);
 
 	bool  FindFirst            (char* path, uint16_t& id);
 	bool  FindNext             (uint16_t id, char* &result);
@@ -334,18 +345,21 @@ public:
 	DOS_Drive();
 	virtual ~DOS_Drive() = default;
 
-	virtual bool FileOpen(DOS_File * * file,char * name,uint32_t flags)=0;
-	virtual bool FileCreate(DOS_File * * file,char * name,uint16_t attributes)=0;
-	virtual bool FileUnlink(char * _name)=0;
+	virtual bool FileOpen(DOS_File** file, char* name, uint32_t flags) = 0;
+	virtual bool FileCreate(DOS_File** file, char* name,
+	                        FatAttributeFlags attributes) = 0;
+	virtual bool FileUnlink(char* _name)=0;
 	virtual bool RemoveDir(char * _dir)=0;
 	virtual bool MakeDir(char * _dir)=0;
 	virtual bool TestDir(char * _dir)=0;
 	virtual bool FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst=false)=0;
 	virtual bool FindNext(DOS_DTA & dta)=0;
-	virtual bool GetFileAttr(char * name, uint16_t * attr) = 0;
-	virtual bool SetFileAttr(const char * name, const uint16_t attr) = 0;
-	virtual bool Rename(char * oldname,char * newname)=0;
-	virtual bool AllocationInfo(uint16_t * _bytes_sector,uint8_t * _sectors_cluster,uint16_t * _total_clusters,uint16_t * _free_clusters)=0;
+	virtual bool GetFileAttr(char* name, FatAttributeFlags* attr) = 0;
+	virtual bool SetFileAttr(const char* name, const FatAttributeFlags attr) = 0;
+	virtual bool Rename(char* oldname, char* newname) = 0;
+	virtual bool AllocationInfo(uint16_t* _bytes_sector, uint8_t* _sectors_cluster,
+	                            uint16_t* _total_clusters,
+	                            uint16_t* _free_clusters) = 0;
 	virtual bool FileExists(const char* name)=0;
 	virtual bool FileStat(const char* name, FileStat_Block * const stat_block)=0;
 	virtual uint8_t GetMediaByte(void)=0;
@@ -412,7 +426,7 @@ enum SeekType : uint8_t {
 
 typedef bool (MultiplexHandler)(void);
 void DOS_AddMultiplexHandler(MultiplexHandler* handler);
-void DOS_DeleteMultiplexHandler(MultiplexHandler* handler);
+void DOS_DeleteMultiplexHandler(MultiplexHandler* const handler);
 
 /* AddDevice stores the pointer to a created device */
 void DOS_AddDevice(DOS_Device * adddev);

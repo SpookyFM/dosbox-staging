@@ -70,7 +70,6 @@ void IO_Init(Section * );
 void CALLBACK_Init(Section*);
 void PROGRAMS_Init(Section*);
 //void CREDITS_Init(Section*);
-void RENDER_Init(Section*);
 void VGA_Init(Section*);
 
 void DOS_Init(Section*);
@@ -84,12 +83,10 @@ void FPU_Init(Section*);
 
 void DMA_Init(Section*);
 
-#if defined(PCI_FUNCTIONALITY_ENABLED)
 void PCI_Init(Section*);
-#if C_VOODOO
 void VOODOO_Init(Section*);
-#endif
-#endif
+void VIRTUALBOX_Init(Section*);
+void VMWARE_Init(Section*);
 
 void KEYBOARD_Init(Section*);	//TODO This should setup INT 16 too but ok ;)
 void JOYSTICK_Init(Section*);
@@ -187,7 +184,7 @@ void increaseticks() { //Make it return ticksRemain and set it in the function a
 
 		static int64_t cumulativeTimeSlept = 0;
 
-		constexpr auto sleepDuration = std::chrono::microseconds(100);
+		constexpr auto sleepDuration = std::chrono::microseconds(1000);
 		std::this_thread::sleep_for(sleepDuration);
 
 		const auto timeslept = GetTicksUsSince(ticksNewUs);
@@ -225,13 +222,13 @@ void increaseticks() { //Make it return ticksRemain and set it in the function a
 	ticksAdded = ticksRemain;
 
 	// Is the system in auto cycle mode guessing ? If not just exit. (It can be temporary disabled)
-	if (!CPU_CycleAutoAdjust || CPU_SkipCycleAutoAdjust) return;
+	if (!CPU_CycleAutoAdjust) return;
 
-	if (ticksScheduled >= 250 || ticksDone >= 250 || (ticksAdded > 15 && ticksScheduled >= 5) ) {
+	if (ticksScheduled >= 100 || ticksDone >= 100 || (ticksAdded > 15 && ticksScheduled >= 5) ) {
 		if(ticksDone < 1) ticksDone = 1; // Protect against div by zero
-		/* ratio we are aiming for is around 90% usage*/
+		// Ratio we are aiming for is 100% usage
 		int32_t ratio = static_cast<int32_t>(
-		        (ticksScheduled * (CPU_CyclePercUsed * 90 * 1024 / 100 / 100)) /
+		        (ticksScheduled * (CPU_CyclePercUsed * 1024 / 100)) /
 		        ticksDone);
 
 		int32_t new_cmax = CPU_CycleMax;
@@ -247,11 +244,11 @@ void increaseticks() { //Make it return ticksRemain and set it in the function a
 
 				/* Don't allow very high ratio which can cause us to lock as we don't scale down
 				 * for very low ratios. High ratio might result because of timing resolution */
-				if (ticksScheduled >= 250 && ticksDone < 10 && ratio > 16384)
+				if (ticksScheduled >= 100 && ticksDone < 10 && ratio > 16384)
 					ratio = 16384;
 
 				// Limit the ratio even more when the cycles are already way above the realmode default.
-				if (ticksScheduled >= 250 && ticksDone < 10 && ratio > 5120 && CPU_CycleMax > 50000)
+				if (ticksScheduled >= 100 && ticksDone < 10 && ratio > 5120 && CPU_CycleMax > 50000)
 					ratio = 5120;
 
 				// When downscaling multiple times in a row, ensure a minimum amount of downscaling
@@ -346,24 +343,16 @@ static void DOSBOX_UnlockSpeed( bool pressed ) {
 	}
 }
 
-static void DOSBOX_RealInit(Section * sec) {
-	Section_prop * section=static_cast<Section_prop *>(sec);
-	/* Initialize some dosbox internals */
-	ticksRemain=0;
-	ticksLast=GetTicks();
-	ticksLocked = false;
-	DOSBOX_SetLoop(&Normal_Loop);
-
-	MAPPER_AddHandler(DOSBOX_UnlockSpeed, SDL_SCANCODE_F12, MMOD2,
-	                  "speedlock", "Speedlock");
-
-	std::string cmd_machine;
-	if (control->cmdline->FindString("-machine",cmd_machine,true)){
+void DOSBOX_SetMachineTypeFromConfig(Section_prop* section)
+{
+	const auto arguments = &control->arguments;
+	if (!arguments->machine.empty()) {
 		//update value in config (else no matching against suggested values
-		section->HandleInputline(std::string("machine=") + cmd_machine);
+		section->HandleInputline(std::string("machine=") +
+		                         arguments->machine);
 	}
 
-	std::string mtype(section->Get_string("machine"));
+	std::string mtype = section->Get_string("machine");
 	svgaCard = SVGA_None;
 	machine = MCH_VGA;
 	int10.vesa_nolfb = false;
@@ -391,18 +380,32 @@ static void DOSBOX_RealInit(Section * sec) {
 	} else if (mtype == "svga_paradise") {
 		svgaCard = SVGA_ParadisePVGA1A;
 	} else {
-		E_Exit("DOSBOX:Unknown machine type %s", mtype.c_str());
+		E_Exit("DOSBOX: Invalid machine type '%s'", mtype.c_str());
 	}
 
 	// VGA-type machine needs an valid SVGA card and vice-versa
 	assert((machine == MCH_VGA && svgaCard != SVGA_None) ||
 	       (machine != MCH_VGA && svgaCard == SVGA_None));
+}
+
+static void DOSBOX_RealInit(Section* sec)
+{
+	Section_prop* section = static_cast<Section_prop*>(sec);
+	/* Initialize some dosbox internals */
+	ticksRemain = 0;
+	ticksLast   = GetTicks();
+	ticksLocked = false;
+	DOSBOX_SetLoop(&Normal_Loop);
+
+	MAPPER_AddHandler(DOSBOX_UnlockSpeed, SDL_SCANCODE_F12, MMOD2, "speedlock", "Speedlock");
+
+	DOSBOX_SetMachineTypeFromConfig(section);
 
 	// Set the user's prefered MCB fault handling strategy
-	DOS_SetMcbFaultStrategy(section->Get_string("mcb_fault_strategy"));
+	DOS_SetMcbFaultStrategy(section->Get_string("mcb_fault_strategy").c_str());
 
 	// Convert the users video memory in either MB or KB to bytes
-	const auto vmemsize_string = std::string(section->Get_string("vmemsize"));
+	const std::string vmemsize_string = section->Get_string("vmemsize");
 
 	// If auto, then default to 0 and let the adapter's setup rountine set
 	// the size
@@ -412,7 +415,8 @@ static void DOSBOX_RealInit(Section * sec) {
 	vmemsize *= (vmemsize <= 8) ? 1024 * 1024 : 1024;
 	vga.vmemsize = check_cast<uint32_t>(vmemsize);
 
-	if (const auto pref = std::string_view(section->Get_string("vesa_modes")); pref == "compatible") {
+	const std::string pref = section->Get_string("vesa_modes");
+	if (pref == "compatible") {
 		int10.vesa_mode_preference = VesaModePref::Compatible;
 	} else if (pref == "halfline") {
 		int10.vesa_mode_preference = VesaModePref::Halfline;
@@ -466,11 +470,14 @@ void DOSBOX_Init()
 	secprop = control->AddSection_prop("dosbox", &DOSBOX_RealInit);
 	pstring = secprop->Add_string("language", always, "");
 	pstring->Set_help(
-	        "Select a language to use: de, en, es, fr, it, nl, pl, and ru (unset by default)\n"
-	        "Notes: This setting will override the 'LANG' environment, if set.\n"
-	        "       The 'resources/translations' directory bundled with the executable holds\n"
-	        "       these files. Please keep it along-side the executable to support this\n"
-	        "       feature.");
+	        "Select a language to use: 'de', 'en', 'es', 'fr', 'it', 'nl', 'pl', or 'ru'\n"
+	        "(unset by default; this defaults to English)\n"
+	        "Notes:\n"
+	        "  - This setting will override the 'LANG' environment variable, if set.\n"
+	        "  - The bundled 'resources/translations' directory with the executable holds\n"
+	        "    these files. Please keep it along-side the executable to support this\n"
+	        "    feature.");
+
 	pstring = secprop->Add_string("machine", only_at_start, "svga_s3");
 	pstring->Set_values(machines);
 	pstring->SetDeprecatedWithAlternateValue("vgaonly", "svga_paradise");
@@ -529,29 +536,21 @@ void DOSBOX_Init()
 	        "  deny:    Quit (and report) when faults are detected.");
 	pstring->Set_values(mcb_fault_strategies);
 
-	const char *vmemsize_choices[] = {
+	const std::vector<std::string> vmemsize_choices = {
 	        "auto",
-	        "1",
-	        "2",
-	        "4",
-	        "8", // MB
-	        "256",
-	        "512",
-	        "1024",
-	        "2048",
-	        "4096",
-	        "8192",
-	        nullptr, // KB
+	        // values in MB
+	        "1", "2", "4", "8",
+	        // values in KB
+	        "256", "512", "1024", "2048", "4096", "8192",
 	};
+	static_assert(8192 * 1024 <= PciGfxLfbLimit - PciGfxLfbBase);
+
 	pstring = secprop->Add_string("vmemsize", only_at_start, "auto");
 	pstring->Set_values(vmemsize_choices);
 	pstring->Set_help(
 	        "Video memory in MB (1-8) or KB (256 to 8192). 'auto' uses the default for\n"
 	        "the selected video adapter ('auto' by default). See the 'machine' setting for\n"
 	        "the list of valid options per adapter.");
-
-	pbool = secprop->Add_bool("force_vga_single_scan", when_idle, false);
-	pbool->Set_help("Always single-scan sub-350 line modes on VGA adapters (disabled by default).");
 
 	pstring = secprop->Add_string("dos_rate", when_idle, "default");
 	pstring->Set_help(
@@ -638,100 +637,18 @@ void DOSBOX_Init()
 		"copy-on-write or network-based filesystem, this setting avoids triggering\n"
 		"write-operations for these write-protected files.");
 
-	secprop = control->AddSection_prop("render", &RENDER_Init, changeable_at_runtime);
-	secprop->AddEarlyInitFunction(&RENDER_InitShaderSource, changeable_at_runtime);
+	pbool = secprop->Add_bool("shell_config_shortcuts", when_idle, true);
+	pbool->Set_help("Allow shortcuts for direct configuration management (enabled by default), i.e.\n"
+	                "instead of 'config -set sbtype sb16' it is enough to execute 'sbtype sb16', \n"
+	                "and instead of 'config -get sbtype' it is enough to execute 'sbtype' command.");
 
-	pint = secprop->Add_int("frameskip", deprecated, 0);
-	pint->Set_help("Consider capping frame-rates using the '[sdl] host_rate' setting.");
+	// Configure render settings
+	RENDER_AddConfigSection(control);
 
-	pbool = secprop->Add_bool("aspect", always, true);
-	pbool->Set_help(
-	        "Apply aspect ratio correction for modern square-pixel flat-screen displays,\n"
-	        "so DOS resolutions with non-square pixels appear as they would on a 4:3 display\n"
-	        "aspect ratio CRT monitor the majority of DOS games were designed for (enabled\n"
-	        "by default). This setting only affects video modes that use non-square pixels,\n"
-	        "such as 320x200 or 640x400; square-pixel modes, such as 320x240, 640x480, and\n"
-	        "800x600 are displayed as-is.");
-
-	pstring = secprop->Add_string("integer_scaling", always, "off");
-	pstring->Set_help(
-	        "Constrain the horizontal or vertical scaling factor to integer values.\n"
-	        "The correct aspect ratio is always maintained, which may result in a\n"
-	        "non-integer scaling factor to be applied in the other dimension. If the\n"
-	        "image is larger than the viewport, the integer scaling constraint is\n"
-	        "auto-disabled (same as 'off').\n"
-	        "  off:         No integer scaling constraint; the aspect ratio correct image\n"
-	        "               fills the viewport (default).\n"
-	        "  horizontal:  Constrain the horizontal scaling factor to integer values\n"
-	        "               within the viewport.\n"
-	        "  vertical:    Constrain the vertical scaling factor to integer values\n"
-	        "               within the viewport.");
-
-	pstring = secprop->Add_string("monochrome_palette", always, "white");
-	pstring->Set_help(
-	        "Select default palette for monochrome display ('white' by default).\n"
-	        "Works only when emulating 'hercules' or 'cga_mono'.\n"
-	        "You can also cycle through available colours using F11.");
-	const char* mono_pal[] = {"white", "paperwhite", "green", "amber", nullptr};
-	pstring->Set_values(mono_pal);
-
-	pstring = secprop->Add_string("cga_colors", only_at_start, "default");
-	pstring->Set_help(
-	        "Set the interpretation of CGA RGBI colours. Affects all machine types capable\n"
-	        "of displaying CGA or better graphics. Built-in presets:\n"
-	        "  default:       The canonical CGA palette, as emulated by VGA adapters\n"
-	        "                 (default).\n"
-	        "  tandy <bl>:    Emulation of an idealised Tandy monitor with adjustable brown\n"
-	        "                 level. The brown level can be provided as an optional second\n"
-	        "                 parameter (0 - red, 50 - brown, 100 - dark yellow;\n"
-	        "                 defaults to 50). E.g. tandy 100\n"
-	        "  tandy-warm:    Emulation of the actual colour output of an unknown Tandy\n"
-	        "                 monitor.\n"
-	        "  ibm5153 <c>:   Emulation of the actual colour output of an IBM 5153 monitor\n"
-	        "                 with a unique contrast control that dims non-bright colours\n"
-	        "                 only. The contrast can be optionally provided as a second\n"
-	        "                 parameter (0 to 100; defaults to 100), e.g. ibm5153 60\n"
-	        "  agi-amiga-v1, agi-amiga-v2, agi-amiga-v3:\n"
-	        "                 Palettes used by the Amiga ports of Sierra AGI games.\n"
-	        "  agi-amigaish:  A mix of EGA and Amiga colours used by the Sarien\n"
-	        "                 AGI-interpreter.\n"
-	        "  scumm-amiga:   Palette used by the Amiga ports of LucasArts EGA games.\n"
-	        "  colodore:      Commodore 64 inspired colours based on the Colodore palette.\n"
-	        "  colodore-sat:  Colodore palette with 20% more saturation.\n"
-	        "  dga16:         A modern take on the canonical CGA palette with dialed back\n"
-	        "                 contrast.\n"
-	        "You can also set custom colours by specifying 16 space or comma separated\n"
-	        "colour values, either as 3 or 6-digit hex codes (e.g. #f00 or #ff0000 for full\n"
-	        "red), or decimal RGB triplets (e.g. (255, 0, 255) for magenta). The 16 colours\n"
-	        "are ordered as follows:\n"
-	        "  black, blue, green, cyan, red, magenta, brown, light-grey, dark-grey,\n"
-	        "  light-blue, light-green, light-cyan, light-red, light-magenta, yellow, white.\n"
-	        "Their default values, shown here in 6-digit hex code format, are:\n"
-	        "  #000000 #0000aa #00aa00 #00aaaa #aa0000 #aa00aa #aa5500 #aaaaaa\n"
-	        "  #555555 #5555ff #55ff55 #55ffff #ff5555 #ff55ff #ffff55 #ffffff");
-
-	pstring = secprop->Add_string("scaler", deprecated, "none");
-	pstring->Set_help(
-	        "Software scalers are deprecated in favour of hardware-accelerated options:\n"
-	        "  - If you used the normal2x/3x scalers, set a desired 'windowresolution'\n"
-	        "    instead.\n"
-	        "  - If you used an advanced scaler, consider one of the 'glshader'\n"
-	        "    options instead.");
-
-#if C_OPENGL
-	pstring = secprop->Add_path("glshader", always, "default");
-	pstring->Set_help(
-	        "Set the GLSL shader to use in OpenGL output modes.\n"
-			"Options include 'default', 'none', a shader listed using the --list-glshaders\n"
-	        "command-line argument, or an absolute or relative path to a file.\n"
-			"'default' sets the `interpolation/sharp.glsl` shader.\n"
-	        "In all cases, you may omit the shader's '.glsl' file extension.");
-#endif
-
-	// Add the [composite] conf block after [render]
-	assert(control);
+	// Configure composite video settings
 	VGA_AddCompositeSettings(*control);
 
+	// Configure CPU settings
 	secprop = control->AddSection_prop("cpu", &CPU_Init, changeable_at_runtime);
 	const char* cores[] =
 	{ "auto",
@@ -785,23 +702,34 @@ void DOSBOX_Init()
 	secprop->AddInitFunction(&DMA_Init);
 	secprop->AddInitFunction(&VGA_Init);
 	secprop->AddInitFunction(&KEYBOARD_Init);
+	secprop->AddInitFunction(&PCI_Init); // PCI bus
 
-#if defined(PCI_FUNCTIONALITY_ENABLED)
-	secprop=control->AddSection_prop("pci", &PCI_Init, false); // PCI bus
+	secprop = control->AddSection_prop("voodoo", &VOODOO_Init);
 
-#if C_VOODOO
-	secprop->AddInitFunction(&VOODOO_Init, false);
+	pbool = secprop->Add_bool("voodoo", when_idle, true);
+	pbool->Set_help("Enable 3dfx Voodoo emulation (enabled by default).");
 
-	const char* voodootypes[] = { "12mb", "4mb", "disabled", nullptr };
-	pstring = secprop->Add_string("voodoo", only_at_start, "12mb");
-	pstring->Set_values(voodootypes);
-	pstring->Set_help("RAM amount of emulated Vodooo 3dfx card.");
+	const char* voodoo_memsizes[] = {"4", "12", nullptr};
 
-	pint = secprop->Add_int("voodoo_perf", only_at_start, 0);
-	pint->SetMinMax(0, 4);
-	pint->Set_help("Toggle performance optimizations for Vodooo 3dfx emulation (0 = none, 1 = use multi-threading, 2 = disable bilinear filter, 3 = both).");
-#endif
-#endif
+	pstring = secprop->Add_string("voodoo_memsize",
+	                              only_at_start,
+	                              voodoo_memsizes[0]);
+	pstring->Set_values(voodoo_memsizes);
+	pstring->Set_help(
+	        "Set the amount of video memory for 3dfx Voodoo graphics, either 4 or 12 megabytes.\n"
+	        "The memory is used by the Frame Buffer Interface (FBI) and Texture Mapping Unit (TMU)\n"
+	        "as follows:\n"
+	        "   4: 2 MB for the FBI and one TMU with 2 MB (default)\n"
+	        "  12: 4 MB for the FBI and two TMUs, each with 4 MB.");
+
+	pbool = secprop->Add_bool("voodoo_multithreading", only_at_start, true);
+	pbool->Set_help("Use threads to improve 3dfx Voodoo performance (enabled by default).");
+
+	pbool = secprop->Add_bool("voodoo_bilinear_filtering", only_at_start, false);
+	pbool->Set_help(
+	        "Use bilinear filtering to emulate the 3dfx Voodoo's texture\n"
+	        "smoothing effect. Only suggested if you have a fast desktop-class\n"
+	        "CPU, as it can impact frame rates on slower systems (disabled by default).");
 
 	// Configure capture
 	CAPTURE_AddConfigSection(control);
@@ -876,6 +804,19 @@ void DOSBOX_Init()
 	pstring->Set_help("Type of OPL emulation ('auto' by default).\n"
 	                  "On 'auto' the mode is determined by 'sbtype'.\n"
 	                  "All OPL modes are AdLib-compatible, except for 'cms'.");
+
+	pstring = secprop->Add_string("opl_fadeout", when_idle, "off");
+	pstring->Set_help(
+	        "Fade out the OPL synth output after the last IO port write:\n"
+	        "  off:       Don't fade out; residual output will play forever (default).\n"
+	        "  on:        Wait 0.5s before fading out over a 0.5s period.\n"
+	        "  <custom>:  A custom fade-out definition in the following format:\n"
+	        "               WAIT FADE\n"
+	        "             Where WAIT is how long after the last IO port write fading begins,\n"
+	        "             ranging between 100 and 5000 milliseconds; and FADE is the fade-out\n"
+	        "             period, ranging between 10 and 3000 milliseconds. Examples:\n"
+	        "                300 200 (Wait 300ms before fading out over a 200ms period)\n"
+	        "                1000 3000 (Wait 1s before fading out over a 3s period)");
 
 	pstring = secprop->Add_string("oplemu", deprecated, "");
 	pstring->Set_help("Only 'nuked' OPL emulation is supported now.");
@@ -972,6 +913,13 @@ void DOSBOX_Init()
 	        "  psg:   Only enable the card's three-voice programmable sound generator\n"
 	        "         without DAC to avoid conflicts with other cards using DMA 1.\n"
 	        "  off:   Disable Tandy/PCjr sound.");
+
+	pstring = secprop->Add_string("tandy_fadeout", when_idle, "off");
+	pstring->Set_help(
+	        "Fade out the Tandy synth output after the last IO port write:\n"
+	        "  off:       Don't fade out; residual output will play forever (default).\n"
+	        "  on:        Wait 0.5s before fading out over a 0.5s period.\n"
+	        "  <custom>:  Custom fade out definition; see 'opl_fadeout' for details.");
 
 	pstring = secprop->Add_string("tandy_filter", when_idle, "on");
 	pstring->Set_help(
@@ -1107,24 +1055,24 @@ void DOSBOX_Init()
 
 	pbool = secprop->Add_bool("use_joy_calibration_hotkeys", when_idle, false);
 	pbool->Set_help(
-	        "Enable hotkeys to allow realtime calibration of the joystick's x and y axis\n"
+	        "Enable hotkeys to allow realtime calibration of the joystick's X and Y axes\n"
 	        "(disabled by default). Only consider this if in-game calibration fails and\n"
 	        "other settings have been tried.\n"
-	        "  - Ctrl/Cmd+Arrow-keys adjusts the axis' scalar value:\n"
-	        "      - left and right diminish or magnify the x-axis scalar, respectively.\n"
-	        "      - down and up diminish or magnify the y-axis scalar, respectively.\n"
-	        "  - Alt+Arrow-keys adjusts the axis' offset position:\n"
-	        "      - left and right shift x-axis offset in the given direction.\n"
-	        "      - down and up shift the y-axis offset in the given direction.\n"
+	        "  - Ctrl/Cmd+Arrow-keys adjust the axis' scalar value:\n"
+	        "      - Left and Right diminish or magnify the x-axis scalar, respectively.\n"
+	        "      - Down and Up diminish or magnify the y-axis scalar, respectively.\n"
+	        "  - Alt+Arrow-keys adjust the axis' offset position:\n"
+	        "      - Left and Right shift X-axis offset in the given direction.\n"
+	        "      - Down and Up shift the Y-axis offset in the given direction.\n"
 	        "  - Reset the X and Y calibration using Ctrl+Delete and Ctrl+Home,\n"
 	        "    respectively.\n"
 	        "Each tap will report X or Y calibration values you can set below. When you find\n"
-	        "parameters that work, quit the game, switch this setting back to false, and\n"
+	        "parameters that work, quit the game, switch this setting back to disabled, and\n"
 	        "populate the reported calibration parameters.");
 
 	pstring = secprop->Add_string("joy_x_calibration", when_idle, "auto");
 	pstring->Set_help(
-	        "Apply x-axis calibration parameters from the hotkeys ('auto' by default).");
+	        "Apply X-axis calibration parameters from the hotkeys ('auto' by default).");
 
 	pstring = secprop->Add_string("joy_y_calibration", when_idle, "auto");
 	pstring->Set_help(
@@ -1147,7 +1095,7 @@ void DOSBOX_Init()
 	        "  - for 'mouse':      model, overrides setting from [mouse] section\n"
 	        "  - for 'direct':     realport (required), rxdelay (optional).\n"
 	        "                      (realport:COM1 realport:ttyS0).\n"
-	        "  - for 'modem':      listenport, sock, baudrate (all optional).\n"
+	        "  - for 'modem':      listenport, sock, bps (all optional).\n"
 	        "  - for 'nullmodem':  server, rxdelay, txdelay, telnet, usedtr,\n"
 	        "                      transparent, port, inhsocket, sock (all optional).\n"
 	        "SOCK parameter specifies the protocol to be used by both sides\n"
@@ -1261,26 +1209,26 @@ void DOSBOX_Init()
 	        "  - 10.0.2.2:       IP of the gateway and DHCP service.\n"
 	        "  - 10.0.2.3:       IP of the virtual DNS server.\n"
 	        "  - 10.0.2.15:      First IP provided by DHCP, your IP!\n"
-	        "Notes: Inside DOS, setting this up requires an NE2000 packet driver, DHCP\n"
-	        "       client, and TCP/IP stack. You might need port-forwarding from the host\n"
-	        "       into the DOS guest, and from your router to your host when acting as the\n"
-	        "       server for multiplayer games.");
+	        "Note: Inside DOS, setting this up requires an NE2000 packet driver, DHCP\n"
+	        "      client, and TCP/IP stack. You might need port-forwarding from the host\n"
+	        "      into the DOS guest, and from your router to your host when acting as the\n"
+	        "      server for multiplayer games.");
 
 	const char *nic_addresses[] = {"200", "220", "240", "260", "280", "2c0",
 	                               "300", "320", "340", "360", nullptr};
 	phex = secprop->Add_hex("nicbase", when_idle, 0x300);
 	phex->Set_values(nic_addresses);
 	phex->Set_help("Base address of the NE2000 card (300 by default).\n"
-	               "Notes: Addresses 220 and 240 might not be available as they're assigned to the\n"
-	               "       Sound Blaster and Gravis UltraSound by default.");
+	               "Note: Addresses 220 and 240 might not be available as they're assigned to the\n"
+	               "      Sound Blaster and Gravis UltraSound by default.");
 
 	const char *nic_irqs[] = {"3",  "4",  "5",  "9",  "10",
 	                          "11", "12", "14", "15", nullptr};
 	pint                   = secprop->Add_int("nicirq", when_idle, 3);
 	pint->Set_values(nic_irqs);
 	pint->Set_help("The interrupt used by the NE2000 card (3 by default).\n"
-	               "Notes: IRQs 3 and 5 might not be available as they're assigned to\n"
-	               "       'serial2' and the Gravis UltraSound by default.");
+	               "Note: IRQs 3 and 5 might not be available as they're assigned to\n"
+	               "      'serial2' and the Gravis UltraSound by default.");
 
 	pstring = secprop->Add_string("macaddr", when_idle, "AC:DE:48:88:99:AA");
 	pstring->Set_help(
@@ -1302,9 +1250,10 @@ void DOSBOX_Init()
 	        "Mappings and ranges can be combined, too:\n"
 	        "  hstart-hend:gstart-gend ..., (e.g, 8040-8080:20-60)\n"
 	        "  This forwards ports 8040 to 8080 into 20 to 60 in the guest\n"
-	        "Notes: If mapped ranges differ, the shorter range is extended to fit.\n"
-	        "       If conflicting host ports are given, only the first one is setup.\n"
-	        "       If conflicting guest ports are given, the latter rule takes precedent.");
+	        "Notes:\n"
+	        "  - If mapped ranges differ, the shorter range is extended to fit.\n"
+	        "  - If conflicting host ports are given, only the first one is setup.\n"
+	        "  - If conflicting guest ports are given, the latter rule takes precedent.");
 
 	pstring = secprop->Add_string("udp_port_forwards", when_idle, "");
 	pstring->Set_help(
@@ -1313,6 +1262,10 @@ void DOSBOX_Init()
 #endif
 
 	//	secprop->AddInitFunction(&CREDITS_Init);
+
+	// VMM interfaces
+	secprop->AddInitFunction(&VIRTUALBOX_Init);
+	secprop->AddInitFunction(&VMWARE_Init);
 
 	//TODO ?
 	control->AddSection_line("autoexec", &AUTOEXEC_Init);

@@ -1,4 +1,6 @@
 /*
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *
  *  Copyright (C) 2022-2023  The DOSBox Staging Team
  *  Copyright (C) 2002-2021  The DOSBox Team
  *
@@ -17,7 +19,6 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-
 #include "dosbox.h"
 
 #include <algorithm>
@@ -32,11 +33,7 @@
 #include "support.h"
 #include "vga.h"
 
-#if defined(PCI_FUNCTIONALITY_ENABLED)
-
 void PCI_AddSVGAS3_Device();
-
-#endif
 
 void SVGA_S3_WriteCRTC(io_port_t reg, io_val_t value, io_width_t)
 {
@@ -621,15 +618,19 @@ uint8_t SVGA_S3_ReadSEQ(io_port_t reg, io_width_t)
 uint32_t SVGA_S3_GetClock(void)
 {
 	uint32_t clock = (vga.misc_output >> 2) & 3;
-	if (clock == 0)
-		clock = 25175000;
-	else if (clock == 1)
-		clock = 28322000;
-	else
-		clock=1000*S3_CLOCK(vga.s3.clk[clock].m,vga.s3.clk[clock].n,vga.s3.clk[clock].r);
-	/* Check for dual transfer, clock/2 */
-	if (vga.s3.pll.control_2 & 0x10)
+	if (clock == 0) {
+		clock = Vga640PixelClockHz;
+	} else if (clock == 1) {
+		clock = Vga720PixelClockHz;
+	} else {
+		clock = 1000 * S3_CLOCK(vga.s3.clk[clock].m,
+		                        vga.s3.clk[clock].n,
+		                        vga.s3.clk[clock].r);
+	}
+	// Check for dual transfer, clock/2
+	if (vga.s3.pll.control_2 & 0x10) {
 		clock /= 2;
+	}
 	return clock;
 }
 
@@ -749,17 +750,16 @@ void filter_s3_modes_to_oem_only()
 			return (m.mode == 0x10d || m.mode == 0x10e || m.mode == 0x10f);
 
 		// Allow all modes that aren't part of the VESA VGA set (CGA/EGA/Hercules/etc)
-		constexpr auto vesa_vga_modes = M_LIN4 | M_LIN8 | M_LIN15 | M_LIN16 | M_LIN24 | M_LIN32;
-		const bool is_a_vesa_vga_mode = m.type & vesa_vga_modes;
-		if (!is_a_vesa_vga_mode)
+		if (!VESA_IsVesaMode(m.mode)) {
 			return false;
+		}
 
 		// Does the S3 OEM list have this mode for the given DRAM size?
 		const auto it = oem_modes.find(hash(m.swidth, m.sheight, m.type));
 		const bool is_an_oem_mode = (it != oem_modes.end()) && (it->second & dram_size);
 
-		// LOG_MSG("S3: %x: %ux%u - m.type=%d is_a_vesa_vga_mode=%d is_an_oem_mode=%d",
-		//         m.mode, m.swidth, m.sheight, m.type, is_a_vesa_vga_mode, is_an_oem_mode);
+		// LOG_MSG("S3: %x: %ux%u - m.type=%d is_vesa_mode=%d is_an_oem_mode=%d",
+		//         m.mode, m.swidth, m.sheight, m.type, VESA_IsVesaMode(m.mode), is_an_oem_mode);
 
 		return !is_an_oem_mode;
 	};
@@ -831,12 +831,8 @@ void SVGA_Setup_S3Trio(void)
 	const auto num_modes = ModeList_VGA.size();
 	VGA_LogInitialization(description.c_str(), ram_type.c_str(), num_modes);
 
-#if defined(PCI_FUNCTIONALITY_ENABLED)
 	PCI_AddSVGAS3_Device();
-#endif
 }
-
-#if defined(PCI_FUNCTIONALITY_ENABLED)
 
 struct PCI_VGADevice : public PCI_Device {
 	enum { vendor = 0x5333 }; // S3
@@ -907,24 +903,21 @@ struct PCI_VGADevice : public PCI_Device {
 		//registers[0x3c] = 0x0b;	// irq line
 		//registers[0x3d] = 0x01;	// irq pin
 
-		// uint32_t gfx_address_space=(((uint32_t)S3_LFB_BASE)&0xfffffff0)
-		// | 0x08;	// memory space, within first 4GB, prefetchable
-		uint32_t gfx_address_space = (((uint32_t)S3_LFB_BASE) &
-		                              0xfffffff0); // memory space,
-		                                           // within first 4GB
-		registers[0x10] = (uint8_t)(gfx_address_space & 0xff); // base
-		                                                       // addres 0
-		registers[0x11] = (uint8_t)((gfx_address_space >> 8) & 0xff);
-		registers[0x12] = (uint8_t)((gfx_address_space >> 16) & 0xff);
-		registers[0x13] = (uint8_t)((gfx_address_space >> 24) & 0xff);
+		// BAR0 - memory space, within first 4GB
+		// Check 8-byte alignment of LFB base
+		static_assert((PciGfxLfbBase & 0xf) == 0);
+		registers[0x10] = static_cast<uint8_t>(PciGfxLfbBase & 0xff);
+		registers[0x11] = static_cast<uint8_t>((PciGfxLfbBase >> 8) & 0xff);
+		registers[0x12] = static_cast<uint8_t>((PciGfxLfbBase >> 16) & 0xff);
+		registers[0x13] = static_cast<uint8_t>((PciGfxLfbBase >> 24) & 0xff);
 
-		uint32_t gfx_address_space_mmio = (((uint32_t)S3_LFB_BASE + 0x1000000) &
-		                                   0xfffffff0); // memory space,
-		                                                // within first 4GB
-		registers[0x14] = (uint8_t)(gfx_address_space_mmio & 0xff); // base addres 0
-		registers[0x15] = (uint8_t)((gfx_address_space_mmio >> 8) & 0xff);
-		registers[0x16] = (uint8_t)((gfx_address_space_mmio >> 16) & 0xff);
-		registers[0x17] = (uint8_t)((gfx_address_space_mmio >> 24) & 0xff);
+		// BAR1 - MMIO space, within first 4GB
+		// Check 8-byte alignment of MMIO base
+		static_assert((PciGfxMmioBase & 0xf) == 0);
+		registers[0x14] = static_cast<uint8_t>(PciGfxMmioBase & 0xff);
+		registers[0x15] = static_cast<uint8_t>((PciGfxMmioBase >> 8) & 0xff);
+		registers[0x16] = static_cast<uint8_t>((PciGfxMmioBase >> 16) & 0xff);
+		registers[0x17] = static_cast<uint8_t>((PciGfxMmioBase >> 24) & 0xff);
 
 		return true;
 	}
@@ -934,4 +927,3 @@ void PCI_AddSVGAS3_Device() {
 	PCI_AddDevice(new PCI_VGADevice());
 }
 
-#endif

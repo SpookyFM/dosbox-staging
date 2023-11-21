@@ -131,7 +131,7 @@ ECBClass::ECBClass(uint16_t segment, uint16_t offset)
 }
 
 void ECBClass::writeDataBuffer(uint8_t* buffer, uint16_t length) {
-	if(databuffer!=nullptr) delete [] databuffer;
+	delete[] databuffer;
 	databuffer = new uint8_t[length];
 	memcpy(databuffer,buffer,length);
 	buflen=length;
@@ -193,11 +193,12 @@ void ECBClass::getFragDesc(uint16_t descNum, fragmentDescriptor *fragDesc) {
 	fragDesc->size = real_readw(RealSegment(ECBAddr), memoff);
 }
 
-RealPt ECBClass::getESRAddr(void) {
-	return RealMake(real_readw(RealSegment(ECBAddr),
-		RealOffset(ECBAddr)+6),
-		real_readw(RealSegment(ECBAddr),
-		RealOffset(ECBAddr)+4));
+RealPt ECBClass::getESRAddr()
+{
+	const auto segment = RealSegment(ECBAddr);
+	const auto offset  = RealOffset(ECBAddr);
+	return RealMake(real_readw(segment, offset + 6),
+	                real_readw(segment, offset + 4));
 }
 
 void ECBClass::NotifyESR(void) {
@@ -262,7 +263,7 @@ ECBClass::~ECBClass() {
 			if(nextECB != nullptr) nextECB->prevECB = prevECB;
 		}
 	}
-	if(databuffer!=nullptr) delete [] databuffer;
+	delete[] databuffer;
 }
 
 
@@ -538,8 +539,7 @@ static void pingAck(IPaddress retAddr) {
 	const int result = SDLNet_UDP_Send(ipxClientSocket, regPacket.channel,
 	                                   &regPacket);
 	if (!result) {
-		DEBUG_LOG_MSG("IPX: Failed to acknowledge send: %s",
-		              SDLNet_GetError());
+		LOG_DEBUG("IPX: Failed to acknowledge send: %s", SDLNet_GetError());
 	}
 }
 

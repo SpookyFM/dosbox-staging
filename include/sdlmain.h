@@ -20,15 +20,20 @@
 
 #ifndef DOSBOX_SDLMAIN_H
 #define DOSBOX_SDLMAIN_H
- 
+
+#include <optional>
 #include <string>
 #include <string_view>
 #include <string.h>
 #include "SDL.h"
+
 #if C_OPENGL
 #include <SDL_opengl.h>
 #endif
+
+#include "fraction.h"
 #include "render.h"
+#include "shader_manager.h"
 #include "video.h"
 
 #define SDL_NOFRAME 0x00000020
@@ -38,14 +43,6 @@ using update_frame_buffer_f = void(const uint16_t *);
 using present_frame_f = bool();
 constexpr void update_frame_noop([[maybe_unused]] const uint16_t *) { /* no-op */ }
 static inline bool present_frame_noop() { return true; }
-
-enum SCREEN_TYPES	{
-	SCREEN_SURFACE,
-	SCREEN_TEXTURE,
-#if C_OPENGL
-	SCREEN_OPENGL
-#endif
-};
 
 enum class FrameMode {
 	Unset,
@@ -60,8 +57,6 @@ enum class HostRateMode {
 	Vrr, // variable refresh rate
 	Custom,
 };
-
-enum class InterpolationMode { Bilinear, NearestNeighbour };
 
 enum class VsyncState {
 	Unset    = -2,
@@ -97,25 +92,29 @@ enum PRIORITY_LEVELS {
 struct SDL_Block {
 	bool initialized = false;
 	bool active = false; // If this isn't set don't draw
-	bool updating = false;
-	bool update_display_contents = true;
+	bool updating        = false;
 	bool resizing_window = false;
 	bool wait_on_error = false;
+
+	RenderingBackend rendering_backend      = RenderingBackend::Texture;
+	RenderingBackend want_rendering_backend = RenderingBackend::Texture;
 
 	InterpolationMode interpolation_mode    = InterpolationMode::Bilinear;
 	IntegerScalingMode integer_scaling_mode = IntegerScalingMode::Off;
 
 	struct {
-		int width = 0;
-		int height = 0;
-		double scalex = 1.0;
-		double scaley = 1.0;
-		uint16_t previous_mode = 0;
+		int width_px = 0;
+		int height_px = 0;
+		Fraction render_pixel_aspect_ratio = {1};
+
 		bool has_changed = false;
 		GFX_CallBack_t callback = nullptr;
 		bool width_was_doubled = false;
 		bool height_was_doubled = false;
 	} draw = {};
+
+	VideoMode video_mode = {};
+
 	struct {
 		struct {
 			int width = 0;
@@ -127,7 +126,6 @@ struct SDL_Block {
 			// user-configured window size
 			int width = 0;
 			int height = 0;
-			bool resizable = false;
 			bool show_decorations = true;
 			bool adjusted_initial_size = false;
 			int initial_x_pos = -1;
@@ -140,7 +138,7 @@ struct SDL_Block {
 			int height = 0;
 		} requested_window_bounds = {};
 
-		uint8_t bpp = 0;
+		PixelFormat pixel_format = {};
 		double dpi_scale = 1.0;
 		bool fullscreen = false;
 
@@ -152,13 +150,11 @@ struct SDL_Block {
 		// Lazy window size init triggers updating window size and
 		// position when leaving fullscreen for the first time.
 		// See FinalizeWindowState function for details.
-		bool lazy_init_window_size = false;
+		bool lazy_init_window_size  = false;
 		HostRateMode host_rate_mode = HostRateMode::Auto;
-		double preferred_host_rate = 0.0;
-		bool want_resizable_window = false;
-		SCREEN_TYPES type = SCREEN_SURFACE;
-		SCREEN_TYPES want_type = SCREEN_SURFACE;
+		double preferred_host_rate  = 0.0;
 	} desktop = {};
+
 	struct {
 		int num_cycles = 0;
 		std::string hint_mouse_str  = {};
@@ -176,18 +172,19 @@ struct SDL_Block {
 	struct {
 		SDL_GLContext context;
 		int pitch = 0;
-		void *framebuf = nullptr;
-		GLuint buffer;
+		void* framebuf = nullptr;
 		GLuint texture;
 		GLuint displaylist;
 		GLint max_texsize;
 		bool bilinear;
-		bool pixel_buffer_object = false;
 		bool npot_textures_supported = false;
 		bool use_shader;
 		bool framebuffer_is_srgb_encoded;
 		GLuint program_object;
-		std::string_view shader_source_sv = {};
+
+		ShaderInfo shader_info    = {};
+		std::string shader_source = {};
+
 		struct {
 			GLint texture_size;
 			GLint input_size;
@@ -206,8 +203,7 @@ struct SDL_Block {
 	bool mute_when_inactive  = false;
 	bool pause_when_inactive = false;
 
-	SDL_Rect clip = {0, 0, 0, 0};
-	SDL_Surface *surface = nullptr;
+	SDL_Rect clip_px = {0, 0, 0, 0};
 	SDL_Window *window = nullptr;
 	SDL_Renderer *renderer = nullptr;
 	std::string render_driver = "";
@@ -225,18 +221,17 @@ struct SDL_Block {
 		FrameMode desired_mode        = FrameMode::Unset;
 		FrameMode mode                = FrameMode::Unset;
 		double period_ms    = 0.0; // in ms, for use with PIC timers
+		float max_dupe_frames = 0.0f;
 		int period_us       = 0; // same but in us, for use with chrono
 		int period_us_early = 0;
-		int period_us_late  = 0;
-		int8_t vfr_dupe_countdown = 0;
+		int period_us_late    = 0;
 	} frame = {};
 
 	SDL_Rect updateRects[1024] = {};
 
 	bool use_exact_window_resolution = false;
-	bool use_viewport_limits = false;
 
-	SDL_Point viewport_resolution = {-1, -1};
+	std::optional<SDL_Point> viewport_resolution = {};
 #if defined (WIN32)
 	// Time when sdl regains focus (Alt+Tab) in windowed mode
 	int64_t focus_ticks = 0;

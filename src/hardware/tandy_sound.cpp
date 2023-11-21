@@ -82,11 +82,13 @@ centerline.
 #include <queue>
 #include <string_view>
 
+#include "bios.h"
+#include "channel_names.h"
 #include "dma.h"
 #include "hardware.h"
 #include "inout.h"
-#include "mem.h"
 #include "math_utils.h"
+#include "mem.h"
 #include "mixer.h"
 #include "pic.h"
 #include "setup.h"
@@ -167,6 +169,7 @@ private:
 class TandyPSG {
 public:
 	TandyPSG(const ConfigProfile config_profile, const bool is_dac_enabled,
+	         const std::string_view fadeout_choice,
 	         const std::string_view filter_choice);
 	~TandyPSG();
 
@@ -225,7 +228,7 @@ TandyDAC::TandyDAC(const ConfigProfile config_profile,
 
 	channel = MIXER_AddChannel(callback,
 	                           use_mixer_rate,
-	                           "TANDYDAC",
+	                           ChannelName::TandyDac,
 	                           {ChannelFeature::Sleep,
 	                            ChannelFeature::ChorusSend,
 	                            ChannelFeature::ReverbSend,
@@ -247,7 +250,7 @@ TandyDAC::TandyDAC(const ConfigProfile config_profile,
 
 	} else if (!channel->TryParseAndSetCustomFilter(filter_choice)) {
 		if (!filter_choice_has_bool) {
-			LOG_WARNING("TANDYDAC: Invalid 'tandy_dac_filter' value: '%s', using 'off'",
+			LOG_WARNING("TANDYDAC: Invalid 'tandy_dac_filter' setting: '%s', using 'off'",
 			            filter_choice.data());
 		}
 
@@ -332,7 +335,7 @@ void TandyDAC::ChangeMode()
 			channel->FillUp(); // using the prior frequency
 			channel->SetSampleRate(freq);
 			const auto vol = static_cast<float>(regs.amplitude) / 7.0f;
-			channel->SetAppVolume(vol, vol);
+			channel->SetAppVolume({vol, vol});
 			if ((regs.mode & 0x0c) == 0x0c) {
 				dma.is_done = false;
 				dma.channel = DMA_GetChannel(io.dma);
@@ -423,7 +426,7 @@ void TandyDAC::WriteToPort(io_port_t port, io_val_t value, io_width_t)
 void TandyDAC::AudioCallback(uint16_t requested)
 {
 	if (!channel || !dma.channel) {
-		DEBUG_LOG_MSG("TANDY: Skipping update until the DAC is initialized");
+		LOG_DEBUG("TANDY: Skipping update until the DAC is initialized");
 		return;
 	}
 	const bool should_read = is_enabled && (regs.mode & 0x0c) == 0x0c &&
@@ -449,6 +452,7 @@ void TandyDAC::AudioCallback(uint16_t requested)
 }
 
 TandyPSG::TandyPSG(const ConfigProfile config_profile, const bool is_dac_enabled,
+                   const std::string_view fadeout_choice,
                    const std::string_view filter_choice)
 {
 	assert(config_profile != ConfigProfile::SoundCardRemoved);
@@ -456,12 +460,10 @@ TandyPSG::TandyPSG(const ConfigProfile config_profile, const bool is_dac_enabled
 	// Instantiate the MAME PSG device
 	constexpr auto rounded_psg_clock = render_rate_hz * render_divisor;
 	if (config_profile == ConfigProfile::PCjrSystem)
-		device = std::make_unique<sn76496_device>(machine_config(),
-		                                          "SN76489", nullptr,
+		device = std::make_unique<sn76496_device>("SN76489", nullptr,
 		                                          rounded_psg_clock);
 	else
-		device = std::make_unique<ncr8496_device>(machine_config(),
-		                                          "NCR 8496", nullptr,
+		device = std::make_unique<ncr8496_device>("NCR 8496", nullptr,
 		                                          rounded_psg_clock);
 	// Register the write ports
 	constexpr io_port_t base_addr = 0xc0;
@@ -478,11 +480,15 @@ TandyPSG::TandyPSG(const ConfigProfile config_profile, const bool is_dac_enabled
 
 	channel = MIXER_AddChannel(callback,
 	                           use_mixer_rate,
-	                           "TANDY",
+	                           ChannelName::TandyPsg,
 	                           {ChannelFeature::Sleep,
+	                            ChannelFeature::FadeOut,
 	                            ChannelFeature::ReverbSend,
 	                            ChannelFeature::ChorusSend,
 	                            ChannelFeature::Synthesizer});
+
+	// Setup fadeout
+	channel->ConfigureFadeOut(fadeout_choice);
 
 	// Setup filters
 	const auto filter_choice_has_bool = parse_bool_setting(filter_choice);
@@ -629,6 +635,7 @@ bool TS_Get_Address(Bitu &tsaddr, Bitu &tsirq, Bitu &tsdma)
 static void set_tandy_sound_flag_in_bios(const bool is_enabled)
 {
 	real_writeb(0x40, 0xd4, is_enabled ? 0xff : 0x00);
+	BIOS_SetupTandySbDacCallbacks();
 }
 
 static void shutdown_dac(Section*)
@@ -653,7 +660,7 @@ void TANDYSOUND_Init(Section *section)
 {
 	assert(section);
 	const auto prop = static_cast<Section_prop*>(section);
-	const auto pref = std::string_view(prop->Get_string("tandy"));
+	const auto pref = prop->Get_string("tandy");
 	if (has_false(pref) || (!IS_TANDY_ARCH && pref == "auto")) {
 		set_tandy_sound_flag_in_bios(false);
 		return;
@@ -679,6 +686,7 @@ void TANDYSOUND_Init(Section *section)
 	}
 	tandy_psg = std::make_unique<TandyPSG>(cfg,
 	                                       wants_dac,
+	                                       prop->Get_string("tandy_fadeout"),
 	                                       prop->Get_string("tandy_filter"));
 
 	set_tandy_sound_flag_in_bios(true);

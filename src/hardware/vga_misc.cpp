@@ -1,4 +1,7 @@
 /*
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ *  Copyright (C) 2020-2023  The DOSBox Staging Team
  *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -16,7 +19,6 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-
 #include "dosbox.h"
 #include "inout.h"
 #include "pic.h"
@@ -33,7 +35,7 @@ uint8_t vga_read_p3da(io_port_t, io_width_t)
 	uint8_t retval = 4; // bit 2 set, needed by Blues Brothers
 	const auto timeInFrame = PIC_FullIndex() - vga.draw.delay.framestart;
 
-	vga.internal.attrindex=false;
+	vga.attr.is_address_mode = true;
 	vga.tandy.pcjr_flipflop=false;
 
 	// 3DAh (R):  Status Register

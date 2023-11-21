@@ -30,6 +30,8 @@
 #include <tuple>
 
 #include "../ints/int10.h"
+#include "ansi_code_markup.h"
+#include "channel_names.h"
 #include "control.h"
 #include "cross.h"
 #include "fs_utils.h"
@@ -72,10 +74,10 @@ static void init_fluid_dosbox_settings(Section_prop& secprop)
 	        "    - depth is a decimal from 0.0 to 21.0\n"
 	        "    - modulation-wave is either 'sine' or 'triangle'\n"
 	        "  For example: chorus = 3 1.2 0.3 8.0 sine\n"
-	        "Notes: You can disable the FluidSynth chorus and enable the mixer-level chorus\n"
-	        "       on the FluidSynth channel instead, or enable both chorus effects at the\n"
-	        "       same time. Whether this sounds good depends on the SoundFont and the\n"
-	        "       chorus settings being used.");
+	        "Note: You can disable the FluidSynth chorus and enable the mixer-level chorus\n"
+	        "      on the FluidSynth channel instead, or enable both chorus effects at the\n"
+	        "      same time. Whether this sounds good depends on the SoundFont and the\n"
+	        "      chorus settings being used.");
 
 	str_prop = secprop.Add_string("fsynth_reverb", when_idle, "auto");
 	str_prop->Set_help(
@@ -88,10 +90,10 @@ static void init_fluid_dosbox_settings(Section_prop& secprop)
 	        "    - width is a decimal from 0.0 to 100.0\n"
 	        "    - level is a decimal from 0.0 to 1.0\n"
 	        "  For example: reverb = 0.61 0.23 0.76 0.56\n"
-	        "Notes: You can disable the FluidSynth reverb and enable the mixer-level reverb\n"
-	        "       on the FluidSynth channel instead, or enable both reverb effects at the\n"
-	        "       same time. Whether this sounds good depends on the SoundFont and the\n"
-	        "       reverb settings being used.");
+	        "Note: You can disable the FluidSynth reverb and enable the mixer-level reverb\n"
+	        "      on the FluidSynth channel instead, or enable both reverb effects at the\n"
+	        "      same time. Whether this sounds good depends on the SoundFont and the\n"
+	        "      reverb settings being used.");
 
 	str_prop = secprop.Add_string("fsynth_filter", when_idle, "off");
 	assert(str_prop);
@@ -146,12 +148,12 @@ std::tuple<std::string, int> parse_soundfont_pref(const std::string& line)
 static std::deque<std_fs::path> get_data_dirs()
 {
 	return {
-	        get_platform_config_dir() / "soundfonts",
+	        GetConfigDir() / DefaultSoundfontsDir,
 
 	        // C:\soundfonts is the default place where FluidSynth places
 	        // default.sf2
 	        // https://www.fluidsynth.org/api/fluidsettings.xml#synth.default-soundfont
-	        "C:\\soundfonts\\",
+	        std::string("C:\\") + DefaultSoundfontsDir + "\\",
 	};
 }
 
@@ -160,7 +162,7 @@ static std::deque<std_fs::path> get_data_dirs()
 static std::deque<std_fs::path> get_data_dirs()
 {
 	return {
-	        get_platform_config_dir() / "soundfonts",
+	        GetConfigDir() / DefaultSoundfontsDir,
 	        resolve_home("~/Library/Audio/Sounds/Banks"),
 	};
 }
@@ -173,30 +175,30 @@ static std::deque<std_fs::path> get_data_dirs()
 	const auto xdg_data_home = get_xdg_data_home();
 
 	std::deque<std_fs::path> dirs = {
-	        xdg_data_home / "dosbox/soundfonts",
-	        xdg_data_home / "soundfonts",
+	        xdg_data_home / "dosbox" / DefaultSoundfontsDir,
+	        xdg_data_home / DefaultSoundfontsDir,
 	        xdg_data_home / "sounds/sf2",
 	};
 
 	// Second priority are the $XDG_DATA_DIRS
 	for (const auto& data_dir : get_xdg_data_dirs()) {
-		dirs.emplace_back(data_dir / "soundfonts");
+		dirs.emplace_back(data_dir / DefaultSoundfontsDir);
 		dirs.emplace_back(data_dir / "sounds/sf2");
 	}
 
 	// Third priority is $XDG_CONF_HOME, for convenience
-	dirs.emplace_back(get_platform_config_dir() / "soundfonts");
+	dirs.emplace_back(GetConfigDir() / DefaultSoundfontsDir);
 
 	return dirs;
 }
 
 #endif
 
-static std::string find_sf_file(const std::string& name)
+static std_fs::path find_sf_file(const std::string& name)
 {
 	const std_fs::path sf_path = resolve_home(name);
 	if (path_exists(sf_path)) {
-		return sf_path.string();
+		return sf_path;
 	}
 	for (const auto& dir : get_data_dirs()) {
 		for (const auto& sf :
@@ -205,11 +207,11 @@ static std::string find_sf_file(const std::string& name)
 			LOG_MSG("FSYNTH: FluidSynth checking if '%s' exists", sf.c_str());
 #endif
 			if (path_exists(sf)) {
-				return sf.string();
+				return sf;
 			}
 		}
 	}
-	return "";
+	return {};
 }
 
 static void log_unknown_midi_message(const std::vector<uint8_t>& msg)
@@ -272,7 +274,7 @@ bool MidiHandlerFluidsynth::Open([[maybe_unused]] const char* conf)
 	auto [sf_filename, scale_by_percent] = parse_soundfont_pref(
 	        section->Get_string("soundfont"));
 
-	const auto soundfont = find_sf_file(sf_filename);
+	const std::string soundfont = find_sf_file(sf_filename).string();
 
 	if (!soundfont.empty() && fluid_synth_sfcount(fluid_synth.get()) == 0) {
 		constexpr auto reset_presets = true;
@@ -495,7 +497,7 @@ bool MidiHandlerFluidsynth::Open([[maybe_unused]] const char* conf)
 
 	auto mixer_channel = MIXER_AddChannel(mixer_callback,
 	                                      audio_frame_rate_hz,
-	                                      "FSYNTH",
+	                                      ChannelName::FluidSynth,
 	                                      {ChannelFeature::Sleep,
 	                                       ChannelFeature::Stereo,
 	                                       ChannelFeature::ReverbSend,
@@ -503,8 +505,8 @@ bool MidiHandlerFluidsynth::Open([[maybe_unused]] const char* conf)
 	                                       ChannelFeature::Synthesizer});
 
 	// FluidSynth renders float audio frames between -1.0f and +1.0f, so we
-	// ask the channel to scale all the samples up to it's 0db level.
-	mixer_channel->Set0dbScalar(MAX_AUDIO);
+	// ask the channel to scale all the samples up to its 0db level.
+	mixer_channel->Set0dbScalar(Max16BitSampleValue);
 
 	const std::string filter_prefs = section->Get_string("fsynth_filter");
 
@@ -663,10 +665,57 @@ void MidiHandlerFluidsynth::ApplyChannelMessage(const std::vector<uint8_t>& msg)
 
 	// clang-format off
 	switch (status) {
-	case MidiStatus::NoteOff:         fluid_synth_noteoff(         synth.get(), channel, msg[1]);                 break;
-	case MidiStatus::NoteOn:          fluid_synth_noteon(          synth.get(), channel, msg[1], msg[2]);         break;
-	case MidiStatus::PolyKeyPressure: fluid_synth_key_pressure(    synth.get(), channel, msg[1], msg[2]);         break;
-	case MidiStatus::ControlChange:   fluid_synth_cc(              synth.get(), channel, msg[1], msg[2]);         break;
+	case MidiStatus::NoteOff:         fluid_synth_noteoff(     synth.get(), channel, msg[1]);         break;
+	case MidiStatus::NoteOn:          fluid_synth_noteon(      synth.get(), channel, msg[1], msg[2]); break;
+	case MidiStatus::PolyKeyPressure: fluid_synth_key_pressure(synth.get(), channel, msg[1], msg[2]); break;
+
+	case MidiStatus::ControlChange: {
+		const auto controller = msg[1];
+		const auto value = msg[2];
+
+		if (controller == MidiController::Portamento ||
+			controller == MidiController::PortamentoTime ||
+			controller == MidiController::PortamentoControl) {
+
+			// The Roland SC-55 and its clones (Yamaha MU80 or Roland's own
+			// later modules that emulate the SC-55) handle portamento (pitch
+			// glides between consecutive notes on the same channel) in a very
+			// specific and unique way, just like most synthesisers.
+			//
+			// The SC-55 accepts only 7-bit Portamento Time values via MIDI
+			// CC5, where the min value of 0 sets the fastest portamento time
+			// (effectively turns it off), and the max value of 127 the
+			// slowest (up to 8 minutes!). There is an exponential mapping
+			// between the CC values and the duration of the portamento (pitch
+			// slides/glides); this custom curve is apparently approximated by
+			// multiple linear segments. Moreover, the distance between the
+			// source and destination notes also affect the portamento time,
+			// making portamento dynamic and highly dependent on the notes
+			// being played.
+			//
+			// FluidSynth, on the other hand, implements a very different
+			// portamento model. Portament Time values are set via 14-bit CC
+			// messages (via MIDI CC5 (coarse) and CC37 (fine)), and there is
+			// a linear mapping between CC values and the portamento time as
+			// per the following formula:
+			//
+			//   (CC5 * 127 ms) + (CC37 ms)
+			//
+			// Because of these fundamental differences, emulating Roland
+			// SC-55 style portamento on FluidSynth is practically not
+			// possible. Music written for the SC-55 that use portamento
+			// sounds weirdly out of tune on FluidSynth (e.g. the Level 8
+			// music of Descent), and "mapping" SC-55 portamento behaviour to
+			// the FluidSynth range is not possible due to dynamic nature of
+			// the SC-55 portamento handling. All in all, it's for the best to
+			// ignore portamento altogether. This is not a great loss as it's
+			// used rarely and usually only to add some subtle flair to the
+			// start of the notes in synth-oriented soundtracks.
+		} else {
+			fluid_synth_cc(synth.get(), channel, controller, value);
+		}
+	} break;
+
 	case MidiStatus::ProgramChange:   fluid_synth_program_change(  synth.get(), channel, msg[1]);                 break;
 	case MidiStatus::ChannelPressure: fluid_synth_channel_pressure(synth.get(), channel, msg[1]);                 break;
 	case MidiStatus::PitchBend:       fluid_synth_pitch_bend(      synth.get(), channel, msg[1] + (msg[2] << 7)); break;
@@ -807,27 +856,39 @@ std::string format_sf2_line(size_t width, const std_fs::path& sf2_path)
 
 MIDI_RC MidiHandlerFluidsynth::ListAll(Program* caller)
 {
+	// Find SoundFont from user config. FluidSynth may not be open so it
+	// must be done here.
 	auto* section = static_cast<Section_prop*>(control->GetSection("fluidsynth"));
 	const auto sf_spec = parse_soundfont_pref(section->Get_string("soundfont"));
-	const auto sf_name      = std::get<std::string>(sf_spec);
+	const std_fs::path found_soundfont = find_sf_file(
+	        std::get<std::string>(sf_spec));
+
 	const size_t term_width = INT10_GetTextColumns();
 
-	auto write_line = [caller](bool do_highlight, const std::string& line) {
-		const char color[]   = "\033[32;1m";
-		const char nocolor[] = "\033[0m";
+	auto write_line = [&](const std_fs::path& sf2_path) {
+		constexpr auto green = "[color=light-green]";
+		constexpr auto reset = "[reset]";
+
+		const auto line = format_sf2_line(term_width - 2, sf2_path);
+		const bool do_highlight = is_open &&
+		                          (selected_font == sf2_path.string());
+
 		if (do_highlight) {
-			caller->WriteOut("* %s%s%s\n", color, line.c_str(), nocolor);
+			const auto output = format_string("%s* %s%s\n",
+			                                  green,
+			                                  line.c_str(),
+			                                  reset);
+
+			caller->WriteOut(convert_ansi_markup(output).c_str());
 		} else {
 			caller->WriteOut("  %s\n", line.c_str());
 		}
 	};
 
-	// If selected SoundFont exists in the current working directory,
-	// then print it.
-	const std_fs::path sf_path = resolve_home(sf_name);
-	if (path_exists(sf_path)) {
-		write_line((sf_path == selected_font),
-		           format_sf2_line(term_width - 2, sf_name));
+	// Print SoundFont found from user config,
+	std::error_code ec = {};
+	if (std_fs::is_regular_file(found_soundfont, ec)) {
+		write_line(found_soundfont);
 	}
 
 	// Go through all SoundFont directories and list all .sf2 files.
@@ -844,19 +905,21 @@ MIDI_RC MidiHandlerFluidsynth::ListAll(Program* caller)
 				continue;
 			}
 
+			const auto& sf2_path = entry.path();
+
+			if (sf2_path == found_soundfont) {
+				// Has already been printed.
+				continue;
+			}
+
 			// Is it an .sf2 file?
-			auto ext = entry.path().extension().string();
+			auto ext = sf2_path.extension().string();
 			lowcase(ext);
 			if (ext != SoundFontExtension) {
 				continue;
 			}
 
-			const auto& sf2_path = entry.path();
-			const auto line = format_sf2_line(term_width - 2, sf2_path);
-			const bool do_highlight = is_open && (selected_font ==
-			                                      sf2_path.string());
-
-			write_line(do_highlight, line);
+			write_line(sf2_path);
 		}
 	}
 

@@ -685,18 +685,27 @@ static void INT10_Seg40Init(void) {
 	}
 }
 
-
-static void INT10_InitVGA(void) {
+static void INT10_InitVGA(void)
+{
 	if (IS_EGAVGA_ARCH) {
-		/* switch to color mode and enable CPU access 480 lines */
-		IO_Write(0x3c2,0xc3);
-		/* More than 64k */
-		IO_Write(0x3c4,0x04);
-		IO_Write(0x3c5,0x02);
+		// Switch to color mode and enable CPU access 480 lines
+		IO_Write(0x3c2, 0xc3);
+
+		// More than 64k
+		IO_Write(0x3c4, 0x04);
+		IO_Write(0x3c5, 0x02);
+
 		if (IS_VGA_ARCH) {
-			/* Initialize DAC */
-			IO_Write(0x3c8,0);
-			for (Bitu i=0;i<3*256;i++) IO_Write(0x3c9,0);
+			// Initialize 256-colour VGA DAC palette to black
+			IO_Write(0x3c8, 0);
+
+			for (auto i = 0; i < NumVgaColors; ++i) {
+				constexpr Rgb666 black = {0, 0, 0};
+
+				IO_Write(0x3c9, black.red);
+				IO_Write(0x3c9, black.green);
+				IO_Write(0x3c9, black.blue);
+			}
 		}
 	}
 }
@@ -730,7 +739,7 @@ void INT10_Init(Section* /*sec*/) {
 	call_10=CALLBACK_Allocate();	
 	CALLBACK_Setup(call_10,&INT10_Handler,CB_IRET,"Int 10 video");
 	RealSetVec(0x10,CALLBACK_RealPointer(call_10));
-	//Init the 0x40 segment and init the datastructures in the the video rom area
+	//Init the 0x40 segment and init the datastructures in the video rom area
 	INT10_SetupRomMemory();
 	INT10_Seg40Init();
 	INT10_SetVideoMode(0x3);

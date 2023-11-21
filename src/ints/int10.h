@@ -26,9 +26,10 @@
 #include "mem.h"
 #include "vga.h"
 
-#define S3_LFB_BASE		0xC0000000
+// forward declarations
+class Rgb666;
 
-#define BIOSMEM_SEG		0x40
+#define BIOSMEM_SEG 0x40
 
 #define BIOSMEM_INITIAL_MODE  0x10
 #define BIOSMEM_CURRENT_MODE  0x49
@@ -50,6 +51,8 @@
 #define BIOSMEM_CRTCPU_PAGE   0x8A
 #define BIOSMEM_VS_POINTER    0xA8
 
+constexpr uint16_t MinVesaBiosModeNumber = 0x100;
+constexpr uint16_t MaxVesaBiosModeNumber = 0x7ff;
 
 /*
  *
@@ -114,19 +117,36 @@ extern uint8_t int10_font_14_alternate[20 * 15 + 1];
 extern uint8_t int10_font_16_alternate[19 * 17 + 1];
 
 struct palette_t {
-	std::vector<RGBEntry> mono_text = {};
-	std::vector<RGBEntry> mono_text_s3 = {};
-	std::vector<RGBEntry> cga16 = {};
-	std::vector<RGBEntry> cga64 = {};
-	std::vector<RGBEntry> ega = {};
-	std::vector<RGBEntry> vga = {};
+	// 64 entries
+	std::vector<Rgb666> mono_text = {};
+
+	// 64 entries
+	std::vector<Rgb666> mono_text_s3 = {};
+
+	// 16 entries. This is default canonical 16-colour CGA palette as emulated
+	// by VGA cards.
+	std::vector<Rgb666> cga16 = {};
+
+	// 64 entries. This is the default 64-colour 6-bit RGB EGA palette as
+	// emulated by VGA cards. The BIOS sets up these colours in the first 64
+	// of the 256 VGA colour registers in EGA modes.
+	std::vector<Rgb666> cga64 = {};
+
+	// 64 entries
+	std::vector<Rgb666> ega = {};
+
+	// 256 entries. This is the default 256-colour VGA palette.
+	std::vector<Rgb666> vga = {};
 };
 
 extern palette_t palette;
 
 struct VideoModeBlock {
+	// BIOS video mode number
 	uint16_t mode;
+
 	VGAModes type;
+
 	uint16_t swidth, sheight;
 	uint8_t twidth, theight;
 	uint8_t cwidth, cheight;
@@ -144,6 +164,11 @@ extern std::vector<VideoModeBlock> ModeList_VGA_Paradise;
 extern std::vector<VideoModeBlock> ModeList_VGA_Tseng;
 
 using video_mode_block_iterator_t = std::vector<VideoModeBlock>::const_iterator;
+
+// Holds the last set "coarse" video mode via an INT 10H BIOS call.
+// A "refined", more accurate version of the current mode is stored in the
+// `vga.mode` global (e.g. M_TEXT may get refined into M_CGA_TEXT_COMPOSITE,
+// M_CGA4 into M_TANDY4 or M_CGA4_COMPOSITE, etc.)
 extern video_mode_block_iterator_t CurMode;
 
 enum class VesaModePref {
@@ -202,6 +227,8 @@ void INT10_SetupPalette();
 bool INT10_SetVideoMode(uint16_t mode);
 void INT10_SetCurMode(void);
 
+bool INT10_IsTextMode(const VideoModeBlock& mode_block);
+
 void INT10_ScrollWindow(uint8_t rul,uint8_t cul,uint8_t rlr,uint8_t clr,int8_t nlines,uint8_t attr,uint8_t page);
 
 void INT10_SetActivePage(uint8_t page);
@@ -209,12 +236,30 @@ void INT10_DisplayCombinationCode(uint16_t * dcc,bool set);
 void INT10_GetFuncStateInformation(PhysPt save);
 
 void INT10_SetCursorShape(uint8_t first,uint8_t last);
+
 void INT10_SetCursorPos(uint8_t row,uint8_t col,uint8_t page);
-void INT10_TeletypeOutput(uint8_t chr,uint8_t attr);
-void INT10_TeletypeOutputAttr(uint8_t chr,uint8_t attr,bool useattr);
-void INT10_ReadCharAttr(uint16_t * result,uint8_t page);
-void INT10_WriteChar(uint8_t chr, uint8_t attr, uint8_t page, uint16_t count, bool showattr);
-void INT10_WriteString(uint8_t row,uint8_t col,uint8_t flag,uint8_t attr,PhysPt string,uint16_t count,uint8_t page);
+void INT10_SetCursorPosViaInterrupt(const uint8_t row, const uint8_t col,
+                                    const uint8_t page);
+
+void INT10_TeletypeOutput(const uint8_t char_value, const uint8_t attribute);
+void INT10_TeletypeOutputViaInterrupt(const uint8_t char_value,
+                                      const uint8_t attribute);
+
+void INT10_TeletypeOutputAttr(const uint8_t char_value, const uint8_t attribute,
+                              const bool use_attribute);
+void INT10_TeletypeOutputAttrViaInterrupt(const uint8_t char_value,
+                                          const uint8_t attribute,
+                                          const bool use_attribute);
+
+void INT10_ReadCharAttr(uint16_t* result, uint8_t page);
+
+void INT10_WriteChar(const uint8_t char_value, const uint8_t attribute,
+                     uint8_t page, uint16_t count, bool use_attribute);
+void INT10_WriteCharViaInterrupt(const uint8_t char_value, const uint8_t attribute,
+                                 uint8_t page, uint16_t count, bool use_attribute);
+
+void INT10_WriteString(uint8_t row, uint8_t col, uint8_t flag, uint8_t attr,
+                       PhysPt string, uint16_t count, uint8_t page);
 
 /* Graphics Stuff */
 void INT10_PutPixel(uint16_t x,uint16_t y,uint8_t page,uint8_t color);
@@ -246,7 +291,8 @@ void INT10_PerformGrayScaleSumming(uint16_t start_reg,uint16_t count);
 
 
 /* Vesa Group */
-uint8_t VESA_GetSVGAInformation(uint16_t seg,uint16_t off);
+uint8_t VESA_GetSVGAInformation(const uint16_t segment, const uint16_t offset);
+bool VESA_IsVesaMode(const uint16_t bios_mode_number);
 uint8_t VESA_GetSVGAModeInformation(uint16_t mode,uint16_t seg,uint16_t off);
 uint8_t VESA_SetSVGAMode(uint16_t mode);
 uint8_t VESA_GetSVGAMode(uint16_t & mode);

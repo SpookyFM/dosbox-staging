@@ -36,6 +36,7 @@
 
 #include "../../dos/program_more_output.h"
 #include "callback.h"
+#include "channel_names.h"
 #include "dos_inc.h"
 #include "dos_system.h"
 #include "mapper.h"
@@ -1088,8 +1089,8 @@ public:
 		        "Loads or unloads the built-in ReelMagic Full Motion Player driver.\n"
 		        "\n"
 		        "Usage:\n"
-		        "  [color=green]fmpdrv[reset]    (loads the driver)\n"
-		        "  [color=green]fmpdrv[reset] /u (unloads the driver)\n"
+		        "  [color=light-green]fmpdrv[reset]    (loads the driver)\n"
+		        "  [color=light-green]fmpdrv[reset] /u (unloads the driver)\n"
 		        "\n"
 		        "Notes:\n"
 		        "  The \"reelmagic = on\" configuration setting loads the\n"
@@ -1099,21 +1100,21 @@ public:
 		        "ReelMagic Full Motion Player Driver (built-in) %hhu.%hhu\n");
 
 		MSG_Add("PROGRAM_FMPDRV_LOADED",
-		        "[reset][color=light-yellow]Loaded at interrupt %xh[reset]\n");
+		        "[reset][color=brown]Loaded at interrupt %xh[reset]\n");
 
 		MSG_Add("PROGRAM_FMPDRV_LOAD_FAILED_ALREADY_LOADED",
-		        "[reset][color=light-yellow]Already loaded at interrupt %xh[reset]\n");
+		        "[reset][color=brown]Already loaded at interrupt %xh[reset]\n");
 
 		MSG_Add("PROGRAM_FMPDRV_LOAD_FAILED_INT_CONFLICT",
-		        "[reset][color=red]Not loaded: No free interrupts![reset]\n");
+		        "[reset][color=light-red]Not loaded: No free interrupts![reset]\n");
 
-		MSG_Add("PROGRAM_FMPDRV_UNLOADED", "[reset][color=light-yellow]Driver unloaded[reset]\n");
+		MSG_Add("PROGRAM_FMPDRV_UNLOADED", "[reset][color=brown]Driver unloaded[reset]\n");
 
 		MSG_Add("PROGRAM_FMPDRV_UNLOAD_FAILED_NOT_LOADED",
-		        "[reset][color=light-yellow]Driver was not loaded[reset]\n");
+		        "[reset][color=brown]Driver was not loaded[reset]\n");
 
 		MSG_Add("PROGRAM_FMPDRV_UNLOAD_FAILED_BLOCKED",
-		        "[reset][color=light-yellow]Driver not unloaded: configured to stay resident[reset]\n");
+		        "[reset][color=brown]Driver not unloaded: configured to stay resident[reset]\n");
 
 		messages_were_added = true;
 	}
@@ -1173,7 +1174,7 @@ static void SetMixerVolume(const char* const channelName, const uint16_t percent
 
 	AudioFrame vol_gain     = chan->GetAppVolume();
 	vol_gain[right ? 1 : 0] = percentage_to_gain(percentage);
-	chan->SetAppVolume(vol_gain.left, vol_gain.right);
+	chan->SetAppVolume({vol_gain.left, vol_gain.right});
 }
 
 static bool RMDEV_SYS_int2fHandler()
@@ -1232,28 +1233,28 @@ static bool RMDEV_SYS_int2fHandler()
 			reg_ax = 100; // can't touch this
 			return true;
 		case 0x0012: // query MPEG left volume
-			reg_ax = GetMixerVolume(reelmagic_channel_name, false);
+			reg_ax = GetMixerVolume(ChannelName::ReelMagic, false);
 			return true;
 		case 0x0013: // query MPEG right volume
-			reg_ax = GetMixerVolume(reelmagic_channel_name, true);
+			reg_ax = GetMixerVolume(ChannelName::ReelMagic, true);
 			return true;
 		case 0x0014: // query SYNT left volume
-			reg_ax = GetMixerVolume("OPL", false);
+			reg_ax = GetMixerVolume(ChannelName::Opl, false);
 			return true;
 		case 0x0015: // query SYNT right volume
-			reg_ax = GetMixerVolume("OPL", true);
+			reg_ax = GetMixerVolume(ChannelName::Opl, true);
 			return true;
 		case 0x0016: // query PCM left volume
-			reg_ax = GetMixerVolume("SB", false);
+			reg_ax = GetMixerVolume(ChannelName::SoundBlasterDac, false);
 			return true;
 		case 0x0017: // query PCM right volume
-			reg_ax = GetMixerVolume("SB", true);
+			reg_ax = GetMixerVolume(ChannelName::SoundBlasterDac, true);
 			return true;
 		case 0x001C: // query CD left volume
-			reg_ax = GetMixerVolume("CDAUDIO", false);
+			reg_ax = GetMixerVolume(ChannelName::CdAudio, false);
 			return true;
 		case 0x001D: // query CD right volume
-			reg_ax = GetMixerVolume("CDAUDIO", true);
+			reg_ax = GetMixerVolume(ChannelName::CdAudio, true);
 			return true;
 		}
 		break;
@@ -1266,28 +1267,28 @@ static bool RMDEV_SYS_int2fHandler()
 			LOG(LOG_REELMAGIC, LOG_ERROR)("RMDEV.SYS: Can't update MAIN Right Volume");
 			return true;
 		case 0x0012: // set MPEG left volume
-			SetMixerVolume(reelmagic_channel_name, reg_dx, false);
+			SetMixerVolume(ChannelName::ReelMagic, reg_dx, false);
 			return true;
 		case 0x0013: // set MPEG right volume
-			SetMixerVolume(reelmagic_channel_name, reg_dx, true);
+			SetMixerVolume(ChannelName::ReelMagic, reg_dx, true);
 			return true;
 		case 0x0014: // set SYNT left volume
-			SetMixerVolume("OPL", reg_dx, false);
+			SetMixerVolume(ChannelName::Opl, reg_dx, false);
 			return true;
 		case 0x0015: // set SYNT right volume
-			SetMixerVolume("OPL", reg_dx, true);
+			SetMixerVolume(ChannelName::Opl, reg_dx, true);
 			return true;
 		case 0x0016: // set PCM left volume
-			SetMixerVolume("SB", reg_dx, false);
+			SetMixerVolume(ChannelName::SoundBlasterDac, reg_dx, false);
 			return true;
 		case 0x0017: // set PCM right volume
-			SetMixerVolume("SB", reg_dx, true);
+			SetMixerVolume(ChannelName::SoundBlasterDac, reg_dx, true);
 			return true;
 		case 0x001C: // set CD left volume
-			SetMixerVolume("CDAUDIO", reg_dx, false);
+			SetMixerVolume(ChannelName::CdAudio, reg_dx, false);
 			return true;
 		case 0x001D: // set CD right volume
-			SetMixerVolume("CDAUDIO", reg_dx, true);
+			SetMixerVolume(ChannelName::CdAudio, reg_dx, true);
 			return true;
 		}
 		break;
@@ -1396,8 +1397,7 @@ void ReelMagic_Init(Section* sec)
 	const auto section = static_cast<Section_prop*>(sec);
 
 	// Does the user want ReelMagic emulation?
-	const auto reelmagic_choice = std::string_view(
-	        section->Get_string("reelmagic"));
+	const auto reelmagic_choice = section->Get_string("reelmagic");
 
 	const auto wants_card_only = (reelmagic_choice == "cardonly");
 

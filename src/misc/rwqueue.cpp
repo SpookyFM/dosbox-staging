@@ -51,11 +51,13 @@ void RWQueue<T>::Stop()
 	if (!is_running) {
 		return;
 	}
+	mutex.lock();
 	is_running = false;
+	mutex.unlock();
 
 	// notify the conditions
-	has_items.notify_one();
-	has_room.notify_one();
+	has_items.notify_all();
+	has_room.notify_all();
 }
 
 template <typename T>

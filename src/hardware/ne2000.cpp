@@ -376,7 +376,7 @@ bx_ne2k_c::asic_read(io_port_t offset, io_width_t io_len)
     // have been initialised.
     //
     if (!s.remote_bytes) {
-	    LOG_WARNING("Empty ASIC read from port=0x%02x of length %u and %u remote_bytes",
+	    LOG_WARNING("NE2000: Empty ASIC read from port=0x%02x of length %u and %u remote_bytes",
 			offset, enum_val(io_len), s.remote_bytes);
 	    break;
     }
@@ -1310,7 +1310,7 @@ int bx_ne2k_c::rx_frame(const void *buf, unsigned io_len)
   }
 
   // Setup packet header
-  pkthdr[0] = 0;	// rx status - old behavior
+  // pkthdr[0] = 0;	// rx status - old behavior
   pkthdr[0] = 1;        // Probably better to set it all the time
                         // rather than set it to 0, which is clearly wrong.
   if (pktbuf[0] & 0x01) {
@@ -1335,7 +1335,7 @@ int bx_ne2k_c::rx_frame(const void *buf, unsigned io_len)
     memcpy(startptr + 4, buf, (size_t)(endbytes - 4u));
     startptr = & BX_NE2K_THIS s.mem[BX_NE2K_THIS s.page_start * 256u -
 				 BX_NE2K_MEMSTART];
-    memcpy(startptr, (void *)(pktbuf + endbytes - 4u),
+    memcpy(startptr, (const void *)(pktbuf + endbytes - 4u),
 	   (size_t)(io_len - endbytes + 8u));
     BX_NE2K_THIS s.curr_page = nextpage;
   }
@@ -1482,10 +1482,10 @@ public:
         LOG_MSG("NE2000: Initialised on port %xh and IRQ %u", base, irq);
 
 		// mac address
-		const char* macstring=section->Get_string("macaddr");
+		std::string macstring = section->Get_string("macaddr");
 		unsigned int macint[6];
 		uint8_t mac[6];
-		if(sscanf(macstring,"%02x:%02x:%02x:%02x:%02x:%02x",
+		if(sscanf(macstring.c_str(),"%02x:%02x:%02x:%02x:%02x:%02x",
 			&macint[0],&macint[1],&macint[2],&macint[3],&macint[4],&macint[5]) != 6) {
 			mac[0]=0xac;mac[1]=0xde;mac[2]=0x48;
 			mac[3]=0x88;mac[4]=0xbb;mac[5]=0xaa;
@@ -1526,11 +1526,11 @@ public:
 	}
 };
 
-static NE2K* test;
-void NE2K_ShutDown(Section* sec) {
-    (void)sec;//UNUSED
-	if(test) delete test;
-	test=nullptr;
+static NE2K* instance;
+void NE2K_ShutDown(Section* /* sec */)
+{
+	delete instance;
+	instance = nullptr;
 }
 
 void NE2K_Init(Section* sec)
@@ -1538,14 +1538,14 @@ void NE2K_Init(Section* sec)
 	assert(sec);
 	// LOG(LOG_MISC,LOG_DEBUG)("Initializing NE2000 network card emulation");
 
-	test = new NE2K(sec);
+	instance = new NE2K(sec);
 
 	constexpr auto changeable_at_runtime = true;
 	sec->AddDestroyFunction(&NE2K_ShutDown, changeable_at_runtime);
 
-	if (!test->load_success) {
-		delete test;
-		test = nullptr;
+	if (!instance->load_success) {
+		delete instance;
+		instance = nullptr;
 	}
 }
 

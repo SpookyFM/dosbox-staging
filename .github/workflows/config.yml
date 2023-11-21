@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: false
 
@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: false
 
@@ -68,7 +68,7 @@ jobs:
         shell: bash
         run:   echo "date=$(date +%Y-%W)" >> $GITHUB_OUTPUT
 
-      - uses:  actions/cache@v3.3.1
+      - uses:  actions/cache@v3.3.2
         id:    cache-msys2
         if:    matrix.system.name == 'Windows'
         with:
@@ -104,7 +104,7 @@ jobs:
 
       - name: Cache subprojects
         id:   cache-subprojects
-        uses: actions/cache@v3.3.1
+        uses: actions/cache@v3.3.2
         with:
           path: subprojects.tar
           key: subprojects-${{ hashFiles('subprojects/*.wrap') }}-4

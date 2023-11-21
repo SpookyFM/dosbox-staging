@@ -60,15 +60,11 @@ constexpr Rgb888 marginal_color(255, 103, 0); // Amber for marginal conditions
 constexpr Rgb888 on_color(0, 1, 0);           // Green for on/ready/in-use
 constexpr Rgb888 off_color(0, 0, 0);          // Black for off/stopped/not-in-use
 
-enum {
-	CLR_BLACK=0,
-	CLR_GREY=1,
-	CLR_WHITE=2,
-	CLR_RED=3,
-	CLR_BLUE=4,
-	CLR_GREEN=5,
-	CLR_LAST=6
-};
+constexpr Rgb888 color_black(0, 0, 0);
+constexpr Rgb888 color_grey(127, 127, 127);
+constexpr Rgb888 color_white(255, 255, 255);
+constexpr Rgb888 color_red(255, 0, 0);
+constexpr Rgb888 color_green(0, 255, 0);
 
 enum BB_Types {
 	BB_Next,BB_Add,BB_Del,
@@ -106,17 +102,14 @@ static void SetActiveEvent(CEvent * event);
 static void SetActiveBind(CBind * _bind);
 extern uint8_t int10_font_14[256 * 14];
 
-static std::vector<CEvent *> events;
-static std::vector<CButton *> buttons;
+static std::vector<std::unique_ptr<CEvent>> events;
+static std::vector<std::unique_ptr<CButton>> buttons;
 static std::vector<CBindGroup *> bindgroups;
 static std::vector<CHandlerEvent *> handlergroup;
 static std::list<CBind *> all_binds;
 
 typedef std::list<CBind *> CBindList;
-typedef std::list<CEvent *>::iterator CEventList_it;
 typedef std::list<CBind *>::iterator CBindList_it;
-typedef std::vector<CButton *>::iterator CButton_it;
-typedef std::vector<CEvent *>::iterator CEventVector_it;
 typedef std::vector<CBindGroup *>::iterator CBindGroup_it;
 
 static CBindList holdlist;
@@ -126,7 +119,7 @@ public:
 	CEvent(const char *ev_entry) : bindlist{}
 	{
 		safe_strcpy(entry, ev_entry);
-		events.push_back(this);
+		events.emplace_back(this);
 	}
 
 	virtual ~CEvent() = default;
@@ -197,19 +190,16 @@ public:
 			if (!GetActivityCount()) Active(true);
 		}
 	}
-	void DeActivateEvent(bool ev_trigger) override {
-		if (ev_trigger) {
-			if (activity>0) activity--;
-			if (activity==0) {
-				/* test if still some trigger-activity is present,
-				   adjust the state in this case accordingly */
-				if (GetActivityCount()) RepostActivity();
-				else Active(false);
-			}
-		} else {
-			if (!GetActivityCount()) Active(false);
+	void DeActivateEvent(const bool ev_trigger) override
+	{
+		if (ev_trigger || GetActivityCount() == 0) {
+			// Zero-out this event's pending activity if triggered
+			// or we have no opposite-direction events
+			activity = 0;
+			Active(false);
 		}
 	}
+
 	virtual Bitu GetActivityCount() {
 		return activity;
 	}
@@ -383,7 +373,10 @@ public:
 			return "abnt1"; // called "ABNT_C1" at kbdlayout.info
 		}
 
-		DEBUG_LOG_MSG("MAPPER: Please report unnamed SDL scancode %d (%xh)", key, key);
+		LOG_DEBUG("MAPPER: Please report unnamed SDL scancode %d (%xh)",
+		          key,
+		          key);
+
 		return sdl_scancode_name;
 	}
 
@@ -1270,7 +1263,7 @@ public:
 	Typer(const Typer &) = delete;            // prevent copy
 	Typer &operator=(const Typer &) = delete; // prevent assignment
 	~Typer() { Stop(); }
-	void Start(std::vector<CEvent *> *ext_events,
+	void Start(std::vector<std::unique_ptr<CEvent>> *ext_events,
 	           std::vector<std::string> &ext_sequence,
 	           const uint32_t wait_ms,
 	           const uint32_t pace_ms)
@@ -1311,7 +1304,7 @@ private:
 		static CEvent *lshift_event = nullptr;
 		for (auto &event : *m_events) {
 			if (std::string("key_lshift") == event->GetName()) {
-				lshift_event = event;
+				lshift_event = event.get();
 				break;
 			}
 		}
@@ -1378,7 +1371,7 @@ private:
 
 	std::thread m_instance = {};
 	std::vector<std::string> m_sequence = {};
-	std::vector<CEvent *> *m_events = nullptr;
+	std::vector<std::unique_ptr<CEvent>>* m_events = nullptr;
 	uint32_t m_wait_ms = 0;
 	uint32_t m_pace_ms = 0;
 	std::atomic_bool m_stop_requested{false};
@@ -1386,10 +1379,8 @@ private:
 
 static struct CMapper {
 	SDL_Window *window = nullptr;
-	SDL_Rect draw_rect = {0, 0, 0, 0};
-	SDL_Surface *draw_surface_nonpaletted = nullptr; // Needed for SDL_BlitScaled
-	SDL_Surface *surface = nullptr;
-	SDL_Surface *draw_surface = nullptr;
+	SDL_Renderer* renderer  = nullptr;
+	SDL_Texture* font_atlas = nullptr;
 	bool exit = false;
 	CEvent *aevent = nullptr;  // Active Event
 	CBind *abind = nullptr;    // Active Bind
@@ -1428,35 +1419,30 @@ void CBindGroup::DeactivateBindList(CBindList * list,bool ev_trigger) {
 	}
 }
 
-static void DrawText(Bitu x,Bitu y,const char * text,uint8_t color) {
-	uint8_t * draw = ((uint8_t *)mapper.draw_surface->pixels) + (y * mapper.draw_surface->w) + x;
+static void DrawText(int32_t x, int32_t y, const char* text, const Rgb888& color)
+{
+	SDL_Rect character_rect = {0, 0, 8, 14};
+	SDL_Rect dest_rect      = {x, y, 8, 14};
+	SDL_SetTextureColorMod(mapper.font_atlas, color.red, color.green, color.blue);
 	while (*text) {
-		uint8_t * font=&int10_font_14[(*text)*14];
-		Bitu i,j;uint8_t * draw_line=draw;
-		for (i=0;i<14;i++) {
-			uint8_t map=*font++;
-			for (j=0;j<8;j++) {
-				if (map & 0x80) *(draw_line+j)=color;
-				else *(draw_line+j)=CLR_BLACK;
-				map<<=1;
-			}
-			draw_line += mapper.draw_surface->w;
-		}
-		text++;draw+=8;
+		character_rect.y = *text * character_rect.h;
+		SDL_RenderCopy(mapper.renderer,
+		               mapper.font_atlas,
+		               &character_rect,
+		               &dest_rect);
+		text++;
+		dest_rect.x += character_rect.w;
 	}
 }
 
 class CButton {
 public:
-	CButton(Bitu p_x, Bitu p_y, Bitu p_dx, Bitu p_dy)
-		: x(p_x),
-		  y(p_y),
-		  dx(p_dx),
-		  dy(p_dy),
-		  color(CLR_WHITE),
-		  enabled(true)
+	CButton(int32_t p_x, int32_t p_y, int32_t p_dx, int32_t p_dy)
+	        : rect{p_x, p_y, p_dx, p_dy},
+	          color(color_white),
+	          enabled(true)
 	{
-		buttons.push_back(this);
+		buttons.emplace_back(this);
 	}
 
 	virtual ~CButton() = default;
@@ -1464,19 +1450,20 @@ public:
 	virtual void Draw() {
 		if (!enabled)
 			return;
-		uint8_t * point = ((uint8_t *)mapper.draw_surface->pixels) + (y * mapper.draw_surface->w) + x;
-		for (Bitu lines=0;lines<dy;lines++)  {
-			if (lines==0 || lines==(dy-1)) {
-				for (Bitu cols=0;cols<dx;cols++) *(point+cols)=color;
-			} else {
-				*point=color;*(point+dx-1)=color;
-			}
-			point += mapper.draw_surface->w;
-		}
+		SDL_SetRenderDrawColor(mapper.renderer,
+		                       color.red,
+		                       color.green,
+		                       color.blue,
+		                       SDL_ALPHA_OPAQUE);
+		SDL_RenderDrawRect(mapper.renderer, &rect);
 	}
-	virtual bool OnTop(Bitu _x,Bitu _y) {
-		return ( enabled && (_x>=x) && (_x<x+dx) && (_y>=y) && (_y<y+dy));
+
+	virtual bool OnTop(int32_t _x, int32_t _y)
+	{
+		return (enabled && (_x >= rect.x) && (_x < rect.x + rect.w) &&
+		        (_y >= rect.y) && (_y < rect.y + rect.h));
 	}
+
 	virtual void BindColor() {}
 	virtual void Click() {}
 
@@ -1486,10 +1473,14 @@ public:
 		mapper.redraw = true;
 	}
 
-	void SetColor(uint8_t _col) { color=_col; }
+	void SetColor(const Rgb888& _col)
+	{
+		color = _col;
+	}
+
 protected:
-	Bitu x,y,dx,dy;
-	uint8_t color;
+	SDL_Rect rect;
+	Rgb888 color;
 	bool enabled;
 };
 
@@ -1497,9 +1488,9 @@ protected:
 //+V773:SUPPRESS, class:CTextButton
 class CTextButton : public CButton {
 public:
-	CTextButton(Bitu  x, Bitu y, Bitu dx, Bitu dy, const char *txt)
-		: CButton(x, y, dx, dy),
-		  text(txt)
+	CTextButton(int32_t x, int32_t y, int32_t dx, int32_t dy, const char* txt)
+	        : CButton(x, y, dx, dy),
+	          text(txt)
 	{}
 
 	CTextButton(const CTextButton&) = delete; // prevent copy
@@ -1510,7 +1501,7 @@ public:
 		if (!enabled)
 			return;
 		CButton::Draw();
-		DrawText(x + 2, y + 2, text.c_str(), color);
+		DrawText(rect.x + 2, rect.y + 2, text.c_str(), color);
 	}
 
 	void SetText(const std::string &txt) { text = txt; }
@@ -1521,13 +1512,14 @@ protected:
 
 class CClickableTextButton : public CTextButton {
 public:
-	CClickableTextButton(Bitu _x, Bitu _y, Bitu _dx, Bitu _dy, const char * _text)
-		: CTextButton(_x, _y, _dx, _dy, _text)
+	CClickableTextButton(int32_t _x, int32_t _y, int32_t _dx, int32_t _dy,
+	                     const char* _text)
+	        : CTextButton(_x, _y, _dx, _dy, _text)
 	{}
 
 	void BindColor() override
 	{
-		this->SetColor(CLR_WHITE);
+		this->SetColor(color_white);
 	}
 };
 
@@ -1536,20 +1528,23 @@ static CEventButton * last_clicked = nullptr;
 
 class CEventButton final : public CClickableTextButton {
 public:
-	CEventButton(Bitu x, Bitu y, Bitu dx, Bitu dy, const char *text, CEvent *ev)
-		: CClickableTextButton(x, y, dx, dy, text),
-		  event(ev)
+	CEventButton(int32_t x, int32_t y, int32_t dx, int32_t dy,
+	             const char* text, CEvent* ev)
+	        : CClickableTextButton(x, y, dx, dy, text),
+	          event(ev)
 	{}
 
 	CEventButton(const CEventButton&) = delete; // prevent copy
 	CEventButton& operator=(const CEventButton&) = delete; // prevent assignment
 
 	void BindColor() override {
-		this->SetColor(event->bindlist.begin()==event->bindlist.end() ? CLR_GREY : CLR_WHITE);
+		this->SetColor(event->bindlist.begin() == event->bindlist.end()
+		                       ? color_grey
+		                       : color_white);
 	}
 	void Click() override {
 		if (last_clicked) last_clicked->BindColor();
-		this->SetColor(CLR_GREEN);
+		this->SetColor(color_green);
 		SetActiveEvent(event);
 		last_clicked=this;
 	}
@@ -1559,14 +1554,16 @@ protected:
 
 class CCaptionButton final : public CButton {
 public:
-	CCaptionButton(Bitu _x,Bitu _y,Bitu _dx,Bitu _dy) : CButton(_x,_y,_dx,_dy){
+	CCaptionButton(int32_t _x, int32_t _y, int32_t _dx, int32_t _dy)
+	        : CButton(_x, _y, _dx, _dy)
+	{
 		caption[0]=0;
 	}
 	void Change(const char * format,...) GCC_ATTRIBUTE(__format__(__printf__,2,3));
 
 	void Draw() override {
 		if (!enabled) return;
-		DrawText(x+2,y+2,caption,color);
+		DrawText(rect.x + 2, rect.y + 2, caption, color);
 	}
 protected:
 	char caption[128] = {};
@@ -1580,15 +1577,16 @@ void CCaptionButton::Change(const char * format,...) {
 	mapper.redraw=true;
 }
 
-static void change_action_text(const char* text,uint8_t col);
+static void change_action_text(const char* text, const Rgb888& col);
 
 static void MAPPER_SaveBinds();
 
 class CBindButton final : public CClickableTextButton {
 public:
-	CBindButton(Bitu _x, Bitu _y, Bitu _dx, Bitu _dy, const char * _text, BB_Types _type)
-		: CClickableTextButton(_x, _y, _dx, _dy, _text),
-		  type(_type)
+	CBindButton(int32_t _x, int32_t _y, int32_t _dx, int32_t _dy,
+	            const char* _text, BB_Types _type)
+	        : CClickableTextButton(_x, _y, _dx, _dy, _text),
+	          type(_type)
 	{}
 
 	void Click() override {
@@ -1596,7 +1594,8 @@ public:
 		case BB_Add:
 			mapper.addbind=true;
 			SetActiveBind(nullptr);
-			change_action_text("Press a key/joystick button or move the joystick.",CLR_RED);
+			change_action_text("Press a key/joystick button or move the joystick.",
+			                   color_red);
 			break;
 		case BB_Del:
 			if (mapper.abindit != mapper.aevent->bindlist.end()) {
@@ -1631,9 +1630,10 @@ protected:
 
 class CCheckButton final : public CClickableTextButton {
 public:
-	CCheckButton(Bitu x, Bitu y, Bitu dx, Bitu dy, const char *text, BC_Types t)
-		: CClickableTextButton(x, y, dx, dy, text),
-		  type(t)
+	CCheckButton(int32_t x, int32_t y, int32_t dx, int32_t dy,
+	             const char* text, BC_Types t)
+	        : CClickableTextButton(x, y, dx, dy, text),
+	          type(t)
 	{}
 
 	void Draw() override {
@@ -1654,11 +1654,16 @@ public:
 			break;
 		}
 		if (checked) {
-			uint8_t * point=((uint8_t *)mapper.draw_surface->pixels)+((y+2)*mapper.draw_surface->w)+x+dx-dy+2;
-			for (Bitu lines=0;lines<(dy-4);lines++)  {
-				memset(point,color,dy-4);
-				point+=mapper.draw_surface->w;
-			}
+			const SDL_Rect checkbox_rect = {rect.x + rect.w - rect.h + 2,
+			                                rect.y + 2,
+			                                rect.h - 4,
+			                                rect.h - 4};
+			SDL_SetRenderDrawColor(mapper.renderer,
+			                       color.red,
+			                       color.green,
+			                       color.blue,
+			                       SDL_ALPHA_OPAQUE);
+			SDL_RenderFillRect(mapper.renderer, &checkbox_rect);
 		}
 		CClickableTextButton::Draw();
 	}
@@ -1695,6 +1700,24 @@ public:
 	}
 
 	KBD_KEYS key;
+};
+
+class CMouseButtonEvent final : public CTriggeredEvent {
+public:
+	CMouseButtonEvent() = delete;
+
+	CMouseButtonEvent(const char* const entry, const MouseButtonId id)
+	        : CTriggeredEvent(entry),
+	          button_id(id)
+	{}
+
+	void Active(const bool pressed) override
+	{
+		MOUSE_EventButton(button_id, pressed);
+	}
+
+private:
+	const MouseButtonId button_id = MouseButtonId::None;
 };
 
 class CJAxisEvent final : public CContinuousEvent {
@@ -1841,8 +1864,8 @@ static struct {
 	CCheckButton * mod1,* mod2,* mod3,* hold;
 } bind_but;
 
-
-static void change_action_text(const char* text,uint8_t col) {
+static void change_action_text(const char* text, const Rgb888& col)
+{
 	bind_but.action->Change(text,"");
 	bind_but.action->SetColor(col);
 }
@@ -1951,7 +1974,7 @@ static void update_active_bind_ui()
 	                            (mods & BMOD_Mod3 ? mod_3_desc.c_str() : ""),
 	                            mapper.abind->GetBindName().c_str());
 
-	bind_but.bind_title->SetColor(CLR_GREEN);
+	bind_but.bind_title->SetColor(color_green);
 	bind_but.bind_title->Enable(true);
 	bind_but.del->Enable(true);
 	bind_but.next->Enable(active_event_binds_num > 1);
@@ -1970,12 +1993,12 @@ static void SetActiveEvent(CEvent * event) {
 	mapper.addbind=false;
 	bind_but.event_title->Change("   Event: %s", event ? event->GetName() : "none");
 	if (!event) {
-		change_action_text("Select an event to change.",CLR_WHITE);
+		change_action_text("Select an event to change.", color_white);
 		bind_but.add->Enable(false);
 		SetActiveBind(nullptr);
 	} else {
 		change_action_text("Modify the bindings for this event or select a different event.",
-		                   CLR_WHITE);
+		                   color_white);
 		mapper.abindit=event->bindlist.begin();
 		if (mapper.abindit!=event->bindlist.end()) {
 			SetActiveBind(*(mapper.abindit));
@@ -1984,25 +2007,24 @@ static void SetActiveEvent(CEvent * event) {
 	}
 }
 
-extern SDL_Window* GFX_SetSDLSurfaceWindow(uint16_t width, uint16_t height,
-                                           bool allow_highdpi = true);
-extern SDL_Rect GFX_GetSDLSurfaceSubwindowDims(uint16_t width, uint16_t height);
+extern SDL_Window* GFX_GetWindow();
 extern void GFX_UpdateDisplayDimensions(int width, int height);
 
 static void DrawButtons() {
-	SDL_FillRect(mapper.draw_surface,nullptr,CLR_BLACK);
-	for (CButton_it but_it = buttons.begin(); but_it != buttons.end(); ++but_it) {
-		(*but_it)->Draw();
+	SDL_SetRenderDrawColor(mapper.renderer,
+	                       color_black.red,
+	                       color_black.green,
+	                       color_black.blue,
+	                       SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(mapper.renderer);
+	for (const auto& button : buttons) {
+		button->Draw();
 	}
-	// We can't just use SDL_BlitScaled (say for Android) in one step
-	SDL_BlitSurface(mapper.draw_surface, nullptr, mapper.draw_surface_nonpaletted, nullptr);
-	SDL_BlitScaled(mapper.draw_surface_nonpaletted, nullptr, mapper.surface, &mapper.draw_rect);
-	//SDL_BlitSurface(mapper.draw_surface, NULL, mapper.surface, NULL);
-	SDL_UpdateWindowSurface(mapper.window);
+	SDL_RenderPresent(mapper.renderer);
 }
 
-static CKeyEvent* AddKeyButtonEvent(Bitu x, Bitu y, Bitu dx, Bitu dy,
-                                    const char* const title,
+static CKeyEvent* AddKeyButtonEvent(int32_t x, int32_t y, int32_t dx,
+                                    int32_t dy, const char* const title,
                                     const char* const entry, KBD_KEYS key)
 {
 	char buf[64];
@@ -2013,7 +2035,18 @@ static CKeyEvent* AddKeyButtonEvent(Bitu x, Bitu y, Bitu dx, Bitu dy,
 	return event;
 }
 
-static CJAxisEvent* AddJAxisButton(Bitu x, Bitu y, Bitu dx, Bitu dy,
+static CMouseButtonEvent* AddMouseButtonEvent(const int32_t x, const int32_t y,
+                                              const int32_t dx, const int32_t dy,
+                                              const char* const title,
+                                              const char* const entry,
+                                              const MouseButtonId button_id)
+{
+	auto event = new CMouseButtonEvent(entry, button_id);
+	new CEventButton(x, y, dx, dy, title, event);
+	return event;
+}
+
+static CJAxisEvent* AddJAxisButton(int32_t x, int32_t y, int32_t dx, int32_t dy,
                                    const char* const title, Bitu stick, Bitu axis,
                                    bool positive, CJAxisEvent* opposite_axis)
 {
@@ -2035,7 +2068,7 @@ static CJAxisEvent * AddJAxisButton_hidden(Bitu stick,Bitu axis,bool positive,CJ
 	return new CJAxisEvent(buf,stick,axis,positive,opposite_axis);
 }
 
-static void AddJButtonButton(Bitu x, Bitu y, Bitu dx, Bitu dy,
+static void AddJButtonButton(int32_t x, int32_t y, int32_t dx, int32_t dy,
                              const char* const title, Bitu stick, Bitu button)
 {
 	char buf[64];
@@ -2053,8 +2086,8 @@ static void AddJButtonButton_hidden(Bitu stick,Bitu button) {
 	new CJButtonEvent(buf,stick,button);
 }
 
-static void AddJHatButton(Bitu x, Bitu y, Bitu dx, Bitu dy, const char* const title,
-                          Bitu _stick, Bitu _hat, Bitu _dir)
+static void AddJHatButton(int32_t x, int32_t y, int32_t dx, int32_t dy,
+                          const char* const title, Bitu _stick, Bitu _hat, Bitu _dir)
 {
 	char buf[64];
 	sprintf(buf, "jhat_%d_%d_%d",
@@ -2065,7 +2098,7 @@ static void AddJHatButton(Bitu x, Bitu y, Bitu dx, Bitu dy, const char* const ti
 	new CEventButton(x,y,dx,dy,title,event);
 }
 
-static void AddModButton(Bitu x, Bitu y, Bitu dx, Bitu dy,
+static void AddModButton(int32_t x, int32_t y, int32_t dx, int32_t dy,
                          const char* const title, int mod)
 {
 	char buf[64];
@@ -2134,100 +2167,139 @@ static CKeyEvent * caps_lock_event=nullptr;
 static CKeyEvent * num_lock_event=nullptr;
 
 static void CreateLayout() {
-	Bitu i;
+	int32_t i;
 	/* Create the buttons for the Keyboard */
-#define BW 28
-#define BH 20
-#define DX 5
-#define PX(_X_) ((_X_)*BW + DX)
-#define PY(_Y_) (10+(_Y_)*BH)
-	AddKeyButtonEvent(PX(0),PY(0),BW,BH,"ESC","esc",KBD_esc);
-	for (i=0;i<12;i++) AddKeyButtonEvent(PX(2+i),PY(0),BW,BH,combo_f[i].title,combo_f[i].entry,combo_f[i].key);
-	for (i=0;i<14;i++) AddKeyButtonEvent(PX(  i),PY(1),BW,BH,combo_1[i].title,combo_1[i].entry,combo_1[i].key);
-
-	AddKeyButtonEvent(PX(0),PY(2),BW*2,BH,"TAB","tab",KBD_tab);
-	for (i=0;i<12;i++) AddKeyButtonEvent(PX(2+i),PY(2),BW,BH,combo_2[i].title,combo_2[i].entry,combo_2[i].key);
-
-	AddKeyButtonEvent(PX(14),PY(2),BW*2,BH*2,"ENTER","enter",KBD_enter);
-
-	caps_lock_event=AddKeyButtonEvent(PX(0),PY(3),BW*2,BH,"CLCK","capslock",KBD_capslock);
-	for (i=0;i<12;i++) AddKeyButtonEvent(PX(2+i),PY(3),BW,BH,combo_3[i].title,combo_3[i].entry,combo_3[i].key);
-
-	AddKeyButtonEvent(PX(0),PY(4),BW*2,BH,"SHIFT","lshift",KBD_leftshift);
+	constexpr int32_t button_width  = 28;
+	constexpr int32_t button_height = 20;
+	constexpr int32_t margin        = 5;
+	constexpr auto pos_x = [](int32_t x) { return x * button_width + margin; };
+	constexpr auto pos_y = [](int32_t y) { return 10 + y * button_height; };
+	AddKeyButtonEvent(pos_x(0), pos_y(0), button_width, button_height, "ESC", "esc", KBD_esc);
 	for (i = 0; i < 12; i++) {
-		AddKeyButtonEvent(PX(2 + i),
-		                  PY(4),
-		                  BW,
-		                  BH,
+		AddKeyButtonEvent(pos_x(2 + i), pos_y(0), button_width, button_height, combo_f[i].title, combo_f[i].entry, combo_f[i].key);
+	}
+	for (i = 0; i < 14; i++) {
+		AddKeyButtonEvent(pos_x(i), pos_y(1), button_width, button_height, combo_1[i].title, combo_1[i].entry, combo_1[i].key);
+	}
+
+	AddKeyButtonEvent(pos_x(0), pos_y(2), button_width * 2, button_height, "TAB", "tab", KBD_tab);
+	for (i = 0; i < 12; i++) {
+		AddKeyButtonEvent(pos_x(2 + i), pos_y(2), button_width, button_height, combo_2[i].title, combo_2[i].entry, combo_2[i].key);
+	}
+
+	AddKeyButtonEvent(pos_x(14), pos_y(2), button_width * 2, button_height * 2, "ENTER", "enter", KBD_enter);
+
+	caps_lock_event = AddKeyButtonEvent(pos_x(0), pos_y(3), button_width * 2, button_height, "CLCK", "capslock", KBD_capslock);
+	for (i = 0; i < 12; i++) {
+		AddKeyButtonEvent(pos_x(2 + i), pos_y(3), button_width, button_height, combo_3[i].title, combo_3[i].entry, combo_3[i].key);
+	}
+
+	AddKeyButtonEvent(pos_x(0), pos_y(4), button_width * 2, button_height, "SHIFT", "lshift", KBD_leftshift);
+	for (i = 0; i < 12; i++) {
+		AddKeyButtonEvent(pos_x(2 + i),
+		                  pos_y(4),
+		                  button_width,
+		                  button_height,
 		                  combo_4[i].title,
 		                  combo_4[i].entry,
 		                  combo_4[i].key);
 	}
-	AddKeyButtonEvent(PX(14), PY(4), BW * 3, BH, "SHIFT", "rshift", KBD_rightshift);
+	AddKeyButtonEvent(pos_x(14), pos_y(4), button_width * 3, button_height, "SHIFT", "rshift", KBD_rightshift);
 
 	/* Bottom Row */
-	AddKeyButtonEvent(PX(0), PY(5), BW * 2, BH, MMOD1_NAME, "lctrl", KBD_leftctrl);
+	AddKeyButtonEvent(pos_x(0), pos_y(5), button_width * 2, button_height, MMOD1_NAME, "lctrl", KBD_leftctrl);
 
 #if !defined(MACOSX)
-	AddKeyButtonEvent(PX(2), PY(5), BW * 2, BH, MMOD3_NAME, "lgui", KBD_leftgui);
-	AddKeyButtonEvent(PX(4), PY(5), BW * 2, BH, MMOD2_NAME, "lalt", KBD_leftalt);
+	AddKeyButtonEvent(pos_x(2), pos_y(5), button_width * 2, button_height, MMOD3_NAME, "lgui", KBD_leftgui);
+	AddKeyButtonEvent(pos_x(4), pos_y(5), button_width * 2, button_height, MMOD2_NAME, "lalt", KBD_leftalt);
 #else
-	AddKeyButtonEvent(PX(2), PY(5), BW * 2, BH, MMOD2_NAME, "lalt", KBD_leftalt);
-	AddKeyButtonEvent(PX(4), PY(5), BW * 2, BH, MMOD3_NAME, "lgui", KBD_leftgui);
+	AddKeyButtonEvent(pos_x(2), pos_y(5), button_width * 2, button_height, MMOD2_NAME, "lalt", KBD_leftalt);
+	AddKeyButtonEvent(pos_x(4), pos_y(5), button_width * 2, button_height, MMOD3_NAME, "lgui", KBD_leftgui);
 #endif
 
-	AddKeyButtonEvent(PX(6), PY(5), BW * 4, BH, "SPACE", "space", KBD_space);
+	AddKeyButtonEvent(pos_x(6), pos_y(5), button_width * 4, button_height, "SPACE", "space", KBD_space);
 
 #if !defined(MACOSX)
-	AddKeyButtonEvent(PX(10), PY(5), BW * 2, BH, MMOD2_NAME, "ralt", KBD_rightalt);
-	AddKeyButtonEvent(PX(12), PY(5), BW * 2, BH, MMOD3_NAME, "rgui", KBD_rightgui);
+	AddKeyButtonEvent(pos_x(10), pos_y(5), button_width * 2, button_height, MMOD2_NAME, "ralt", KBD_rightalt);
+	AddKeyButtonEvent(pos_x(12), pos_y(5), button_width * 2, button_height, MMOD3_NAME, "rgui", KBD_rightgui);
 #else
-	AddKeyButtonEvent(PX(10), PY(5), BW * 2, BH, MMOD3_NAME, "rgui", KBD_rightgui);
-	AddKeyButtonEvent(PX(12), PY(5), BW * 2, BH, MMOD2_NAME, "ralt", KBD_rightalt);
+	AddKeyButtonEvent(pos_x(10), pos_y(5), button_width * 2, button_height, MMOD3_NAME, "rgui", KBD_rightgui);
+	AddKeyButtonEvent(pos_x(12), pos_y(5), button_width * 2, button_height, MMOD2_NAME, "ralt", KBD_rightalt);
 #endif
 
-	AddKeyButtonEvent(PX(14), PY(5), BW * 2, BH, MMOD1_NAME, "rctrl", KBD_rightctrl);
+	AddKeyButtonEvent(pos_x(14), pos_y(5), button_width * 2, button_height, MMOD1_NAME, "rctrl", KBD_rightctrl);
 
 	/* Arrow Keys */
 #define XO 17
 #define YO 0
 
-	AddKeyButtonEvent(PX(XO+0),PY(YO),BW,BH,"PRT","printscreen",KBD_printscreen);
-	AddKeyButtonEvent(PX(XO+1),PY(YO),BW,BH,"SCL","scrolllock",KBD_scrolllock);
-	AddKeyButtonEvent(PX(XO+2),PY(YO),BW,BH,"PAU","pause",KBD_pause);
-	AddKeyButtonEvent(PX(XO+0),PY(YO+1),BW,BH,"INS","insert",KBD_insert);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+1),BW,BH,"HOM","home",KBD_home);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+1),BW,BH,"PUP","pageup",KBD_pageup);
-	AddKeyButtonEvent(PX(XO+0),PY(YO+2),BW,BH,"DEL","delete",KBD_delete);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+2),BW,BH,"END","end",KBD_end);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+2),BW,BH,"PDN","pagedown",KBD_pagedown);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+4),BW,BH,"\x18","up",KBD_up);
-	AddKeyButtonEvent(PX(XO+0),PY(YO+5),BW,BH,"\x1B","left",KBD_left);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+5),BW,BH,"\x19","down",KBD_down);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+5),BW,BH,"\x1A","right",KBD_right);
+	AddKeyButtonEvent(pos_x(XO + 0), pos_y(YO), button_width, button_height, "PRT", "printscreen", KBD_printscreen);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO), button_width, button_height, "SCL", "scrolllock", KBD_scrolllock);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO), button_width, button_height, "PAU", "pause", KBD_pause);
+	AddKeyButtonEvent(pos_x(XO + 0), pos_y(YO + 1), button_width, button_height, "INS", "insert", KBD_insert);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 1), button_width, button_height, "HOM", "home", KBD_home);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 1), button_width, button_height, "PUP", "pageup", KBD_pageup);
+	AddKeyButtonEvent(pos_x(XO + 0), pos_y(YO + 2), button_width, button_height, "DEL", "delete", KBD_delete);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 2), button_width, button_height, "END", "end", KBD_end);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 2), button_width, button_height, "PDN", "pagedown", KBD_pagedown);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 4), button_width, button_height, "\x18", "up", KBD_up);
+	AddKeyButtonEvent(pos_x(XO + 0), pos_y(YO + 5), button_width, button_height, "\x1B", "left", KBD_left);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 5), button_width, button_height, "\x19", "down", KBD_down);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 5), button_width, button_height, "\x1A", "right", KBD_right);
 #undef XO
 #undef YO
 #define XO 0
 #define YO 7
 	/* Numeric KeyPad */
-	num_lock_event=AddKeyButtonEvent(PX(XO),PY(YO),BW,BH,"NUM","numlock",KBD_numlock);
-	AddKeyButtonEvent(PX(XO+1),PY(YO),BW,BH,"/","kp_divide",KBD_kpdivide);
-	AddKeyButtonEvent(PX(XO+2),PY(YO),BW,BH,"*","kp_multiply",KBD_kpmultiply);
-	AddKeyButtonEvent(PX(XO+3),PY(YO),BW,BH,"-","kp_minus",KBD_kpminus);
-	AddKeyButtonEvent(PX(XO+0),PY(YO+1),BW,BH,"7","kp_7",KBD_kp7);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+1),BW,BH,"8","kp_8",KBD_kp8);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+1),BW,BH,"9","kp_9",KBD_kp9);
-	AddKeyButtonEvent(PX(XO+3),PY(YO+1),BW,BH*2,"+","kp_plus",KBD_kpplus);
-	AddKeyButtonEvent(PX(XO),PY(YO+2),BW,BH,"4","kp_4",KBD_kp4);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+2),BW,BH,"5","kp_5",KBD_kp5);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+2),BW,BH,"6","kp_6",KBD_kp6);
-	AddKeyButtonEvent(PX(XO+0),PY(YO+3),BW,BH,"1","kp_1",KBD_kp1);
-	AddKeyButtonEvent(PX(XO+1),PY(YO+3),BW,BH,"2","kp_2",KBD_kp2);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+3),BW,BH,"3","kp_3",KBD_kp3);
-	AddKeyButtonEvent(PX(XO+3),PY(YO+3),BW,BH*2,"ENT","kp_enter",KBD_kpenter);
-	AddKeyButtonEvent(PX(XO),PY(YO+4),BW*2,BH,"0","kp_0",KBD_kp0);
-	AddKeyButtonEvent(PX(XO+2),PY(YO+4),BW,BH,".","kp_period",KBD_kpperiod);
+	num_lock_event = AddKeyButtonEvent(pos_x(XO), pos_y(YO), button_width, button_height, "NUM", "numlock", KBD_numlock);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO), button_width, button_height, "/", "kp_divide", KBD_kpdivide);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO), button_width, button_height, "*", "kp_multiply", KBD_kpmultiply);
+	AddKeyButtonEvent(pos_x(XO + 3), pos_y(YO), button_width, button_height, "-", "kp_minus", KBD_kpminus);
+	AddKeyButtonEvent(pos_x(XO + 0), pos_y(YO + 1), button_width, button_height, "7", "kp_7", KBD_kp7);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 1), button_width, button_height, "8", "kp_8", KBD_kp8);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 1), button_width, button_height, "9", "kp_9", KBD_kp9);
+	AddKeyButtonEvent(pos_x(XO + 3), pos_y(YO + 1), button_width, button_height * 2, "+", "kp_plus", KBD_kpplus);
+	AddKeyButtonEvent(pos_x(XO), pos_y(YO + 2), button_width, button_height, "4", "kp_4", KBD_kp4);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 2), button_width, button_height, "5", "kp_5", KBD_kp5);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 2), button_width, button_height, "6", "kp_6", KBD_kp6);
+	AddKeyButtonEvent(pos_x(XO + 0), pos_y(YO + 3), button_width, button_height, "1", "kp_1", KBD_kp1);
+	AddKeyButtonEvent(pos_x(XO + 1), pos_y(YO + 3), button_width, button_height, "2", "kp_2", KBD_kp2);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 3), button_width, button_height, "3", "kp_3", KBD_kp3);
+	AddKeyButtonEvent(pos_x(XO + 3), pos_y(YO + 3), button_width, button_height * 2, "ENT", "kp_enter", KBD_kpenter);
+	AddKeyButtonEvent(pos_x(XO), pos_y(YO + 4), button_width * 2, button_height, "0", "kp_0", KBD_kp0);
+	AddKeyButtonEvent(pos_x(XO + 2), pos_y(YO + 4), button_width, button_height, ".", "kp_period", KBD_kpperiod);
 
+#undef XO
+#undef YO
+
+#define XO 5
+#define YO 8
+	/* Mouse Buttons */
+	new CTextButton(pos_x(XO + 0), pos_y(YO - 1), 3 * button_width, 20, "Mouse");
+
+	AddMouseButtonEvent(pos_x(XO + 0),
+	                    pos_y(YO),
+	                    button_width,
+	                    button_height,
+	                    "L",
+	                    "mouse_left",
+	                    MouseButtonId::Left);
+
+	AddMouseButtonEvent(pos_x(XO + 1),
+	                    pos_y(YO),
+	                    button_width,
+	                    button_height,
+	                    "M",
+	                    "mouse_middle",
+	                    MouseButtonId::Middle);
+
+	AddMouseButtonEvent(pos_x(XO + 2),
+	                    pos_y(YO),
+	                    button_width,
+	                    button_height,
+	                    "R",
+	                    "mouse_right",
+	                    MouseButtonId::Right);
 #undef XO
 #undef YO
 
@@ -2235,126 +2307,128 @@ static void CreateLayout() {
 #define YO 8
 	/* Joystick Buttons/Texts */
 	/* Buttons 1+2 of 1st Joystick */
-	AddJButtonButton(PX(XO),PY(YO),BW,BH,"1" ,0,0);
-	AddJButtonButton(PX(XO+2),PY(YO),BW,BH,"2" ,0,1);
+	AddJButtonButton(pos_x(XO), pos_y(YO), button_width, button_height, "1", 0, 0);
+	AddJButtonButton(pos_x(XO + 2), pos_y(YO), button_width, button_height, "2", 0, 1);
 	/* Axes 1+2 (X+Y) of 1st Joystick */
-	CJAxisEvent * cjaxis=AddJAxisButton(PX(XO+1),PY(YO),BW,BH,"Y-",0,1,false,nullptr);
-	AddJAxisButton  (PX(XO+1),PY(YO+1),BW,BH,"Y+",0,1,true,cjaxis);
-	cjaxis=AddJAxisButton  (PX(XO),PY(YO+1),BW,BH,"X-",0,0,false,nullptr);
-	AddJAxisButton  (PX(XO+2),PY(YO+1),BW,BH,"X+",0,0,true,cjaxis);
+	CJAxisEvent* cjaxis = AddJAxisButton(pos_x(XO + 1), pos_y(YO), button_width, button_height, "Y-", 0, 1, false, nullptr);
+	AddJAxisButton(pos_x(XO + 1), pos_y(YO + 1), button_width, button_height, "Y+", 0, 1, true, cjaxis);
+	cjaxis = AddJAxisButton(pos_x(XO), pos_y(YO + 1), button_width, button_height, "X-", 0, 0, false, nullptr);
+	AddJAxisButton(pos_x(XO + 2), pos_y(YO + 1), button_width, button_height, "X+", 0, 0, true, cjaxis);
 
 	CJAxisEvent * tmp_ptr;
 
 	assert(joytype != JOY_UNSET);
 	if (joytype == JOY_2AXIS) {
 		/* Buttons 1+2 of 2nd Joystick */
-		AddJButtonButton(PX(XO+4),PY(YO),BW,BH,"1" ,1,0);
-		AddJButtonButton(PX(XO+4+2),PY(YO),BW,BH,"2" ,1,1);
+		AddJButtonButton(pos_x(XO + 4), pos_y(YO), button_width, button_height, "1", 1, 0);
+		AddJButtonButton(pos_x(XO + 4 + 2), pos_y(YO), button_width, button_height, "2", 1, 1);
 		/* Buttons 3+4 of 1st Joystick, not accessible */
 		AddJButtonButton_hidden(0,2);
 		AddJButtonButton_hidden(0,3);
 
 		/* Axes 1+2 (X+Y) of 2nd Joystick */
-		cjaxis  = AddJAxisButton(PX(XO+4),PY(YO+1),BW,BH,"X-",1,0,false,nullptr);
-		tmp_ptr = AddJAxisButton(PX(XO+4+2),PY(YO+1),BW,BH,"X+",1,0,true,cjaxis);
+		cjaxis  = AddJAxisButton(pos_x(XO + 4), pos_y(YO + 1), button_width, button_height, "X-", 1, 0, false, nullptr);
+		tmp_ptr = AddJAxisButton(pos_x(XO + 4 + 2), pos_y(YO + 1), button_width, button_height, "X+", 1, 0, true, cjaxis);
 		(void)tmp_ptr;
-		cjaxis  = AddJAxisButton(PX(XO+4+1),PY(YO+0),BW,BH,"Y-",1,1,false,nullptr);
-		tmp_ptr = AddJAxisButton(PX(XO+4+1),PY(YO+1),BW,BH,"Y+",1,1,true,cjaxis);
+		cjaxis  = AddJAxisButton(pos_x(XO + 4 + 1), pos_y(YO + 0), button_width, button_height, "Y-", 1, 1, false, nullptr);
+		tmp_ptr = AddJAxisButton(pos_x(XO + 4 + 1), pos_y(YO + 1), button_width, button_height, "Y+", 1, 1, true, cjaxis);
 		(void)tmp_ptr;
 		/* Axes 3+4 (X+Y) of 1st Joystick, not accessible */
-		cjaxis  = AddJAxisButton_hidden(0,2,false,nullptr);
-		tmp_ptr = AddJAxisButton_hidden(0,2,true,cjaxis);
+		cjaxis  = AddJAxisButton_hidden(0, 2, false, nullptr);
+		tmp_ptr = AddJAxisButton_hidden(0, 2, true, cjaxis);
 		(void)tmp_ptr;
-		cjaxis  = AddJAxisButton_hidden(0,3,false,nullptr);
-		tmp_ptr = AddJAxisButton_hidden(0,3,true,cjaxis);
+		cjaxis  = AddJAxisButton_hidden(0, 3, false, nullptr);
+		tmp_ptr = AddJAxisButton_hidden(0, 3, true, cjaxis);
 		(void)tmp_ptr;
 	} else {
 		/* Buttons 3+4 of 1st Joystick */
-		AddJButtonButton(PX(XO+4),PY(YO),BW,BH,"3" ,0,2);
-		AddJButtonButton(PX(XO+4+2),PY(YO),BW,BH,"4" ,0,3);
+		AddJButtonButton(pos_x(XO + 4), pos_y(YO), button_width, button_height, "3", 0, 2);
+		AddJButtonButton(pos_x(XO + 4 + 2), pos_y(YO), button_width, button_height, "4", 0, 3);
 		/* Buttons 1+2 of 2nd Joystick, not accessible */
-		AddJButtonButton_hidden(1,0);
-		AddJButtonButton_hidden(1,1);
+		AddJButtonButton_hidden(1, 0);
+		AddJButtonButton_hidden(1, 1);
 
 		/* Axes 3+4 (X+Y) of 1st Joystick */
-		cjaxis  = AddJAxisButton(PX(XO+4),PY(YO+1),BW,BH,"X-",0,2,false,nullptr);
-		tmp_ptr = AddJAxisButton(PX(XO+4+2),PY(YO+1),BW,BH,"X+",0,2,true,cjaxis);
+		cjaxis  = AddJAxisButton(pos_x(XO + 4), pos_y(YO + 1), button_width, button_height, "X-", 0, 2, false, nullptr);
+		tmp_ptr = AddJAxisButton(pos_x(XO + 4 + 2), pos_y(YO + 1), button_width, button_height, "X+", 0, 2, true, cjaxis);
 		(void)tmp_ptr;
-		cjaxis  = AddJAxisButton(PX(XO+4+1),PY(YO+0),BW,BH,"Y-",0,3,false,nullptr);
-		tmp_ptr = AddJAxisButton(PX(XO+4+1),PY(YO+1),BW,BH,"Y+",0,3,true,cjaxis);
+		cjaxis  = AddJAxisButton(pos_x(XO + 4 + 1), pos_y(YO + 0), button_width, button_height, "Y-", 0, 3, false, nullptr);
+		tmp_ptr = AddJAxisButton(pos_x(XO + 4 + 1), pos_y(YO + 1), button_width, button_height, "Y+", 0, 3, true, cjaxis);
 		(void)tmp_ptr;
 		/* Axes 1+2 (X+Y) of 2nd Joystick , not accessible*/
-		cjaxis  = AddJAxisButton_hidden(1,0,false,nullptr);
-		tmp_ptr = AddJAxisButton_hidden(1,0,true,cjaxis);
+		cjaxis  = AddJAxisButton_hidden(1, 0, false, nullptr);
+		tmp_ptr = AddJAxisButton_hidden(1, 0, true, cjaxis);
 		(void)tmp_ptr;
-		cjaxis  = AddJAxisButton_hidden(1,1,false,nullptr);
-		tmp_ptr = AddJAxisButton_hidden(1,1,true,cjaxis);
+		cjaxis  = AddJAxisButton_hidden(1, 1, false, nullptr);
+		tmp_ptr = AddJAxisButton_hidden(1, 1, true, cjaxis);
 		(void)tmp_ptr;
 	}
 
-	if (joytype==JOY_CH) {
+	if (joytype == JOY_CH) {
 		/* Buttons 5+6 of 1st Joystick */
-		AddJButtonButton(PX(XO+8),PY(YO),BW,BH,"5" ,0,4);
-		AddJButtonButton(PX(XO+8+2),PY(YO),BW,BH,"6" ,0,5);
+		AddJButtonButton(pos_x(XO + 8), pos_y(YO), button_width, button_height, "5", 0, 4);
+		AddJButtonButton(pos_x(XO + 8 + 2), pos_y(YO), button_width, button_height, "6", 0, 5);
 	} else {
 		/* Buttons 5+6 of 1st Joystick, not accessible */
-		AddJButtonButton_hidden(0,4);
-		AddJButtonButton_hidden(0,5);
+		AddJButtonButton_hidden(0, 4);
+		AddJButtonButton_hidden(0, 5);
 	}
 
 	/* Hat directions up, left, down, right */
-	AddJHatButton(PX(XO+8+1),PY(YO),BW,BH,"UP",0,0,0);
-	AddJHatButton(PX(XO+8+0),PY(YO+1),BW,BH,"LFT",0,0,3);
-	AddJHatButton(PX(XO+8+1),PY(YO+1),BW,BH,"DWN",0,0,2);
-	AddJHatButton(PX(XO+8+2),PY(YO+1),BW,BH,"RGT",0,0,1);
+	AddJHatButton(pos_x(XO + 8 + 1), pos_y(YO), button_width, button_height, "UP", 0, 0, 0);
+	AddJHatButton(pos_x(XO + 8 + 0), pos_y(YO + 1), button_width, button_height, "LFT", 0, 0, 3);
+	AddJHatButton(pos_x(XO + 8 + 1), pos_y(YO + 1), button_width, button_height, "DWN", 0, 0, 2);
+	AddJHatButton(pos_x(XO + 8 + 2), pos_y(YO + 1), button_width, button_height, "RGT", 0, 0, 1);
 
 	/* Labels for the joystick */
 	CTextButton * btn;
-	if (joytype ==JOY_2AXIS) {
-		new CTextButton(PX(XO+0),PY(YO-1),3*BW,20,"Joystick 1");
-		new CTextButton(PX(XO+4),PY(YO-1),3*BW,20,"Joystick 2");
-		btn=new CTextButton(PX(XO+8),PY(YO-1),3*BW,20,"Disabled");
-		btn->SetColor(CLR_GREY);
-	} else if(joytype ==JOY_4AXIS || joytype == JOY_4AXIS_2) {
-		new CTextButton(PX(XO+0),PY(YO-1),3*BW,20,"Axis 1/2");
-		new CTextButton(PX(XO+4),PY(YO-1),3*BW,20,"Axis 3/4");
-		btn=new CTextButton(PX(XO+8),PY(YO-1),3*BW,20,"Disabled");
-		btn->SetColor(CLR_GREY);
+	if (joytype == JOY_2AXIS) {
+		new CTextButton(pos_x(XO + 0), pos_y(YO - 1), 3 * button_width, 20, "Joystick 1");
+		new CTextButton(pos_x(XO + 4), pos_y(YO - 1), 3 * button_width, 20, "Joystick 2");
+		btn = new CTextButton(pos_x(XO + 8), pos_y(YO - 1), 3 * button_width, 20, "Disabled");
+		btn->SetColor(color_grey);
+	} else if(joytype == JOY_4AXIS || joytype == JOY_4AXIS_2) {
+		new CTextButton(pos_x(XO + 0), pos_y(YO - 1), 3 * button_width, 20, "Axis 1/2");
+		new CTextButton(pos_x(XO + 4), pos_y(YO - 1), 3 * button_width, 20, "Axis 3/4");
+		btn = new CTextButton(pos_x(XO + 8), pos_y(YO - 1), 3 * button_width, 20, "Disabled");
+		btn->SetColor(color_grey);
 	} else if(joytype == JOY_CH) {
-		new CTextButton(PX(XO+0),PY(YO-1),3*BW,20,"Axis 1/2");
-		new CTextButton(PX(XO+4),PY(YO-1),3*BW,20,"Axis 3/4");
-		new CTextButton(PX(XO+8),PY(YO-1),3*BW,20,"Hat/D-pad");
-	} else if ( joytype==JOY_FCS) {
-		new CTextButton(PX(XO+0),PY(YO-1),3*BW,20,"Axis 1/2");
-		new CTextButton(PX(XO+4),PY(YO-1),3*BW,20,"Axis 3");
-		new CTextButton(PX(XO+8),PY(YO-1),3*BW,20,"Hat/D-pad");
+		new CTextButton(pos_x(XO + 0), pos_y(YO - 1), 3 * button_width, 20, "Axis 1/2");
+		new CTextButton(pos_x(XO + 4), pos_y(YO - 1), 3 * button_width, 20, "Axis 3/4");
+		new CTextButton(pos_x(XO + 8), pos_y(YO - 1), 3 * button_width, 20, "Hat/D-pad");
+	} else if ( joytype == JOY_FCS) {
+		new CTextButton(pos_x(XO + 0), pos_y(YO - 1), 3 * button_width, 20, "Axis 1/2");
+		new CTextButton(pos_x(XO + 4), pos_y(YO - 1), 3 * button_width, 20, "Axis 3");
+		new CTextButton(pos_x(XO + 8), pos_y(YO - 1), 3 * button_width, 20, "Hat/D-pad");
 	} else if (joytype == JOY_DISABLED) {
-		btn=new CTextButton(PX(XO+0),PY(YO-1),3*BW,20,"Disabled");
-		btn->SetColor(CLR_GREY);
-		btn=new CTextButton(PX(XO+4),PY(YO-1),3*BW,20,"Disabled");
-		btn->SetColor(CLR_GREY);
-		btn=new CTextButton(PX(XO+8),PY(YO-1),3*BW,20,"Disabled");
-		btn->SetColor(CLR_GREY);
+		btn = new CTextButton(pos_x(XO + 0), pos_y(YO - 1), 3 * button_width, 20, "Disabled");
+		btn->SetColor(color_grey);
+		btn = new CTextButton(pos_x(XO + 4), pos_y(YO - 1), 3 * button_width, 20, "Disabled");
+		btn->SetColor(color_grey);
+		btn = new CTextButton(pos_x(XO + 8), pos_y(YO - 1), 3 * button_width, 20, "Disabled");
+		btn->SetColor(color_grey);
 	}
 
 	/* The modifier buttons */
-	AddModButton(PX(0),PY(14),50,20,"Mod1",1);
-	AddModButton(PX(2),PY(14),50,20,"Mod2",2);
-	AddModButton(PX(4),PY(14),50,20,"Mod3",3);
+	AddModButton(pos_x(0), pos_y(14), 50, 20, "Mod1", 1);
+	AddModButton(pos_x(2), pos_y(14), 50, 20, "Mod2", 2);
+	AddModButton(pos_x(4), pos_y(14), 50, 20, "Mod3", 3);
 
 	/* Create Handler buttons */
-	Bitu xpos=3;Bitu ypos=11;
+	int32_t xpos = 3;
+	int32_t ypos = 11;
 	for (const auto &handler_event : handlergroup) {
-		new CEventButton(PX(xpos * 3), PY(ypos), BW * 3, BH,
+		new CEventButton(pos_x(xpos * 3), pos_y(ypos), button_width * 3, button_height,
 		                 handler_event->button_name.c_str(), handler_event);
 		xpos++;
 		if (xpos>6) {
-			xpos=3;ypos++;
+			xpos = 3;
+			ypos++;
 		}
 	}
 	/* Create some text buttons */
-//	new CTextButton(PX(6),0,124,20,"Keyboard Layout");
-//	new CTextButton(PX(17),0,124,20,"Joystick Layout");
+//	new CTextButton(pos_x(6), 0, 124, 20, "Keyboard Layout");
+//	new CTextButton(pos_x(17), 0, 124, 20, "Joystick Layout");
 
 	bind_but.action = new CCaptionButton(0, 335, 0, 0);
 
@@ -2378,22 +2452,13 @@ static void CreateLayout() {
 	bind_but.bind_title->Change("Bind Title");
 }
 
-static SDL_Color map_pal[CLR_LAST]={
-	{0x00,0x00,0x00,0x00},			//0=black
-	{0x7f,0x7f,0x7f,0x00},			//1=grey
-	{0xff,0xff,0xff,0x00},			//2=white
-	{0xff,0x00,0x00,0x00},			//3=red
-	{0x10,0x30,0xff,0x00},			//4=blue
-	{0x00,0xff,0x20,0x00}			//5=green
-};
-
 static void CreateStringBind(char * line) {
 	line=trim(line);
 	char * eventname=strip_word(line);
 	CEvent * event = nullptr;
-	for (CEventVector_it ev_it = events.begin(); ev_it != events.end(); ++ev_it) {
-		if (!strcasecmp((*ev_it)->GetName(),eventname)) {
-			event=*ev_it;
+	for (const auto& evt : events) {
+		if (!strcasecmp(evt->GetName(), eventname)) {
+			event = evt.get();
 			goto foundevent;
 		}
 	}
@@ -2541,7 +2606,7 @@ static void ClearAllBinds() {
 	// wait for the auto-typer to complete because it might be accessing events
 	mapper.typist.Wait();
 
-	for (CEvent *event : events) {
+	for (const auto& event : events) {
 		event->ClearBinds();
 	}
 }
@@ -2635,8 +2700,7 @@ static void MAPPER_SaveBinds() {
 		return;
 	}
 	char buf[128];
-	for (CEventVector_it event_it = events.begin(); event_it != events.end(); ++event_it) {
-		CEvent * event=*(event_it);
+	for (const auto& event : events) {
 		fprintf(savefile,"%s ",event->GetName());
 		for (CBindList_it bind_it = event->bindlist.begin(); bind_it != event->bindlist.end(); ++bind_it) {
 			CBind * bind=*(bind_it);
@@ -2647,7 +2711,7 @@ static void MAPPER_SaveBinds() {
 		fprintf(savefile,"\n");
 	}
 	fclose(savefile);
-	change_action_text("Mapper file saved.",CLR_WHITE);
+	change_action_text("Mapper file saved.", color_white);
 	LOG_MSG("MAPPER: Wrote key bindings to %s", filename);
 }
 
@@ -2683,7 +2747,7 @@ static bool load_binds_from_file(const std::string_view mapperfile_path,
 	// Only report load failures for customized mapperfiles because by
 	// default, the mapperfile is not provided
 	if (!was_loaded && mapperfile_name != MAPPERFILE)
-		LOG_WARNING("MAPPER: Failed loading mapperfile '%s' directly and from resources",
+		LOG_WARNING("MAPPER: Failed loading mapperfile '%s' directly or from resources",
 		            mapperfile_name.data());
 
 	return was_loaded;
@@ -2709,14 +2773,8 @@ void BIND_MappingEvents() {
 		case SDL_MOUSEMOTION:
 			if (!isButtonPressed)
 				break;
-			/* Normalize position in case a scaled sub-window is used (say on Android) */
-			event.button.x = (event.button.x - mapper.draw_rect.x) * mapper.draw_surface->w / mapper.draw_rect.w;
-			if ((event.button.x < 0) || (event.button.x >= mapper.draw_surface->w))
-				break;
-			event.button.y = (event.button.y - mapper.draw_rect.y) * mapper.draw_surface->h / mapper.draw_rect.h;
-			if ((event.button.y < 0) || (event.button.y >= mapper.draw_surface->h))
-				break;
-			/* Maybe we have been pointing at a specific button for a little while  */
+			/* Maybe we have been pointing at a specific button for
+			 * a little while  */
 			if (lastHoveredButton) {
 				/* Check if there's any change */
 				if (lastHoveredButton->OnTop(event.button.x,event.button.y))
@@ -2730,11 +2788,12 @@ void BIND_MappingEvents() {
 				lastHoveredButton = nullptr;
 			}
 			/* Check which button are we currently pointing at */
-			for (CButton_it but_it = buttons.begin(); but_it != buttons.end(); ++but_it) {
-				if (dynamic_cast<CClickableTextButton *>(*but_it) && (*but_it)->OnTop(event.button.x,event.button.y)) {
-					(*but_it)->SetColor(CLR_RED);
-					mapper.redraw = true;
-					lastHoveredButton = *but_it;
+			for (const auto& button : buttons) {
+				if (dynamic_cast<CClickableTextButton*>(button.get()) &&
+				    button->OnTop(event.button.x, event.button.y)) {
+					button->SetColor(color_red);
+					mapper.redraw     = true;
+					lastHoveredButton = button.get();
 					break;
 				}
 			}
@@ -2747,17 +2806,11 @@ void BIND_MappingEvents() {
 				mapper.redraw = true;
 				lastHoveredButton = nullptr;
 			}
-			/* Normalize position in case a scaled sub-window is used (say on Android) */
-			event.button.x = (event.button.x - mapper.draw_rect.x) * mapper.draw_surface->w / mapper.draw_rect.w;
-			if ((event.button.x < 0) || (event.button.x>=mapper.draw_surface->w))
-				break;
-			event.button.y = (event.button.y - mapper.draw_rect.y) * mapper.draw_surface->h / mapper.draw_rect.h;
-			if ((event.button.y < 0) || (event.button.y>=mapper.draw_surface->h))
-				break;
 			/* Check the press */
-			for (CButton_it but_it = buttons.begin(); but_it != buttons.end(); ++but_it) {
-				if (dynamic_cast<CClickableTextButton *>(*but_it) && (*but_it)->OnTop(event.button.x,event.button.y)) {
-					(*but_it)->Click();
+			for (const auto& button : buttons) {
+				if (dynamic_cast<CClickableTextButton*>(button.get()) &&
+				    button->OnTop(event.button.x, event.button.y)) {
+					button->Click();
 					break;
 				}
 			}
@@ -2769,14 +2822,15 @@ void BIND_MappingEvents() {
 			 * toggled, at least on X11. Furthermore, the restore
 			 * event should be handled on Android.
 			 */
-			if ((event.window.event == SDL_WINDOWEVENT_RESIZED)
-			    || (event.window.event == SDL_WINDOWEVENT_RESTORED)) {
-				mapper.surface = SDL_GetWindowSurface(mapper.window);
-				if (mapper.surface == nullptr)
-					E_Exit("Couldn't refresh mapper window surface after resize or restoration: %s", SDL_GetError());
-				GFX_UpdateDisplayDimensions(event.window.data1, event.window.data2);
-				mapper.draw_rect = GFX_GetSDLSurfaceSubwindowDims(640, 480);
-				DrawButtons();
+			if ((event.window.event == SDL_WINDOWEVENT_RESIZED) ||
+			    (event.window.event == SDL_WINDOWEVENT_RESTORED)) {
+				GFX_UpdateDisplayDimensions(event.window.data1,
+				                            event.window.data2);
+				SDL_RenderSetLogicalSize(mapper.renderer, 640, 480);
+				mapper.redraw = true;
+			}
+			if (event.window.event == SDL_WINDOWEVENT_EXPOSED) {
+				mapper.redraw = true;
 			}
 			break;
 		case SDL_QUIT:
@@ -2804,7 +2858,8 @@ void BIND_MappingEvents() {
 // This also resets mapper.sticks.num_groups to 0 and mapper.sticks.num to the
 // number of found SDL joysticks.
 
-// 7-21-2023: No longer resetting mapper.sticks.num_groups due to https://github.com/dosbox-staging/dosbox-staging/issues/2687
+// 7-21-2023: No longer resetting mapper.sticks.num_groups due to
+// https://github.com/dosbox-staging/dosbox-staging/issues/2687
 static void QueryJoysticks()
 {
 	// Reset our joystick status
@@ -2966,9 +3021,10 @@ void MAPPER_UpdateJoysticks() {
 #endif
 
 void MAPPER_LosingFocus() {
-	for (CEventVector_it evit = events.begin(); evit != events.end(); ++evit) {
-		if(*evit != caps_lock_event && *evit != num_lock_event)
-			(*evit)->DeActivateAll();
+	for (const auto& event : events) {
+		if (event.get() != caps_lock_event && event.get() != num_lock_event) {
+			event->DeActivateAll();
+		}
 	}
 }
 
@@ -2997,22 +3053,84 @@ void MAPPER_DisplayUI() {
 
 	// Be sure that there is no update in progress
 	GFX_EndUpdate( nullptr );
-	mapper.window = GFX_SetSDLSurfaceWindow(640, 480, false);
-	if (mapper.window == nullptr)
-		E_Exit("Could not initialize video mode for mapper: %s", SDL_GetError());
-	mapper.surface = SDL_GetWindowSurface(mapper.window);
-	if (mapper.surface == nullptr)
-		E_Exit("Could not retrieve window surface for mapper: %s", SDL_GetError());
+	mapper.window = GFX_GetWindow();
+	if (mapper.window == nullptr) {
+		E_Exit("MAPPER: Could not initialize video mode: %s",
+		       SDL_GetError());
+	}
+	mapper.renderer = SDL_GetRenderer(mapper.window);
+#if C_OPENGL
+	SDL_GLContext context = nullptr;
+	if (!mapper.renderer) {
+		context = SDL_GL_GetCurrentContext();
+		if (!context) {
+			E_Exit("MAPPER: Failed to retrieve current OpenGL context: %s",
+			       SDL_GetError());
+		}
 
-	/* Set some palette entries */
-	mapper.draw_surface=SDL_CreateRGBSurface(0,640,480,8,0,0,0,0);
-	// Needed for SDL_BlitScaled
-	mapper.draw_surface_nonpaletted=SDL_CreateRGBSurface(0,640,480,32,0x0000ff00,0x00ff0000,0xff000000,0);
-	mapper.draw_rect=GFX_GetSDLSurfaceSubwindowDims(640,480);
-	// Sorry, but SDL_SetSurfacePalette requires a full palette.
-	SDL_Palette *sdl2_map_pal_ptr = SDL_AllocPalette(256);
-	SDL_SetPaletteColors(sdl2_map_pal_ptr, map_pal, 0, CLR_LAST);
-	SDL_SetSurfacePalette(mapper.draw_surface, sdl2_map_pal_ptr);
+		const auto renderer_drivers_count = SDL_GetNumRenderDrivers();
+		if (renderer_drivers_count <= 0) {
+			E_Exit("MAPPER: Failed to retrieve available SDL renderer drivers: %s",
+			       SDL_GetError());
+		}
+		int renderer_driver_index = -1;
+		for (int i = 0; i < renderer_drivers_count; ++i) {
+			SDL_RendererInfo renderer_info = {};
+			if (SDL_GetRenderDriverInfo(i, &renderer_info) < 0) {
+				E_Exit("MAPPER: Failed to retrieve SDL renderer driver info: %s",
+				       SDL_GetError());
+			}
+			assert(renderer_info.name);
+			if (strcmp(renderer_info.name, "opengl") == 0) {
+				renderer_driver_index = i;
+				break;
+			}
+		}
+		if (renderer_driver_index == -1) {
+			E_Exit("MAPPER: OpenGL support in SDL renderer is unavailable but required for OpenGL output");
+		}
+		constexpr uint32_t renderer_flags = 0;
+		mapper.renderer = SDL_CreateRenderer(mapper.window,
+		                                     renderer_driver_index,
+		                                     renderer_flags);
+	}
+#endif
+	if (mapper.renderer == nullptr) {
+		E_Exit("MAPPER: Could not retrieve window renderer: %s",
+		       SDL_GetError());
+	}
+
+	if (SDL_RenderSetLogicalSize(mapper.renderer, 640, 480) < 0) {
+		LOG_WARNING("MAPPER: Failed to set renderer logical size: %s",
+		            SDL_GetError());
+	}
+
+	// Create font atlas surface
+	SDL_Surface* atlas_surface = SDL_CreateRGBSurfaceFrom(
+	        int10_font_14, 8, 256 * 14, 1, 1, 0, 0, 0, 0);
+	if (atlas_surface == nullptr) {
+		E_Exit("MAPPER: Failed to create atlas surface: %s", SDL_GetError());
+	}
+
+	// Invert default surface palette
+	const SDL_Color atlas_colors[2] = {{0x00, 0x00, 0x00, 0x00},
+	                                   {0xff, 0xff, 0xff, 0xff}};
+	if (SDL_SetPaletteColors(atlas_surface->format->palette, atlas_colors, 0, 2) <
+	    0) {
+		LOG_WARNING("MAPPER: Failed to set colors in font atlas: %s",
+		            SDL_GetError());
+	}
+
+	// Convert surface to texture for accelerated SDL renderer
+	mapper.font_atlas = SDL_CreateTextureFromSurface(mapper.renderer,
+	                                                 atlas_surface);
+	SDL_FreeSurface(atlas_surface);
+	atlas_surface = nullptr;
+	if (mapper.font_atlas == nullptr) {
+		E_Exit("MAPPER: Failed to create font texture atlas: %s",
+		       SDL_GetError());
+	}
+
 	if (last_clicked) {
 		last_clicked->BindColor();
 		last_clicked=nullptr;
@@ -3028,17 +3146,34 @@ void MAPPER_DisplayUI() {
 		if (mapper.redraw) {
 			mapper.redraw = false;
 			DrawButtons();
-		} else {
-			SDL_UpdateWindowSurface(mapper.window);
 		}
 		BIND_MappingEvents();
 		Delay(1);
 	}
 	/* ONE SHOULD NOT FORGET TO DO THIS!
 	Unless a memory leak is desired... */
-	SDL_FreeSurface(mapper.draw_surface);
-	SDL_FreeSurface(mapper.draw_surface_nonpaletted);
-	SDL_FreePalette(sdl2_map_pal_ptr);
+	SDL_DestroyTexture(mapper.font_atlas);
+	SDL_RenderSetLogicalSize(mapper.renderer, 0, 0);
+	SDL_SetRenderDrawColor(mapper.renderer,
+	                       color_black.red,
+	                       color_black.green,
+	                       color_black.blue,
+	                       SDL_ALPHA_OPAQUE);
+#if C_OPENGL
+	if (context) {
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+		if (SDL_RenderFlush(mapper.renderer) < 0) {
+			LOG_WARNING("MAPPER: Failed to flush pending renderer commands: %s",
+			            SDL_GetError());
+		}
+#endif
+		SDL_DestroyRenderer(mapper.renderer);
+		if (SDL_GL_MakeCurrent(mapper.window, context) < 0) {
+			LOG_ERR("MAPPER: Failed to restore OpenGL context: %s",
+			        SDL_GetError());
+		}
+	}
+#endif
 #if defined (REDUCE_JOYSTICK_POLLING)
 	SDL_JoystickEventState(SDL_DISABLE);
 #endif
@@ -3053,16 +3188,12 @@ static void MAPPER_Destroy(Section *sec) {
 	mapper.typist.Stop();
 
 	// Release all the accumulated allocations by the mapper
-	for (auto &ptr : events)
-		delete ptr;
 	events.clear();
 
 	for (auto & ptr : all_binds)
 		delete ptr;
 	all_binds.clear();
 
-	for (auto & ptr : buttons)
-		delete ptr;
 	buttons.clear();
 
 	for (auto & ptr : keybindgroups)
@@ -3097,7 +3228,7 @@ void MAPPER_BindKeys(Section *sec)
 	const auto section = static_cast<const Section_prop *>(sec);
 	const auto mapperfile_value = section->Get_string("mapperfile");
 	const auto property = section->Get_path("mapperfile");
-	assert(property && !property->realpath.empty());
+	assert(property);
 	mapper.filename = property->realpath.string();
 
 	QueryJoysticks();
@@ -3113,8 +3244,9 @@ void MAPPER_BindKeys(Section *sec)
 	if (!load_binds_from_file(mapper.filename, mapperfile_value))
 		CreateDefaultBinds();
 
-	for (CButton_it but_it = buttons.begin(); but_it != buttons.end(); ++but_it)
-		(*but_it)->BindColor();
+	for (const auto& button : buttons) {
+		button->BindColor();
+	}
 
 	if (SDL_GetModState()&KMOD_CAPS)
 		MAPPER_TriggerEvent(caps_lock_event, false);

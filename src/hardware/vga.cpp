@@ -20,15 +20,17 @@
 
 #include <cassert>
 #include <cstring>
+#include <string>
 #include <utility>
 
 #include "../ints/int10.h"
 #include "logging.h"
 #include "math_utils.h"
 #include "pic.h"
+#include "string_utils.h"
 #include "video.h"
 
-VGA_Type vga;
+VgaType vga;
 SVGA_Driver svga;
 
 uint32_t CGA_2_Table[16];
@@ -42,95 +44,14 @@ uint32_t ExpandTable[256];
 uint32_t Expand16Table[4][16];
 uint32_t FillTable[16];
 
-// Get the current video mode's type and numeric ID
-std::pair<VGAModes, uint16_t> VGA_GetCurrentMode()
-{
-	return {CurMode->type, CurMode->mode};
-}
-
-// Describes the given video mode's type and ID, ie: "VGA, "256 colour"
-std::pair<const char*, const char*> VGA_DescribeMode(const VGAModes video_mode_type,
-                                                     const uint16_t video_mode_id,
-                                                     const uint16_t width,
-                                                     const uint16_t height)
-{
-	auto maybe_cga_on_tandy = [=]() {
-		constexpr uint16_t cga_max_mode = 0x006;
-		return video_mode_id <= cga_max_mode ? "CGA" : "Tandy";
-	};
-
-	auto maybe_mcga_if_320x200 = [=]() {
-		constexpr uint16_t mcga_width  = 320;
-		constexpr uint16_t mcga_height = 200;
-
-		const auto is_single_scan_mcga = (width == mcga_width &&
-		                                  height == mcga_height);
-		const auto is_double_scan_mcga = (width == (mcga_width * 2) &&
-		                                  height == (mcga_height * 2));
-
-		if (is_single_scan_mcga || is_double_scan_mcga) {
-			return "MCGA";
-		}
-		return "VGA";
-	};
-
-	// clang-format off
-	switch (video_mode_type) {
-	case M_HERC_TEXT:          return {"Text",     "monochrome"};
-	case M_HERC_GFX:           return {"Hercules", "monochrome"};
-	case M_TEXT:
-	case M_TANDY_TEXT:
-	case M_CGA_TEXT_COMPOSITE: return {"Text",  "16-colour"};
-	case M_CGA2_COMPOSITE:
-	case M_CGA4_COMPOSITE:     return {"CGA",   "composite"};
-	case M_CGA2:               return {"CGA",   "2-colour"};
-	case M_CGA4:               return {"CGA",   "4-colour"};
-	case M_CGA16:              return {"CGA",   "16-colour"};
-	case M_TANDY2:             return {maybe_cga_on_tandy(), "2-colour"};
-	case M_TANDY4:             return {maybe_cga_on_tandy(), "4-colour"};
-	case M_TANDY16:            return {maybe_cga_on_tandy(), "16-colour"};
-	case M_EGA: // see comment below
-	    switch (video_mode_id) {
-	    case 0x011:            return {"MCGA",  "2-colour"};
-	    case 0x012:            return {"VGA",   "16-colour"};
-	    default:               return {"EGA",   "16-colour"};
-	    }
-	case M_VGA:                return {maybe_mcga_if_320x200(), "256-colour"};
-	case M_LIN4:               return {"VESA",  "16-colour"};
-	case M_LIN8:               return {"VESA",  "256-colour"};
-	case M_LIN15:              return {"VESA",  "15-bit"};
-	case M_LIN16:              return {"VESA",  "16-bit"};
-	case M_LIN24:
-	case M_LIN32:              return {"VESA",  "24-bit"};
-
-	case M_ERROR:
-	default:
-		// Should not occur; log the values and inform the user 
-		LOG_ERR("VIDEO: Unknown mode: %u with ID: %u",
-		        static_cast<uint32_t>(video_mode_type),
-		        video_mode_id);
-		return {"Unknown mode", "Unknown colour-depth"};
-	}
-	// clang-format on
-
-	// Modes 11h and 12h were supported by high-end EGA cards and because of
-	// that operate internally more like EGA modes (so DOSBox uses the EGA
-	// type for them), however they were classified as VGA from a standards
-	// perspective, so we report them as such.
-	// References:
-	// [1] IBM VGA Technical Reference, Mode of Operation, pp 2-12, 19
-	// March, 1992. [2] "IBM PC Family- BIOS Video Modes",
-	// http://minuszerodegrees.net/video/bios_video_modes.htm
-}
-
 void VGA_LogInitialization(const char *adapter_name,
                            const char *ram_type,
                            const size_t num_modes)
 {
-	const auto mem_in_kib = vga.vmemsize / 1024;
+	const auto mem_in_kb = vga.vmemsize / 1024;
 	LOG_INFO("VIDEO: Initialised %s with %d %s of %s supporting %d modes",
-	         adapter_name, mem_in_kib < 1024 ? mem_in_kib : mem_in_kib / 1024,
-	         mem_in_kib < 1024 ? "KB" : "MB", ram_type,
+	         adapter_name, mem_in_kb < 1024 ? mem_in_kb : mem_in_kb / 1024,
+	         mem_in_kb < 1024 ? "KB" : "MB", ram_type,
 	         check_cast<int16_t>(num_modes));
 }
 
@@ -157,7 +78,7 @@ void VGA_DetermineMode(void) {
 	/* Test for VGA output active or direct colour modes */
 	switch (vga.s3.misc_control_2 >> 4) {
 	case 0:
-		if (vga.attr.mode_control & 1) { // graphics mode
+		if (vga.attr.mode_control.is_graphics_enabled) {
 			if (IS_VGA_ARCH && (vga.gfx.mode & 0x40)) {
 				// access above 256k?
 				if (vga.s3.reg_31 & 0x8) VGA_SetMode(M_LIN8);
@@ -179,6 +100,92 @@ void VGA_DetermineMode(void) {
 	case 5:VGA_SetMode(M_LIN16);break;
 	case 7: VGA_SetMode(M_LIN24); break;
 	case 13:VGA_SetMode(M_LIN32);break;
+	}
+}
+
+const char* to_string(const GraphicsStandard g)
+{
+	switch (g) {
+	case GraphicsStandard::Hercules: return "Hercules";
+	case GraphicsStandard::Cga: return "CGA";
+	case GraphicsStandard::Pcjr: return "PCjr";
+	case GraphicsStandard::Tga: return "Tandy";
+	case GraphicsStandard::Ega: return "EGA";
+	case GraphicsStandard::Vga: return "VGA";
+	case GraphicsStandard::Svga: return "SVGA";
+	case GraphicsStandard::Vesa: return "VESA";
+	default: assertm(false, "Invalid GraphicsStandard"); return "";
+	}
+}
+
+const char* to_string(const ColorDepth c)
+{
+	switch (c) {
+	case ColorDepth::Monochrome: return "monochrome";
+	case ColorDepth::Composite: return "composite";
+	case ColorDepth::IndexedColor2: return "2-colour";
+	case ColorDepth::IndexedColor4: return "4-colour";
+	case ColorDepth::IndexedColor16: return "16-colour";
+	case ColorDepth::IndexedColor256: return "256-colour";
+	case ColorDepth::HighColor15Bit: return "15-bit high colour";
+	case ColorDepth::HighColor16Bit: return "16-bit high colour";
+	case ColorDepth::TrueColor24Bit: return "24-bit true colour";
+	default: assertm(false, "Invalid ColorDepth"); return "";
+	}
+}
+
+// Return a human-readable description of the video mode, e.g.:
+//   - "CGA 640x200 16-colour text mode 03h"
+//   - "EGA 640x350 16-colour graphics mode 10h"
+//   - "VGA 720x400 16-colour text mode 03h"
+//   - "VGA 320x200 256-colour graphics mode 13h"
+//   - "VGA 360x240 256-colour graphics mode"
+//   - "VESA 800x600 256-colour graphics mode 103h"
+std::string to_string(const VideoMode& video_mode)
+{
+	const char* mode_type = (video_mode.is_graphics_mode ? "graphics mode"
+	                                                     : "text mode");
+
+	const auto mode_number = (video_mode.is_custom_mode
+	                                  ? ""
+	                                  : format_string(" %02Xh",
+	                                                  video_mode.bios_mode_number));
+
+	return format_string("%s %dx%d %s %s%s",
+	                     to_string(video_mode.graphics_standard),
+	                     video_mode.width,
+	                     video_mode.height,
+	                     to_string(video_mode.color_depth),
+	                     mode_type,
+	                     mode_number.c_str());
+}
+
+const char* to_string(const VGAModes mode)
+{
+	switch (mode) {
+	case M_CGA2: return "M_CGA2";
+	case M_CGA4: return "M_CGA4";
+	case M_EGA: return "M_EGA";
+	case M_VGA: return "M_VGA";
+	case M_LIN4: return "M_LIN4";
+	case M_LIN8: return "M_LIN8";
+	case M_LIN15: return "M_LIN15";
+	case M_LIN16: return "M_LIN16";
+	case M_LIN24: return "M_LIN24";
+	case M_LIN32: return "M_LIN32";
+	case M_TEXT: return "M_TEXT";
+	case M_HERC_GFX: return "M_HERC_GFX";
+	case M_HERC_TEXT: return "M_HERC_TEXT";
+	case M_TANDY2: return "M_TANDY2";
+	case M_TANDY4: return "M_TANDY4";
+	case M_TANDY16: return "M_TANDY16";
+	case M_TANDY_TEXT: return "M_TANDY_TEXT";
+	case M_CGA16: return "M_CGA16";
+	case M_CGA2_COMPOSITE: return "M_CGA2_COMPOSITE";
+	case M_CGA4_COMPOSITE: return "M_CGA4_COMPOSITE";
+	case M_CGA_TEXT_COMPOSITE: return "M_CGA_TEXT_COMPOSITE";
+	case M_ERROR: return "M_ERROR";
+	default: assertm(false, "Invalid VGAMode"); return "";
 	}
 }
 
@@ -246,7 +253,7 @@ void VGA_SetRatePreference(const std::string &pref)
 
 	} else {
 		vga.draw.dos_rate_mode = VgaRateMode::Default;
-		LOG_WARNING("VIDEO: Unknown frame rate setting: %s, using default",
+		LOG_WARNING("VIDEO: Unknown frame rate setting: '%s', using 'default'",
 		            pref.c_str());
 	}
 }
@@ -255,7 +262,9 @@ double VGA_GetPreferredRate()
 {
 	switch (vga.draw.dos_rate_mode) {
 	case VgaRateMode::Default:
-		return vga.draw.dos_refresh_hz;
+		// If another device is overriding our VGA card, then use its rate
+		return vga.draw.vga_override ? vga.draw.override_refresh_hz
+		                             : vga.draw.dos_refresh_hz;
 	case VgaRateMode::Host:
 		assert(vga.draw.host_refresh_hz > RefreshRateMin);
 		return vga.draw.host_refresh_hz;
@@ -265,21 +274,6 @@ double VGA_GetPreferredRate()
 		return vga.draw.custom_refresh_hz;
 	}
 	return vga.draw.dos_refresh_hz;
-}
-
-// Are we using a VGA card, in a sub-350 line mode, and asked to draw the
-// double-scanned lines? (This is a helper function to avoid repeating this
-// logic in the VGA drawing and CRTC areas).
-bool VGA_IsDoubleScanningSub350LineModes()
-{
-	return IS_VGA_ARCH &&
-	       vga.draw.vga_sub_350_line_handling ==
-	               VgaSub350LineHandling::DoubleScan &&
-	       (vga.mode == M_EGA || vga.mode == M_VGA);
-
-	// TODO: Non-composite CGA modes should be included here too, as VGA
-	// cards also line-doubled those modes, however more work is needed to
-	// correctly draw double-scanned CGA lines.
 }
 
 void VGA_SetClock(const Bitu which, const uint32_t desired_clock)
@@ -295,7 +289,7 @@ void VGA_SetClock(const Bitu which, const uint32_t desired_clock)
 
 	// The clk parameters (r, n, m) will be populated with those that find a
 	// clock closest to the desired_clock clock.
-	VGA_S3::clk_t best_clk;
+	VgaS3::clk_t best_clk;
 	auto best_error = clock;
 
 	uint8_t r = 0;
@@ -371,32 +365,38 @@ void VGA_SetCGA4Table(uint8_t val0,uint8_t val1,uint8_t val2,uint8_t val3) {
 	}	
 }
 
-void VGA_SetVgaSub350LineHandling(const VgaSub350LineHandling vga_sub_350_line_handling)
+void VGA_ForceSquarePixels(const bool enable)
 {
-	if (vga.draw.vga_sub_350_line_handling ==
-	    VgaSub350LineHandling::ForceSingleScan) {
-		return;
-	}
-	vga.draw.vga_sub_350_line_handling = vga_sub_350_line_handling;
+	vga.draw.force_square_pixels = enable;
 }
 
-static void set_vga_single_scanning_pref()
+void VGA_EnableVgaDoubleScanning(const bool enable)
 {
-	const auto conf    = control->GetSection("dosbox");
-	const auto section = dynamic_cast<Section_prop*>(conf);
-
-	if (section && section->Get_bool("force_vga_single_scan")) {
-		vga.draw.vga_sub_350_line_handling = VgaSub350LineHandling::ForceSingleScan;
-		LOG_MSG("VIDEO: Single-scanning sub-350 line modes for VGA machine types");
-	} else {
-		vga.draw.vga_sub_350_line_handling = {};
+	if (machine != MCH_VGA) {
+		return;
 	}
+	if (enable && !vga.draw.double_scanning_enabled) {
+		LOG_MSG("VGA: Double-scanning VGA video modes enabled");
+	}
+	if (!enable && vga.draw.double_scanning_enabled) {
+		LOG_MSG("VGA: Forcing single-scanning of double-scanned VGA video modes");
+	}
+	vga.draw.double_scanning_enabled = enable;
+}
+
+void VGA_EnablePixelDoubling(const bool enable)
+{
+	if (enable && !vga.draw.pixel_doubling_enabled) {
+		LOG_MSG("VGA: Pixel-doubling enabled");
+	}
+	if (!enable && vga.draw.pixel_doubling_enabled) {
+		LOG_MSG("VGA: Forcing no pixel-doubling");
+	}
+	vga.draw.pixel_doubling_enabled = enable;
 }
 
 void VGA_Init(Section* sec)
 {
-	set_vga_single_scanning_pref();
-
 	vga.draw.resizing = false;
 	vga.mode          = M_ERROR; // For first init
 	SVGA_Setup_Driver();
@@ -484,3 +484,8 @@ void SVGA_Setup_Driver(void) {
 		break;
 	}
 }
+
+const VideoMode& VGA_GetCurrentVideoMode() {
+	return vga.draw.render.video_mode;
+}
+

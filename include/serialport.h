@@ -22,6 +22,7 @@
 #include "dosbox.h"
 
 #include <algorithm>
+#include <cassert>
 #include <vector>
 
 #ifndef DOSBOX_INOUT_H
@@ -47,6 +48,9 @@
 #if SERIAL_DEBUG
 #include "hardware.h"
 #endif
+
+constexpr uint32_t SerialMinBaudRate = 300u;
+constexpr uint32_t SerialMaxBaudRate = 115200u;
 
 // Serial port interface
 #define SERIAL_IO_HANDLERS 8
@@ -289,6 +293,8 @@ public:
 	bool Putchar(uint8_t data, bool wait_dtr, bool wait_rts, uint32_t timeout);
 	bool Getchar(uint8_t *data, uint8_t *lsr, bool wait_dsr, uint32_t timeout);
 	uint8_t GetPortNumber() const { return port_index + 1; }
+
+	uint32_t GetPortBaudRate() const;
 
 	// What type of port is this?
 	SERIAL_PORT_TYPE serialType = SERIAL_PORT_TYPE::DISABLED;

@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <optional>
 #include <regex>
 #include <sstream>
 #include <string_view>
@@ -73,10 +74,10 @@ Value::operator double() const
 	return _double;
 }
 
-Value::operator const char*() const
+Value::operator std::string() const
 {
 	assert(type == V_STRING);
-	return _string.c_str();
+	return _string;
 }
 
 bool Value::operator==(const Value& other) const
@@ -452,7 +453,7 @@ bool Prop_path::SetValue(const std::string& input)
 	}
 
 	if (current_config_dir.empty()) {
-		realpath = get_platform_config_dir() / temp_path;
+		realpath = GetConfigDir() / temp_path;
 	} else {
 		realpath = current_config_dir / temp_path;
 	}
@@ -778,7 +779,7 @@ PropMultiValRemain* Section_prop::AddMultiValRemain(const std::string& _propname
 
 int Section_prop::Get_int(const std::string& _propname) const
 {
-	for (const_it tel = properties.begin(); tel != properties.end(); tel++) {
+	for (const_it tel = properties.begin(); tel != properties.end(); ++tel) {
 		if ((*tel)->propname == _propname) {
 			return ((*tel)->GetValue());
 		}
@@ -862,7 +863,7 @@ Property* Section_prop::Get_prop(int index)
 	return nullptr;
 }
 
-const char* Section_prop::Get_string(const std::string& _propname) const
+std::string Section_prop::Get_string(const std::string& _propname) const
 {
 	for (const_it tel = properties.begin(); tel != properties.end(); ++tel) {
 		if ((*tel)->propname == _propname) {
@@ -870,6 +871,27 @@ const char* Section_prop::Get_string(const std::string& _propname) const
 		}
 	}
 	return "";
+}
+
+Prop_bool* Section_prop::GetBoolProp(const std::string& propname) const
+{
+	for (const auto property : properties) {
+		if (property->propname == propname) {
+			return dynamic_cast<Prop_bool*>(property);
+		}
+	}
+	return nullptr;
+}
+
+
+Prop_string* Section_prop::GetStringProp(const std::string& propname) const
+{
+	for (const auto property : properties) {
+		if (property->propname == propname) {
+			return dynamic_cast<Prop_string*>(property);
+		}
+	}
+	return nullptr;
 }
 
 Hex Section_prop::Get_hex(const std::string& _propname) const
@@ -977,12 +999,12 @@ std::string Section_line::GetPropValue(const std::string&) const
 	return NO_SUCH_PROPERTY;
 }
 
-bool Config::PrintConfig(const std::string& filename) const
+bool Config::WriteConfig(const std_fs::path& path) const
 {
 	char temp[50];
 	char helpline[256];
 
-	FILE* outfile = fopen(filename.c_str(), "w+t");
+	FILE* outfile = fopen(path.string().c_str(), "w+t");
 	if (!outfile) {
 		return false;
 	}
@@ -1104,15 +1126,6 @@ bool Config::PrintConfig(const std::string& filename) const
 	return true;
 }
 
-Section_prop* Config::AddEarlySectionProp(const char* name, SectionFunction func,
-                                          bool changeable_at_runtime)
-{
-	Section_prop* s = new Section_prop(name);
-	s->AddEarlyInitFunction(func, changeable_at_runtime);
-	sectionlist.push_back(s);
-	return s;
-}
-
 Section_prop* Config::AddSection_prop(const char* section_name, SectionFunction func,
                                       bool changeable_at_runtime)
 {
@@ -1190,18 +1203,7 @@ Config::Config(Config&& source) noexcept
 void Config::Init() const
 {
 	for (const auto& sec : sectionlist) {
-		sec->ExecuteEarlyInit();
-	}
-
-	for (const auto& sec : sectionlist) {
 		sec->ExecuteInit();
-	}
-}
-
-void Section::AddEarlyInitFunction(SectionFunction func, bool changeable_at_runtime)
-{
-	if (func) {
-		early_init_functions.emplace_back(func, changeable_at_runtime);
 	}
 }
 
@@ -1215,16 +1217,6 @@ void Section::AddInitFunction(SectionFunction func, bool changeable_at_runtime)
 void Section::AddDestroyFunction(SectionFunction func, bool changeable_at_runtime)
 {
 	destroyfunctions.emplace_front(func, changeable_at_runtime);
-}
-
-void Section::ExecuteEarlyInit(bool init_all)
-{
-	for (const auto& fn : early_init_functions) {
-		if (init_all || fn.changeable_at_runtime) {
-			assert(fn.function);
-			fn.function(this);
-		}
-	}
 }
 
 void Section::ExecuteInit(const bool init_all)
@@ -1439,7 +1431,7 @@ parse_environ_result_t parse_environ(const char* const* envp) noexcept
 {
 	assert(envp);
 
-	// Filter envirnment variables in following format:
+	// Filter environment variables in following format:
 	// DOSBOX_SECTIONNAME_PROPNAME=VALUE (prefix, section, and property
 	// names are case-insensitive).
 	std::list<std::tuple<std::string, std::string>> props_to_set;
@@ -1565,7 +1557,7 @@ Verbosity Config::GetStartupVerbosity() const
 	return Verbosity::High;
 }
 
-const std::string& SETUP_GetLanguage()
+const std::string& Config::GetLanguage()
 {
 	static bool lang_is_cached = false;
 	static std::string lang    = {};
@@ -1575,11 +1567,11 @@ const std::string& SETUP_GetLanguage()
 	}
 
 	// Has the user provided a language on the command line?
-	(void)control->cmdline->FindString("-lang", lang, true);
+	lang = arguments.lang;
 
 	// Is a language provided in the conf file?
 	if (lang.empty()) {
-		const auto section = control->GetSection("dosbox");
+		const auto section = GetSection("dosbox");
 		assert(section);
 		lang = static_cast<const Section_prop*>(section)->Get_string("language");
 	}
@@ -1612,71 +1604,54 @@ const std::string& SETUP_GetLanguage()
 	return lang;
 }
 
+// forward declaration
+void MSG_Init(Section_prop*);
+
 // Parse the user's configuration files starting with the primary, then custom
 // -conf's, and finally the local dosbox.conf
-void MSG_Init(Section_prop*);
-void SETUP_ParseConfigFiles(const std_fs::path& config_dir)
+void Config::ParseConfigFiles(const std_fs::path& config_dir)
 {
 	std::string config_file;
 
-	// First: parse the user's primary config file
-	const bool wants_primary_conf = !control->cmdline->FindExist("-noprimaryconf",
-	                                                             true);
-	if (wants_primary_conf) {
-		Cross::GetPlatformConfigName(config_file);
-		const auto cfg = config_dir / config_file;
-		control->ParseConfigFile("primary", cfg.string());
+	// First: parse the user's primary 'dosbox-staging.conf' config file
+	const bool load_primary_config = !arguments.noprimaryconf;
+
+	if (load_primary_config) {
+		const auto config_path = config_dir / GetPrimaryConfigName();
+		ParseConfigFile("primary", config_path.string());
 	}
 
 	// Second: parse the local 'dosbox.conf', if present
-	const bool wants_local_conf = !control->cmdline->FindExist("-nolocalconf",
-	                                                           true);
-	if (wants_local_conf) {
-		control->ParseConfigFile("local", "dosbox.conf");
+	const bool load_local_config = !arguments.nolocalconf;
+
+	if (load_local_config) {
+		ParseConfigFile("local", "dosbox.conf");
 	}
 
-	// Finally: layer on custom -conf <files>
-	while (control->cmdline->FindString("-conf", config_file, true)) {
-		if (!control->ParseConfigFile("custom", config_file)) {
+	// Finally: layer on additional config files specified with the '-conf'
+	// switch
+	for (const auto& config_file : arguments.conf) {
+		if (!ParseConfigFile("custom", config_file)) {
 			// Try to load it from the user directory
 			const auto cfg = config_dir / config_file;
-			if (!control->ParseConfigFile("custom", cfg.string())) {
+			if (!ParseConfigFile("custom", cfg.string())) {
 				LOG_WARNING("CONFIG: Can't open custom config file '%s'",
 				            config_file.c_str());
 			}
 		}
 	}
 
-	// Once we've parsed all the potential conf files, we've down our best
+	// Once we've parsed all the potential config files, we've down our best
 	// to discover the user's desired language. At this point, we can now
-	// initialize the messaging system which honors the language and loads
+	// initialise the messaging system which honours the language and loads
 	// those messages.
-	if (const auto sec = control->GetSection("dosbox"); sec) {
+	if (const auto sec = GetSection("dosbox"); sec) {
 		MSG_Init(static_cast<Section_prop*>(sec));
-	}
-
-	// Create a new primary if permitted and no other conf was loaded
-	if (wants_primary_conf && !control->configfiles.size()) {
-		std::string new_config_path = config_dir.string();
-
-		Cross::CreatePlatformConfigDir(new_config_path);
-		Cross::GetPlatformConfigName(config_file);
-
-		const std::string config_combined = new_config_path + config_file;
-
-		if (control->PrintConfig(config_combined)) {
-			LOG_MSG("CONFIG: Wrote new primary config file '%s'",
-			        config_combined.c_str());
-			control->ParseConfigFile("new primary", config_combined);
-		} else {
-			LOG_WARNING("CONFIG: Unable to write a new primary config file '%s'",
-			            config_combined.c_str());
-		}
 	}
 }
 
 static char return_msg[200];
-const char* SetProp(std::vector<std::string>& pvars)
+const char* Config::SetProp(std::vector<std::string>& pvars)
 {
 	*return_msg = 0;
 
@@ -1691,7 +1666,7 @@ const char* SetProp(std::vector<std::string>& pvars)
 		pvars[0].erase(equpos);
 
 		// As we had a = the first thing must be a property now
-		Section* sec = control->GetSectionFromProperty(pvars[0].c_str());
+		Section* sec = GetSectionFromProperty(pvars[0].c_str());
 
 		if (sec) {
 			pvars.insert(pvars.begin(), std::string(sec->GetName()));
@@ -1711,11 +1686,11 @@ const char* SetProp(std::vector<std::string>& pvars)
 		}
 
 		// Check if the first parameter is a section or property
-		Section* sec = control->GetSection(pvars[0].c_str());
+		Section* sec = GetSection(pvars[0]);
 
 		if (!sec) {
 			// Not a section: little duplicate from above
-			Section* sec = control->GetSectionFromProperty(
+			Section* sec = GetSectionFromProperty(
 			        pvars[0].c_str());
 
 			if (sec) {
@@ -1756,12 +1731,12 @@ const char* SetProp(std::vector<std::string>& pvars)
 			}
 
 			// Is this a property?
-			Section* sec2 = control->GetSectionFromProperty(
+			Section* sec2 = GetSectionFromProperty(
 			        pvars[1].c_str());
 
 			if (!sec2) {
 				// Not a property
-				Section* sec3 = control->GetSectionFromProperty(
+				Section* sec3 = GetSectionFromProperty(
 				        pvars[0].c_str());
 				if (sec3) {
 					// Section and property name are identical
@@ -1778,7 +1753,7 @@ const char* SetProp(std::vector<std::string>& pvars)
 	}
 
 	// Check if the property actually exists in the section
-	Section* sec2 = control->GetSectionFromProperty(pvars[1].c_str());
+	Section* sec2 = GetSectionFromProperty(pvars[1].c_str());
 	if (!sec2) {
 		safe_sprintf(return_msg,
 		             MSG_Get("PROGRAM_CONFIG_NO_PROPERTY"),
@@ -1788,4 +1763,63 @@ const char* SetProp(std::vector<std::string>& pvars)
 	}
 
 	return return_msg;
+}
+
+void Config::ParseArguments()
+{
+	arguments.printconf = cmdline->FindRemoveBoolArgument("printconf");
+	arguments.noprimaryconf = cmdline->FindRemoveBoolArgument("noprimaryconf");
+	arguments.nolocalconf = cmdline->FindRemoveBoolArgument("nolocalconf");
+	arguments.fullscreen  = cmdline->FindRemoveBoolArgument("fullscreen");
+	arguments.list_glshaders = cmdline->FindRemoveBoolArgument("list-glshaders");
+	arguments.noconsole   = cmdline->FindRemoveBoolArgument("noconsole");
+	arguments.startmapper = cmdline->FindRemoveBoolArgument("startmapper");
+	arguments.exit        = cmdline->FindRemoveBoolArgument("exit");
+	arguments.securemode = cmdline->FindRemoveBoolArgument("securemode");
+	arguments.noautoexec = cmdline->FindRemoveBoolArgument("noautoexec");
+
+	arguments.eraseconf = cmdline->FindRemoveBoolArgument("eraseconf") ||
+	                      cmdline->FindRemoveBoolArgument("resetconf");
+	arguments.erasemapper = cmdline->FindRemoveBoolArgument("erasemapper") ||
+	                        cmdline->FindRemoveBoolArgument("resetmapper");
+
+	arguments.version = cmdline->FindRemoveBoolArgument("version", 'v');
+	arguments.help    = (cmdline->FindRemoveBoolArgument("help", 'h') || 
+	                     cmdline->FindRemoveBoolArgument("help", '?'));
+
+	arguments.working_dir = cmdline->FindRemoveStringArgument("working-dir");
+	arguments.lang = cmdline->FindRemoveStringArgument("lang");
+	arguments.machine = cmdline->FindRemoveStringArgument("machine");
+
+	arguments.socket = cmdline->FindRemoveIntArgument("socket");
+
+	arguments.conf = cmdline->FindRemoveVectorArgument("conf");
+	arguments.set  = cmdline->FindRemoveVectorArgument("set");
+
+	arguments.editconf = cmdline->FindRemoveOptionalArgument("editconf");
+}
+
+// Only checks if config file exists and is not empty
+bool config_file_is_valid(const std_fs::path& path)
+{
+	FILE* file = fopen(path.string().c_str(), "r");
+	if (!file) {
+		return false;
+	}
+
+	constexpr size_t BufferSize = 4096;
+	char buffer[BufferSize];
+	size_t bytes_read;
+	do {
+		bytes_read = fread(buffer, 1, BufferSize, file);
+		for (size_t i = 0; i < bytes_read; ++i) {
+			if (!isspace(buffer[i])) {
+				fclose(file);
+				return true;
+			}
+		}
+	} while (bytes_read == BufferSize);
+
+	fclose(file);
+	return false;
 }
