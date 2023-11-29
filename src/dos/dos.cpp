@@ -36,6 +36,8 @@
 #include "string_utils.h"
 #include "support.h"
 
+bool dos_printFileReadLog = false;
+
 #if defined(WIN32)
 #include <winsock2.h> // for gethostname
 #endif
@@ -857,6 +859,17 @@ static Bitu DOS_21Handler(void) {
 			dos.echo=true;
 			if (DOS_ReadFile(reg_bx,dos_copybuf,&toread)) {
 				MEM_BlockWrite(SegPhys(ds)+reg_dx,dos_copybuf,toread);
+				/* if (dos_printFileReadLog) {
+					uint16_t targetSegment = SegValue(ds);
+					uint32_t targetOffset = reg_dx;
+					fprintf(stdout, "DOS file read from file %u bytes read %u to address: %.4x:%.4x, values: ", reg_bx, toread, targetSegment, targetOffset);
+					for (int i = 0; i < toread; i++) {
+						fprintf(stdout, "%02x", dos_copybuf[i]);
+					}
+					fprintf(stdout, "\n");
+				} */
+				
+
 				reg_ax=toread;
 				CALLBACK_SCF(false);
 			} else {

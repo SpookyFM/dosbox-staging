@@ -558,6 +558,9 @@ struct VGA_Type {
 	int sharpness = 0;
 };
 
+// Hacky redraw during debug mode
+void VGA_Redraw(void);
+
 /* Hercules Palette function */
 void Herc_Palette(void);
 

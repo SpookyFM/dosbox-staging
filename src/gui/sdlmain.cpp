@@ -352,6 +352,8 @@ void GFX_SetTitle(const int32_t new_num_cycles, const bool is_paused = false)
 		             RunningProgram, num_cycles, cycles_ms_str.c_str(),
 		             is_paused ? hint_paused_str.c_str() : hint_mouse_str.c_str());
 
+	safe_sprintf(title_buf, "X: %u, Y: %u", sdl.title_bar.x, sdl.title_bar.y);
+
 	SDL_SetWindowTitle(sdl.window, title_buf);
 }
 

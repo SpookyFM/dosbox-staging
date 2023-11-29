@@ -106,6 +106,8 @@ extern DOS_Device * Devices[DOS_DEVICES];
 
 extern uint8_t dos_copybuf[0x10000];
 
+extern bool dos_printFileReadLog;
+
 
 void DOS_SetError(uint16_t code);
 

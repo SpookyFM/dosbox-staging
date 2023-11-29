@@ -31,6 +31,7 @@
 #include <sstream>
 #include <regex>
 #include <queue>
+#include <chrono>
 using namespace std;
 
 #include "debug.h"
@@ -56,6 +57,7 @@ using namespace std;
 // Added for writing out a PPM of an off-screen buffer
 #include "vga.h"
 #include "std_filesystem.h"
+#include "sdlmain.h"
 
 SDL_Window *GFX_GetSDLWindow(void);
 
@@ -147,6 +149,8 @@ deque<callstack_entry> calltrace;
 deque<callstack_entry> rolling_calltrace;
 int rolling_calltrace_length = 500;
 bool callstack_started = false;
+uint16_t script_off_skip_start = 0xFFFF;
+uint16_t script_off_skip_end = 0xFFFF;
 
 static bool debugging = false;
 
@@ -357,6 +361,7 @@ public:
 	static CBreakpoint* AddReturnBreakpoint();
 	static CBreakpoint*		AddRegBreakpoint	(uint8_t reg);
 	static CBreakpoint* AddPixelBreakpoint(uint16_t x, uint16_t y);
+	static CBreakpoint* AddBackBufferPixelBreakpoint(uint16_t x, uint16_t y);
 	static void				DeactivateBreakpoints();
 	static void				ActivateBreakpoints	();
 	static void				ActivateBreakpointsExceptAt(PhysPt adr);
@@ -525,6 +530,21 @@ CBreakpoint* CBreakpoint::AddPixelBreakpoint(uint16_t x, uint16_t y)
 	return CBreakpoint::AddMemBreakpoint(0xa000, y * 320 + x);
 	// return CBreakpoint::AddMemBreakpoint(0x026F, y * 320 + x);
 }
+
+CBreakpoint* CBreakpoint::AddBackBufferPixelBreakpoint(uint16_t x, uint16_t y)
+{
+	// Find out in which block this one lives
+	uint16_t blockLength = 0x1e00 + 0x0140;
+	uint16_t offset = y * 320 + x;
+	uint16_t blockIndex = offset / blockLength;
+	uint16_t blockOffset = offset % blockLength;
+	
+	std::vector<uint16_t> blocks = { 0x025F,0x0267,0x026F,0x0277, 0x027F, 0x0287, 0x028F, 0x0297 };
+	uint16_t block = blocks[blockIndex];
+	return CBreakpoint::AddMemBreakpoint(block, 0xc + blockOffset);
+}
+
+
 
 void CBreakpoint::ActivateBreakpoints()
 {
@@ -1175,6 +1195,40 @@ extern uint32_t memReadOverrideValue;
 bool printSpecial = true;
 
 
+void DrawBackBuffer(uint16_t source_segment, uint16_t target_offset, uint16_t length) {
+	constexpr auto palette_map = vga.dac.palette_map;
+	
+	for (int i = 0; i < length; i++) {
+		int j = i + target_offset;
+		uint16_t x = j % 320;
+		uint16_t y = j / 320;
+
+		const auto graphics_window = GFX_GetSDLWindow();
+		const auto graphics_surface = SDL_GetWindowSurface(graphics_window);
+
+		uint32_t value = mem_readb(GetAddress(source_segment, 0xc + i));
+		Uint32* target_pixel = (Uint32*)((Uint8*)graphics_surface->pixels
+			+ 2 * y * graphics_surface->pitch 
+			+ 2 * x * graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+
+		target_pixel = (Uint32*)((Uint8*)graphics_surface->pixels
+			+ 2 * y * graphics_surface->pitch
+			+ 2 * x * graphics_surface->format->BytesPerPixel + graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+
+		target_pixel = (Uint32*)((Uint8*)graphics_surface->pixels
+			+ 2 * y * graphics_surface->pitch + graphics_surface->pitch
+			+ 2 * x * graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+		
+		target_pixel = (Uint32*)((Uint8*)graphics_surface->pixels
+			+ 2 * y * graphics_surface->pitch + graphics_surface->pitch
+			+ 2 * x * graphics_surface->format->BytesPerPixel + graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+	}
+}
+
 bool ParseCommand(char* str) {
 	char* found = str;
 	// Change: We only uppercase the first word = the command itself
@@ -1196,6 +1250,11 @@ bool ParseCommand(char* str) {
 		uint32_t ofs = GetHexValue(found,found); found++;
 		uint32_t num = GetHexValue(found,found); found++;
 		SaveMemory(seg,ofs,num);
+		return true;
+	}
+
+	if (command == "PS") {
+		printSpecial = !printSpecial;
 		return true;
 	}
 
@@ -1406,10 +1465,63 @@ bool ParseCommand(char* str) {
 		found++; // skip ":"
 		uint32_t ofs = GetHexValue(found, found);
 		// TODO: Which data type would this actually have?
+		found++;
 		uint8_t condition = (uint16_t)GetHexValue(found, found);
 		found++; // skip a whitespaceyu
 		CBreakpoint::AddConditionalMemBreakpoint(seg, ofs, condition);
 		DEBUG_ShowMsg("DEBUG: Set conditional memory breakpoint at %04X:%04X with target value %02X\n", seg, ofs, condition);
+		return true;
+	}
+	if (command == "DB") {
+		// Copy the pixels from the back buffer to the buffer
+		// MEM_BlockCopy(GetAddress(0xA000, 0x0000), GetAddress(0x025F, 0x0000), 320 * 200);
+		uint16_t offset = 0x0000;
+		const uint16_t stride = 0x1e00 + 0x0140;
+		DrawBackBuffer(0x025F, offset, stride); offset += stride;
+		DrawBackBuffer(0x0267, offset, stride); offset += stride;
+		DrawBackBuffer(0x026F, offset, stride); offset += stride;
+		DrawBackBuffer(0x0277, offset, stride); offset += stride;
+		DrawBackBuffer(0x027F, offset, stride); offset += stride;
+		DrawBackBuffer(0x0287, offset, stride); offset += stride;
+		DrawBackBuffer(0x028F, offset, stride); offset += stride;
+		DrawBackBuffer(0x0297, offset, stride); offset += stride;
+
+		/* MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x025F, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x0267, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x026F, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x0277, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x027F, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x0287, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x028F, 0xc), stride);
+		offset += stride;
+		MEM_BlockCopy(GetAddress(0xA000, offset), GetAddress(0x0297, 0xc), stride);
+		offset += stride; */
+		
+		// Draw the image ourselves in the window
+		const auto graphics_window = GFX_GetSDLWindow();
+		const auto graphics_surface = SDL_GetWindowSurface(graphics_window);
+		const uint16_t x = 50;
+		const uint16_t y = 50;
+		Uint32* const target_pixel = (Uint32*)((Uint8*)graphics_surface->pixels
+			+ y * graphics_surface->pitch
+			+ x * graphics_surface->format->BytesPerPixel);
+		*target_pixel = 0x00FF0000;
+
+
+
+
+		// Update the surface
+		SDL_UpdateWindowSurface(graphics_window);
+
+		// Focus
+		SDL_RaiseWindow(graphics_window);
+
 		return true;
 	}
 	if (command == "BPMOUSE") { // Hacky "mouse press read memory" breakpoint
@@ -1459,6 +1571,28 @@ bool ParseCommand(char* str) {
 	if (command == "TS") { // Toggle special function output
 		printSpecial = !printSpecial;
 		system("CLS");
+		return true;
+	}
+
+	if (command == "TFR") { // Toggle file read log
+		dos_printFileReadLog = !dos_printFileReadLog;
+		if (dos_printFileReadLog) {
+			DEBUG_ShowMsg("DEBUG: Enabled file read logs.\n");
+		}
+		else {
+			DEBUG_ShowMsg("DEBUG: Disabled file read logs.\n");
+		}
+		return true;
+	}
+
+	if (command == "SKIP") { // Toggle skipping a part of a script
+		uint16_t start = (uint16_t)GetHexValue(found, found);
+		// TODO: Skip all whitespace instead
+		found++; // skip a space
+		uint16_t end = GetHexValue(found, found);
+
+		script_off_skip_start = start;
+		script_off_skip_end = end;
 		return true;
 	}
 
@@ -1522,6 +1656,15 @@ bool ParseCommand(char* str) {
 		uint16_t y = GetHexValue(found, found);
 		CBreakpoint::AddPixelBreakpoint(x, y);
 		DEBUG_ShowMsg("DEBUG: Set pixel breakpoint at %04X:%04X\n", x, y);
+		return true;
+	}
+	if (command == "BPPIXELBB") { // Handle a back buffer pixel write
+		uint16_t x = (uint16_t)GetHexValue(found, found);
+		// TODO: Skip all whitespace instead
+		found++; // skip ":"
+		uint16_t y = GetHexValue(found, found);
+		CBreakpoint::AddBackBufferPixelBreakpoint(x, y);
+		DEBUG_ShowMsg("DEBUG: Set back buffer pixel breakpoint at %04X:%04X\n", x, y);
 		return true;
 	}
 
@@ -3145,7 +3288,101 @@ bool DEBUG_HandleTracePoint(Bitu seg, Bitu off) {
 uint16_t script_read_seg;
 uint16_t script_read_off;
 uint16_t script_last_read_off = 0xFFFF;
+std::chrono::time_point<std::chrono::system_clock> script_last_leave;
 
+uint8_t old_AH = 0xFF;
+
+
+void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
+	if (!printSpecial) {
+		return;
+	}
+	// We use this so that we skip repeats, we need to see a different location first.
+	static bool shouldTrigger = true;
+	if (seg == 0x01F7 && off == 0x040F) {
+		if (shouldTrigger) {
+			// This is the rep movsb
+			// Check if we are copying into the front buffer
+			uint16_t seg_es = SegValue(es);
+			// TODO: Looks like segment 0x014f is somehow mapped to VGA memory
+			if (seg_es != 0x014F) {
+				return;
+			}
+
+
+			uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
+			uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
+
+
+			fprintf(stdout, "Copying %u bytes from %.4x:%.4x to %.4x:%.4x - caller %.4x:%.4x\n", reg_cx, SegValue(ds), reg_si, SegValue(es), reg_di, ret_seg, ret_off);
+			shouldTrigger = false;
+		}
+	}
+	else {
+		shouldTrigger = true;
+	}
+}
+
+void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
+	if (!dos_printFileReadLog) {
+		// TODO: Use proper variable
+		return;
+	}
+	if (seg != 0x0217) {
+		return;
+	}
+
+	
+	if (off == 0x0B8F) {
+
+		uint16_t entry = reg_bx;
+		uint32_t handle = RealHandle(entry);
+		if (handle >= DOS_FILES) {
+			DOS_SetError(DOSERR_INVALID_HANDLE);
+			return;
+		};
+		const char* name = Files[handle]->GetName();
+
+		uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
+		uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
+
+		// This is the command after the INT21
+		uint16_t target_seg = SegValue(ds);
+		uint32_t target_off = reg_dx;
+		uint32_t num_byte_read = reg_ax;
+		fprintf(stdout, "DOS file read from file %u (%s) bytes read %u to address: %.4x:%.4x, caller %.4x:%.4x, values: ", entry, name, num_byte_read, target_seg, target_off, ret_seg, ret_off);
+		for (int i = 0; i < num_byte_read; i++) {
+			uint8_t current_byte = mem_readb_inline(GetAddress(target_seg, target_off + i));
+			fprintf(stdout, "%02x", current_byte);
+		}
+		fprintf(stdout, "\n");
+	}
+	else if (off == 0x0BEC) {
+		// This is where we set the opcode for seeking (potentially)
+		old_AH = reg_ah;
+	}
+	else if (off == 0x0BEE) {
+		// This is after a seek (potentially)
+		if (old_AH != 0x42) {
+			return;
+		}
+		uint16_t msb = reg_dx;
+		uint16_t lsb = reg_ax;
+		uint16_t entry = reg_bx;
+
+		uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
+		uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
+
+		uint32_t handle = RealHandle(entry);
+		if (handle >= DOS_FILES) {
+			DOS_SetError(DOSERR_INVALID_HANDLE);
+			return;
+		};
+		const char* name = Files[handle]->GetName();
+		
+		fprintf(stdout, "DOS file seek file %u new position: %.2x%.2x (%s), caller:  %.4x:%.4x\n", handle, msb, lsb, name, ret_seg, ret_off);
+	}
+}
 void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	if (!printSpecial) {
 		return;
@@ -3154,6 +3391,8 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		fprintf(stdout, "*** Mouse press ***\n");
 		return;
 	}
+
+
 	if (seg != 0x01E7) {
 		return;
 	}
@@ -3162,11 +3401,22 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
 
 	if (off == 0xDB56) {
-		fprintf(stdout, "----- Scripting function entered\n");
+		std::chrono::time_point < std::chrono::system_clock > now = std::chrono::system_clock::now();
+		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now - script_last_leave).count();
+		fprintf(stdout, "----- Scripting function entered (%u ms since last leave)\n", milliseconds);
+	}
+	else if (off == 0xDB89) {
+		// Check if we have a valid skip value
+		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+		if (script_off_skip_start == script_offset) {
+			fprintf(stdout, "----- Skipping script from %.4x:%.4x to %.4x:%.4x\n", SegValue(ds), script_off_skip_start, SegValue(ds), script_off_skip_end);
+			mem_writew_inline(GetAddress(SegValue(ds), 0x0F8A), script_off_skip_end);
+		}
 	}
 	else if (off == 0xE3E5) {
 		fprintf(stdout, "----- Scripting function left\n");
-	}
+		script_last_leave = std::chrono::system_clock::now();
+	} else
 	if (off == 0x9F17) {
 		// This is the case where we read a byte from the file
 		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
@@ -3211,10 +3461,18 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 }
 
 void DEBUG_HandleSpecial(Bitu seg, Bitu off) {
+
 	// Check if we are at the target location
 	if (!(seg == 0x01E7 && off == 0x1BAA)) {
 		return;
 	}
+
+	// Update mouse position in the title
+	static PhysPt xPos = GetAddress(0x0227, 0x0770);
+	static PhysPt yPos = GetAddress(0x0227, 0x0772);
+	sdl.title_bar.x	= mem_readw_inline(xPos);
+	sdl.title_bar.y = mem_readw_inline(yPos);
+
 
 	// Check if we are following the right object
 	uint16_t ptrBP = reg_bp;
@@ -3263,11 +3521,25 @@ bool DEBUG_HandleRegexpBreakpoint(Bitu seg, Bitu off) {
 	return false;
 }
 
+bool lastMouseTest = false;
+
 bool DEBUG_HeavyIsBreakpoint(void) {
 	static Bitu zero_count = 0;
 
+	if ((SegValue(cs) == 0x01D7) && reg_eip == 0x081A && lastMouseTest == false) {
+		if (reg_ax == 0x2) {
+			lastMouseTest = true;
+			return true;
+		}
+	}
+	else {
+		lastMouseTest = false;
+	}
+
 	DEBUG_HandleSpecial(SegValue(cs), reg_eip);
 	DEBUG_HandleScript(SegValue(cs), reg_eip);
+	DEBUG_HandleFileAccess(SegValue(cs), reg_eip);
+	DEBUG_HandleBackbufferBlit(SegValue(cs), reg_eip);
 
 	DEBUG_HandleTracePoint(SegValue(cs), reg_eip);
 	if (DEBUG_HandleRegexpBreakpoint(SegValue(cs), reg_eip)) {

@@ -613,13 +613,14 @@ static void init_key_mappings()
 	                  "Rec. MIDI");
 
 	MAPPER_AddHandler(handle_capture_grouped_screenshot_event,
-	                  SDL_SCANCODE_F5,
+	                 // SDL_SCANCODE_F5,
+					  SDL_SCANCODE_UNKNOWN,
 	                  PRIMARY_MOD,
 	                  "scrshot",
 	                  "Screenshot");
 
 	MAPPER_AddHandler(handle_capture_single_raw_screenshot_event,
-	                  SDL_SCANCODE_UNKNOWN,
+	                  SDL_SCANCODE_F5,
 	                  PRIMARY_MOD,
 	                  "rawshot",
 	                  "Raw Screenshot");
