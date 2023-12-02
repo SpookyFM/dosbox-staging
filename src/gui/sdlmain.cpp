@@ -344,15 +344,13 @@ void GFX_SetTitle(const int32_t new_num_cycles, const bool is_paused = false)
 	}
 
 	if (CPU_CycleAutoAdjust)
-		safe_sprintf(title_buf, "%8s - max %d%% - " APP_NAME_STR "%s",
+		safe_sprintf(title_buf, "%8s - max %d%% - " APP_NAME_STR "%s - Mouse %u %u - %#x %#x ",
 		             RunningProgram, num_cycles,
-		             is_paused ? hint_paused_str.c_str() : hint_mouse_str.c_str());
+		             is_paused ? hint_paused_str.c_str() : hint_mouse_str.c_str(), sdl.title_bar.x, sdl.title_bar.y, sdl.title_bar.x, sdl.title_bar.y);
 	else
-		safe_sprintf(title_buf, "%8s - %d %s - " APP_NAME_STR "%s",
+		safe_sprintf(title_buf, "%8s - %d %s - " APP_NAME_STR "%s - Mouse %u %u - %#x %#x ",
 		             RunningProgram, num_cycles, cycles_ms_str.c_str(),
-		             is_paused ? hint_paused_str.c_str() : hint_mouse_str.c_str());
-
-	safe_sprintf(title_buf, "X: %u, Y: %u", sdl.title_bar.x, sdl.title_bar.y);
+		             is_paused ? hint_paused_str.c_str() : hint_mouse_str.c_str(), sdl.title_bar.x, sdl.title_bar.y, sdl.title_bar.x, sdl.title_bar.y);
 
 	SDL_SetWindowTitle(sdl.window, title_buf);
 }

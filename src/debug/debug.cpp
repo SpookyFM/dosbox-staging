@@ -1574,7 +1574,7 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
-	if (command == "TFR") { // Toggle file read log
+	if (command == "TFR") { // Toggle file read logdos_printFileReadLog
 		dos_printFileReadLog = !dos_printFileReadLog;
 		if (dos_printFileReadLog) {
 			DEBUG_ShowMsg("DEBUG: Enabled file read logs.\n");
@@ -3309,12 +3309,26 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 				return;
 			}
 
-
+			uint16_t x = reg_di % 0x140;
+			uint16_t y = reg_di / 0x140;
 			uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
 			uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
 
+			
 
-			fprintf(stdout, "Copying %u bytes from %.4x:%.4x to %.4x:%.4x - caller %.4x:%.4x\n", reg_cx, SegValue(ds), reg_si, SegValue(es), reg_di, ret_seg, ret_off);
+
+			fprintf(stdout, "Copying %u bytes from %.4x:%.4x to %.4x:%.4x (%u, %u) - caller %.4x:%.4x\n", reg_cx, SegValue(ds), reg_si, SegValue(es), reg_di, x, y, ret_seg, ret_off);
+			shouldTrigger = false;
+		}
+	}
+	else if (seg == 0x01F7 && (off == 0x0E74 || off == 0x0E75)) {
+		if (shouldTrigger) {
+			uint32_t param1 = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x0A));
+			uint32_t param2 = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
+			uint32_t param3 = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
+
+
+			fprintf(stdout, "Function 0C88: Copying %u bytes from %.4x:%.4x to %.4x:%.4x - params 0x0A: %.4x 0x06: %.4x 0x04: %.4x\n", reg_cx, SegValue(ds), reg_si, SegValue(es), reg_di, param1, param2, param3);
 			shouldTrigger = false;
 		}
 	}
@@ -3460,18 +3474,26 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	}
 }
 
+extern void GFX_RefreshTitle();
+
 void DEBUG_HandleSpecial(Bitu seg, Bitu off) {
+	// TODO: Could still do with a bit better location for this one.
+	if (seg == 0x01E7 && off == 0x01D9) {
+		// Update mouse position in the title
+		static PhysPt xPos = GetAddress(0x0227, 0x0770);
+		static PhysPt yPos = GetAddress(0x0227, 0x0772);
+		sdl.title_bar.x = mem_readw_inline(xPos);
+		sdl.title_bar.y = mem_readw_inline(yPos);
+		GFX_RefreshTitle();
+	}
+
 
 	// Check if we are at the target location
 	if (!(seg == 0x01E7 && off == 0x1BAA)) {
 		return;
 	}
 
-	// Update mouse position in the title
-	static PhysPt xPos = GetAddress(0x0227, 0x0770);
-	static PhysPt yPos = GetAddress(0x0227, 0x0772);
-	sdl.title_bar.x	= mem_readw_inline(xPos);
-	sdl.title_bar.y = mem_readw_inline(yPos);
+	
 
 
 	// Check if we are following the right object
@@ -3526,7 +3548,7 @@ bool lastMouseTest = false;
 bool DEBUG_HeavyIsBreakpoint(void) {
 	static Bitu zero_count = 0;
 
-	if ((SegValue(cs) == 0x01D7) && reg_eip == 0x081A && lastMouseTest == false) {
+	/* if ((SegValue(cs) == 0x01D7) && reg_eip == 0x081A && lastMouseTest == false) {
 		if (reg_ax == 0x2) {
 			lastMouseTest = true;
 			return true;
@@ -3534,7 +3556,7 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 	}
 	else {
 		lastMouseTest = false;
-	}
+	} */
 
 	DEBUG_HandleSpecial(SegValue(cs), reg_eip);
 	DEBUG_HandleScript(SegValue(cs), reg_eip);
