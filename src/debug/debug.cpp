@@ -3297,6 +3297,12 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 	if (!printSpecial) {
 		return;
 	}
+
+	if (seg == 0x01F7 && off == 0x1708) {
+		uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
+		uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
+		fprintf(stdout, "16E7: Results of 1480 call: %.4x %.4x - caller %.4x:%.4x\n", reg_ax, reg_dx, ret_seg, ret_off);
+	}
 	// We use this so that we skip repeats, we need to see a different location first.
 	static bool shouldTrigger = true;
 	if (seg == 0x01F7 && off == 0x040F) {
@@ -3327,8 +3333,11 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 			uint32_t param2 = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
 			uint32_t param3 = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
 
+			uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
+			uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
 
-			fprintf(stdout, "Function 0C88: Copying %u bytes from %.4x:%.4x to %.4x:%.4x - params 0x0A: %.4x 0x06: %.4x 0x04: %.4x\n", reg_cx, SegValue(ds), reg_si, SegValue(es), reg_di, param1, param2, param3);
+
+			fprintf(stdout, "Function 0C88: Copying %u bytes from %.4x:%.4x to %.4x:%.4x - caller %.4x:%.4x - params 0x0A: %.4x 0x06: %.4x 0x04: %.4x\n", reg_cx, SegValue(ds), reg_si, SegValue(es), reg_di, ret_seg, ret_off, param1, param2, param3);
 			shouldTrigger = false;
 		}
 	}
