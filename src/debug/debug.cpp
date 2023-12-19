@@ -3479,7 +3479,8 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		// We are skipping bytes using A3D2
 		uint32_t num_bytes = reg_ax;
 		uint16_t opcode1 = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x1));
-		fprintf(stdout, "- A3D2 skipping %u bytes for opcode %.2x (%.4x:%.4x)\n", num_bytes, opcode1, ret_seg, ret_off);
+		uint16_t skipValue = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x4));
+		fprintf(stdout, "- A3D2 skipping %u bytes for opcode %.2x [%u] (%.4x:%.4x)\n", num_bytes, opcode1, skipValue, ret_seg, ret_off);
 	}
 }
 
