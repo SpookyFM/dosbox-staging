@@ -157,6 +157,8 @@ struct SDL_Block {
 
 	struct {
 		int num_cycles = 0;
+		int x = 0;
+		int y = 0;
 		std::string hint_mouse_str  = {};
 		std::string hint_paused_str = {};
 		std::string cycles_ms_str   = {};

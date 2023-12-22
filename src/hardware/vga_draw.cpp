@@ -41,7 +41,10 @@
 
 // #define DEBUG_VGA_DRAW
 
-typedef uint8_t* (*VGA_Line_Handler)(Bitu vidstart, Bitu line);
+
+
+
+typedef uint8_t * (* VGA_Line_Handler)(Bitu vidstart, Bitu line);
 
 static VGA_Line_Handler VGA_DrawLine;
 
@@ -1100,6 +1103,10 @@ static void VGA_DrawPart(uint32_t lines)
 #endif
 		RENDER_EndUpdate(false);
 	}
+}
+
+void VGA_Redraw() {
+	VGA_DrawPart(200);
 }
 
 void VGA_SetBlinking(const uint8_t enabled)
