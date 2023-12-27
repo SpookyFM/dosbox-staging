@@ -2838,7 +2838,10 @@ void DEBUG_Init(Section* sec) {
 //	MSG_Add("DEBUG_CONFIGFILE_HELP","Debugger related options.\n");
 	DEBUG_DrawScreen();
 	/* Add some keyhandlers */
-	MAPPER_AddHandler(DEBUG_Enable, SDL_SCANCODE_PAUSE, MMOD2, "debugger",
+	// Florian: Changing to something easier to access on the laptop
+	// MAPPER_AddHandler(DEBUG_Enable, SDL_SCANCODE_PAUSE, MMOD2, "debugger",
+	//                  "Debugger");
+	MAPPER_AddHandler(DEBUG_Enable, SDL_SCANCODE_B, MMOD2, "debugger",
 	                  "Debugger");
 	/* Reset code overview and input line */
 	codeViewData = {};
@@ -3508,7 +3511,8 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	}
 }
 
-extern void GFX_RefreshTitle();
+extern void GFX_RefreshTitle(const bool is_paused = false);
+extern void GFX_SetTitle(const int32_t cycles, const bool is_paused = false);
 
 void DEBUG_HandleSpecial(Bitu seg, Bitu off) {
 	// TODO: Could still do with a bit better location for this one.
