@@ -1054,6 +1054,14 @@ struct VgaType {
 	bool ega_mode_with_vga_colors = false;
 };
 
+// Hercules & CGA monochrome palette
+enum class MonochromePalette : uint8_t {
+	Amber      = 0,
+	Green      = 1,
+	White      = 2,
+	Paperwhite = 3
+};
+
 // Hacky redraw during debug mode
 void VGA_Redraw(void);
 
