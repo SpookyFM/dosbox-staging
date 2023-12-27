@@ -553,7 +553,7 @@ void CPU_Exception(Bitu which,Bitu error ) {
 
 uint8_t lastint;
 void CPU_Interrupt(Bitu num,Bitu type,Bitu oldeip) {
-	fprintf(stdout, "---- Interrupt %u\n", num);
+	// fprintf(stdout, "---- Interrupt %u\n", num);
 	if (num == EXCEPTION_DB && (type&CPU_INT_EXCEPTION) == 0) {
 		CPU_DebugException(0,oldeip); // DR6 bits need updating
 		return;
