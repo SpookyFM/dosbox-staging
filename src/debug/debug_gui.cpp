@@ -382,7 +382,7 @@ void LOG_StartUp(void) {
 }
 
 
-
+extern SDL_Window* pdc_window;
 
 void DBGUI_StartUp(void) {
 	/* Start the main window */
