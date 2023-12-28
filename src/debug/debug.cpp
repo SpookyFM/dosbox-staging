@@ -1586,17 +1586,6 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
-	if (command == "TFR") { // Toggle file read logdos_printFileReadLog
-		dos_printFileReadLog = !dos_printFileReadLog;
-		if (dos_printFileReadLog) {
-			DEBUG_ShowMsg("DEBUG: Enabled file read logs.\n");
-		}
-		else {
-			DEBUG_ShowMsg("DEBUG: Disabled file read logs.\n");
-		}
-		return true;
-	}
-
 	if (command == "SKIP") { // Toggle skipping a part of a script
 		uint16_t start = (uint16_t)GetHexValue(found, found);
 		// TODO: Skip all whitespace instead
@@ -2866,6 +2855,7 @@ void DEBUG_Init(Section* sec) {
 	/* shutdown function */
 	sec->AddDestroyFunction(&DEBUG_ShutDown);
 	debugLogEnabled["special"] = false;
+	debugLogEnabled["fileread"] = false;
 }
 
 // DEBUGGING VAR STUFF
@@ -3387,7 +3377,7 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 }
 
 void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
-	if (!dos_printFileReadLog) {
+	if (!isChannelActive("fileread")) {
 		// TODO: Use proper variable
 		return;
 	}
