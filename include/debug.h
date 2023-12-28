@@ -45,9 +45,13 @@ extern Bitu debugCallback;
 
 extern bool useCallstack;
 extern bool filterCallstack;
-extern bool printSpecial;
 
 extern std::map<std::string, bool> debugLogEnabled;
+
+inline bool isChannelActive(const std::string& name) {
+	// TODO: Consider a safety mode
+	return debugLogEnabled[name];
+}
 
 struct callstack_entry {
 	bool is_call; // True if this is a call, false if this is a return

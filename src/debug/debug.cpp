@@ -1192,7 +1192,6 @@ extern PhysPt memReadWatch1;
 extern PhysPt memReadWatch2;
 extern PhysPt memReadOverride;
 extern uint32_t memReadOverrideValue;
-bool printSpecial = true;
 std::map<std::string, bool> debugLogEnabled;
 
 
@@ -1251,11 +1250,6 @@ bool ParseCommand(char* str) {
 		uint32_t ofs = GetHexValue(found,found); found++;
 		uint32_t num = GetHexValue(found,found); found++;
 		SaveMemory(seg,ofs,num);
-		return true;
-	}
-
-	if (command == "PS") {
-		printSpecial = !printSpecial;
 		return true;
 	}
 
@@ -1589,12 +1583,6 @@ bool ParseCommand(char* str) {
 		}
 		filterCallstack = false;
 		DEBUG_ShowMsg("DEBUG: Toggling callstack usage\n");
-		return true;
-	}
-
-	if (command == "TS") { // Toggle special function output
-		printSpecial = !printSpecial;
-		system("CLS");
 		return true;
 	}
 
@@ -2877,8 +2865,7 @@ void DEBUG_Init(Section* sec) {
 	CALLBACK_Setup(debugCallback,DEBUG_EnableDebugger,CB_RETF,"debugger");
 	/* shutdown function */
 	sec->AddDestroyFunction(&DEBUG_ShutDown);
-	debugLogEnabled["test"] = false;
-	debugLogEnabled["foo"] = true;
+	debugLogEnabled["special"] = false;
 }
 
 // DEBUGGING VAR STUFF
@@ -3347,7 +3334,7 @@ uint8_t old_AH = 0xFF;
 
 
 void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
-	if (!printSpecial) {
+	if (!isChannelActive("special")) {
 		return;
 	}
 
@@ -3460,7 +3447,7 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 	}
 }
 void DEBUG_HandleScript(Bitu seg, Bitu off) {
-	if (!printSpecial) {
+	if (!isChannelActive("special")) {
 		return;
 	}
 	if (seg == 0x01D7 && off == 0x082A) {
