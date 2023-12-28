@@ -1193,6 +1193,7 @@ extern PhysPt memReadWatch2;
 extern PhysPt memReadOverride;
 extern uint32_t memReadOverrideValue;
 bool printSpecial = true;
+std::map<std::string, bool> debugLogEnabled;
 
 
 void DrawBackBuffer(uint16_t source_segment, uint16_t target_offset, uint16_t length) {
@@ -1457,6 +1458,29 @@ bool ParseCommand(char* str) {
 			seg,
 			ofs,
 			value);
+		return true;
+	}
+
+	if (command == "CHANNEL") {
+		while (*found == ' ') {
+			found++;
+		}
+		if (debugLogEnabled.count(found) == 1) {
+			debugLogEnabled[found] = !debugLogEnabled[found];
+			DEBUG_ShowMsg("DEBUG: Setting debug channel %s to %u\n",
+			              found,
+			              debugLogEnabled[found]);
+		} else {
+			DEBUG_ShowMsg("Unknown debug log channel %s\n", found);
+		}
+		return true;
+	}
+
+	if (command == "CHANNELLIST") {
+		DEBUG_ShowMsg("DEBUG: Log channels:\n");
+		for (auto it = debugLogEnabled.begin(); it != debugLogEnabled.end(); it++) {
+			DEBUG_ShowMsg("%s: %u\n", it->first.c_str(), it->second);
+		}
 		return true;
 	}
 
@@ -2853,6 +2877,8 @@ void DEBUG_Init(Section* sec) {
 	CALLBACK_Setup(debugCallback,DEBUG_EnableDebugger,CB_RETF,"debugger");
 	/* shutdown function */
 	sec->AddDestroyFunction(&DEBUG_ShutDown);
+	debugLogEnabled["test"] = false;
+	debugLogEnabled["foo"] = true;
 }
 
 // DEBUGGING VAR STUFF

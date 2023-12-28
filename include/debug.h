@@ -23,6 +23,7 @@
 
 #include <deque>
 #include <queue>
+#include <map>
 
 #include "paging.h"
 
@@ -45,6 +46,8 @@ extern Bitu debugCallback;
 extern bool useCallstack;
 extern bool filterCallstack;
 extern bool printSpecial;
+
+extern std::map<std::string, bool> debugLogEnabled;
 
 struct callstack_entry {
 	bool is_call; // True if this is a call, false if this is a return
