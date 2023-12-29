@@ -59,6 +59,8 @@ using namespace std;
 #include "std_filesystem.h"
 #include "sdlmain.h"
 
+#include "debug_sis.h"
+
 SDL_Window *GFX_GetSDLWindow(void);
 
 int old_cursor_state;
@@ -2854,8 +2856,9 @@ void DEBUG_Init(Section* sec) {
 	CALLBACK_Setup(debugCallback,DEBUG_EnableDebugger,CB_RETF,"debugger");
 	/* shutdown function */
 	sec->AddDestroyFunction(&DEBUG_ShutDown);
-	debugLogEnabled["special"] = false;
-	debugLogEnabled["fileread"] = false;
+	
+
+	SIS_Init();
 }
 
 // DEBUGGING VAR STUFF

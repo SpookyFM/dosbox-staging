@@ -857,6 +857,9 @@
     <ClCompile Include="..\src\capture\capture_audio.cpp" />
     <ClCompile Include="..\src\capture\capture_midi.cpp" />
     <ClCompile Include="..\src\capture\capture_video.cpp" />
+    <ClCompile Include="..\src\debug\debug_sis.cpp">
+      <Filter>src\debug</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\audio_frame.h">
@@ -1424,6 +1427,9 @@
     <ClInclude Include="..\src\hardware\ston1_dac.h" />
     <ClInclude Include="..\src\capture\image\image_saver.h" />
     <ClInclude Include="..\src\capture\image\image_scaler.h" />
+    <ClInclude Include="..\src\debug\debug_sis.h">
+      <Filter>src\debug</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\winres.rc">
