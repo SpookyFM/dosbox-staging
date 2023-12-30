@@ -3602,6 +3602,11 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 		lastMouseTest = false;
 	} */
 
+	SIS_HandleSIS(SegValue(cs), reg_eip);
+	if (SIS_IsBreakpoint(SegValue(cs), reg_eip)) {
+		return true;
+	}
+
 	DEBUG_HandleSpecial(SegValue(cs), reg_eip);
 	DEBUG_HandleScript(SegValue(cs), reg_eip);
 	DEBUG_HandleFileAccess(SegValue(cs), reg_eip);

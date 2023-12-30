@@ -30,4 +30,6 @@ void SIS_HandleAnimFrame(Bitu seg, Bitu off)
 }
 
 
-void SIS_HandleSIS(Bitu seg, Bitu off) {}
+void SIS_HandleSIS(Bitu seg, Bitu off) {
+	SIS_HandleAnimFrame(seg, off);
+}
