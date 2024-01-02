@@ -1480,6 +1480,11 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "CALLER") {
+		// TODO: Look up optional arg from hex interrupt
+		return true;
+	}
+
 	if (command == "BPMC") { // Add a new conditional memory breakpoint
 		uint16_t seg = (uint16_t)GetHexValue(found, found);
 		found++; // skip ":"
