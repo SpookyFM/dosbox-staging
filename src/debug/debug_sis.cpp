@@ -22,6 +22,58 @@ void SIS_Temp_HandleSkipDrawObject(Bitu seg, Bitu off) {
 	} */ 
 }
 
+void SIS_LogAnimFrame(Bitu seg, Bitu off) {
+	if (!(seg == 0x01E7 && off == 0x95D2)) {
+		return;
+	}
+	uint16_t index = mem_readw_inline(GetAddress(SegValue(ss), reg_bp - 0x0A));
+	if (index != 2) {
+		return;	
+	}
+
+	// push	word ptr es:[di+2Eh] ;; [bp+1Ch]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x16));
+	// push	word ptr es:[di+2Ch] ;; [bp+1Ah]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x14));
+	// mov	ax,[bp-2h]
+	// shr	ax,1h
+	// mov	dx,ax
+	// les	di,[bp-1Ah]
+	// mov	ax,es:[di]
+	// sub	ax,dx
+	// push	ax ;; [bp+18h] 
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x12));
+	// mov	ax,es:[di+2h]
+	// sub	ax,[bp-4h]
+	// sub	ax,[bp-8h]
+	// push	ax ;; [bp+16h]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x10));
+	// push	2h ;; [bp+14h]
+	// TODO: Add the 2
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x0E));
+	// push	word ptr [bp-6h] ;; [bp+12h]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x0C));
+	// push	word ptr es:[di+2h] ;; [bp+10h] 
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x0A));
+
+	// les	di,[0778h]
+	// add	di,1013h
+	// push	es ;; [bp+Eh]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x08));
+	// push	di ;; [bp+Ch]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x06));
+	// les	di,[0778h]
+	// add	di,53D3h
+	// push	es ;; [bp+Ah]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x04));
+	// push	di ;; [bp+8h]
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x02));
+	// push	word ptr [bp-14h] ;; [bp+6h] 
+	mem_readw_inline(GetAddress(SegValue(ss), reg_sp + 0x00));
+
+	// call	far 00B7h:172Ch
+}
+
 void SIS_HandleAnimFrame(Bitu seg, Bitu off)
 {
 	if (!debugLogEnabled[SIS_AnimFrame]) {
