@@ -8,6 +8,11 @@ void SIS_Init() {
 
 bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 {
+	/* static bool hitOnce = false;
+	if (seg == 0x01E7 && off == 0xDB56 && !hitOnce) {
+		hitOnce = true;
+		return true;
+	} */
 	return false;
 }
 
