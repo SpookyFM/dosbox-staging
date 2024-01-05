@@ -1480,27 +1480,7 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
-	if (command == "CALLER") {
-		bool all = !(*found);
-		uint8_t levels = all ? 1 : (uint8_t)GetHexValue(found, found);
-		
-		// At SS:BP, the old stack frame is saved, so we can use this to walk up
-
-		while (levels != 1) {
-			// TODO: Implement more than one level
-			levels--;
-		}
-
-		uint32_t callerBP = reg_bp;
-		uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), callerBP + 0x04));
-		uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), callerBP + 0x02));
-			// mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
-		codeViewData.useCS = ret_seg;
-		codeViewData.useEIP = ret_off;
-		codeViewData.cursorPos = 0;
-
-		return true;
-	}
+	
 
 	if (command == "BPMC") { // Add a new conditional memory breakpoint
 		uint16_t seg = (uint16_t)GetHexValue(found, found);
@@ -1967,7 +1947,8 @@ bool ParseCommand(char* str) {
 
 		return true;
 	}
-	return false;
+
+	return SIS_ParseCommand(found, command);
 }
 
 char* AnalyzeInstruction(char* inst, bool saveSelector) {
@@ -3696,3 +3677,5 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 #endif // HEAVY DEBUG
 
 #endif // DEBUG
+
+#include "debug_sis.cpp"

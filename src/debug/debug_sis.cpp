@@ -1,5 +1,7 @@
 #include "debug_sis.h"
 
+// TODO: Consider something a bit ugly like including this .cpp in the normal debug.cpp to get access to the functions and variables
+
 void SIS_Init() {
 	debugLogEnabled["special"]  = false;
 	debugLogEnabled["fileread"] = false;
@@ -106,4 +108,36 @@ void SIS_HandleSIS(Bitu seg, Bitu off) {
 	// SIS_Temp_HandleSkipDrawObject(seg, off);
 	SIS_LogAnimFrame(seg, off);
 	SIS_HandleAnimFrame(seg, off);
+}
+
+bool SIS_ParseCommand(char* found, std::string command)
+{
+	if (command == "CALLER") {
+		bool all = !(*found);
+		uint8_t levels = all ? 1 : (uint8_t)GetHexValue(found, found);
+
+		// At SS:BP, the old stack frame is saved, so we can use this to walk up
+		uint32_t calleeBP = reg_bp;
+		uint32_t callerBP = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x00));
+		uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x02));
+		uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x04));
+
+		while (levels != 1) {
+			// If need be, walk up again the same way we did before, just that we read the caller's BP from the stack
+			calleeBP = callerBP;
+			callerBP = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x00));
+			ret_off = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x02));
+			ret_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x04));
+			// TODO: Implement more than one level
+			levels--;
+		}
+
+		codeViewData.useCS = ret_seg;
+		codeViewData.useEIP = ret_off;
+		codeViewData.cursorPos = 0;
+
+		return true;
+	}
+
+	return false;
 }
