@@ -12,4 +12,4 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off);
 
 void SIS_HandleSIS(Bitu seg, Bitu off);
 
-bool SIS_ParseCommand(char* found, string command);
+bool SIS_ParseCommand(char* found, std::string command);
