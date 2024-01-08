@@ -3678,4 +3678,27 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 
 #endif // DEBUG
 
+void SIS_PushWord(uint16_t value) {
+	reg_sp -= 2;
+	mem_writew_inline(GetAddress(SegValue(ss), reg_sp), value);
+}
+
+void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff) {
+	SIS_PushWord(retSeg);
+	SIS_PushWord(retOff);
+	SegSet16(cs, seg);
+	reg_ip = off;
+}
+
+void SIS_HandleGameLoad(Bitu seg, Bitu off) {
+	static bool triggered = false;
+	if (seg == 0x01D7 && off == 0x09CB && !triggered) {
+		SIS_PushWord(0x0002);
+		// TODO: These probably don't matter that much?
+		SIS_PushWord(0x0098);
+		SIS_PushWord(0x003B);
+		triggered = true;
+	}
+}
+
 #include "debug_sis.cpp"
