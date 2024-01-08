@@ -3678,19 +3678,31 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 
 #endif // DEBUG
 
-void SIS_PushWord(uint16_t value) {
+// SIS Debug code below
+
+void SIS_Init()
+{
+	debugLogEnabled["special"]     = false;
+	debugLogEnabled["fileread"]    = false;
+	debugLogEnabled[SIS_AnimFrame] = false;
+}
+
+void SIS_PushWord(uint16_t value)
+{
 	reg_sp -= 2;
 	mem_writew_inline(GetAddress(SegValue(ss), reg_sp), value);
 }
 
-void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff) {
+void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff)
+{
 	SIS_PushWord(retSeg);
 	SIS_PushWord(retOff);
 	SegSet16(cs, seg);
 	reg_ip = off;
 }
 
-void SIS_HandleGameLoad(Bitu seg, Bitu off) {
+void SIS_HandleGameLoad(Bitu seg, Bitu off)
+{
 	static bool triggered = false;
 	if (seg == 0x01D7 && off == 0x09CB && !triggered) {
 		SIS_PushWord(0x0002);
@@ -3699,17 +3711,6 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off) {
 		SIS_PushWord(0x003B);
 		triggered = true;
 	}
-}
-
-#include "debug_sis.cpp"
-
-// SIS Debug code below
-
-void SIS_Init()
-{
-	debugLogEnabled["special"]     = false;
-	debugLogEnabled["fileread"]    = false;
-	debugLogEnabled[SIS_AnimFrame] = false;
 }
 
 bool SIS_IsBreakpoint(Bitu seg, Bitu off)
@@ -3737,6 +3738,12 @@ void SIS_Temp_HandleSkipDrawObject(Bitu seg, Bitu off)
 
 void SIS_LogAnimFrame(Bitu seg, Bitu off)
 {
+	if (seg == 0x01F7 && off == 0x174A) {
+		fprintf(stdout,
+		        "Results of 1480 call: %.4x:%.4x\n", reg_ax, reg_dx);
+		return;
+	}
+
 	if (!(seg == 0x01E7 && off == 0x95D2)) {
 		return;
 	}
@@ -3854,6 +3861,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_LogAnimFrame(seg, off);
 	SIS_HandleAnimFrame(seg, off);
 	SIS_HandleAnimFramePainting(seg, off);
+	SIS_HandleGameLoad(seg, off);
 }
 
 bool SIS_ParseCommand(char* found, std::string command)
@@ -3882,7 +3890,6 @@ bool SIS_ParseCommand(char* found, std::string command)
 			        GetAddress(SegValue(ss), calleeBP + 0x02));
 			ret_seg = mem_readw_inline(
 			        GetAddress(SegValue(ss), calleeBP + 0x04));
-			// TODO: Implement more than one level
 			levels--;
 		}
 
