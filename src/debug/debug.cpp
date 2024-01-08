@@ -3443,7 +3443,7 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 	}
 }
 void DEBUG_HandleScript(Bitu seg, Bitu off) {
-	if (!isChannelActive("special")) {
+	if (!isChannelActive("script")) {
 		return;
 	}
 	if (seg == 0x01D7 && off == 0x082A) {
