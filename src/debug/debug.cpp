@@ -3709,6 +3709,7 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off)
 		// TODO: These probably don't matter that much?
 		SIS_PushWord(0x0098);
 		SIS_PushWord(0x003B);
+		SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09D0);
 		triggered = true;
 	}
 }
