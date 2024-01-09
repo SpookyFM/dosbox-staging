@@ -3704,10 +3704,14 @@ void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff)
 void SIS_HandleGameLoad(Bitu seg, Bitu off)
 {
 	static bool triggered = false;
-	static int hitCounter = 0;
+	// static int hitCounter = 0;
 	if (seg == 0x01D7 && off == 0x09D0) {
-		hitCounter++;
-		if (hitCounter == 1 && !triggered) {
+		// hitCounter++;
+		// if (hitCounter == 1 && !triggered) {
+
+		int numkeys;
+		const Uint8* state = SDL_GetKeyboardState(&numkeys);
+		if (state[SDL_SCANCODE_L] && !triggered) {
 			triggered = true;
 			SIS_PushWord(0x0002);
 			// TODO: These probably don't matter that much?
@@ -3715,7 +3719,7 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off)
 			SIS_PushWord(0x003B);
 			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09D0);
 			// This next one at least works, but it still fails since the game is in the wrong state (not the menu state)
-			// CPU_CALL(false, 0x01E7, 0x747E, 0x09D0);
+			CPU_CALL(false, 0x01E7, 0x747E, 0x09D0);
 			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09CB);
 		}
 	}
@@ -3877,7 +3881,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_LogAnimFrame(seg, off);
 	SIS_HandleAnimFrame(seg, off);
 	SIS_HandleAnimFramePainting(seg, off);
-	// SIS_HandleGameLoad(seg, off);
+	SIS_HandleGameLoad(seg, off);
 }
 
 bool SIS_ParseCommand(char* found, std::string command)
