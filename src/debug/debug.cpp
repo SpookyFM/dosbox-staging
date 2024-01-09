@@ -3704,14 +3704,20 @@ void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff)
 void SIS_HandleGameLoad(Bitu seg, Bitu off)
 {
 	static bool triggered = false;
-	if (seg == 0x01D7 && off == 0x09CB && !triggered) {
-		SIS_PushWord(0x0002);
-		// TODO: These probably don't matter that much?
-		SIS_PushWord(0x0098);
-		SIS_PushWord(0x003B);
-		SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09D0);
-		triggered = true;
+	static int hitCounter = 0;
+	if (seg == 0x01D7 && off == 0x09CB) {
+		hitCounter++;
+		if (hitCounter == 30 && !triggered) {
+			triggered = true;
+			SIS_PushWord(0x0002);
+			// TODO: These probably don't matter that much?
+			SIS_PushWord(0x0098);
+			SIS_PushWord(0x003B);
+			SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09D0);
+			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09CB);
+		}
 	}
+	
 }
 
 bool SIS_IsBreakpoint(Bitu seg, Bitu off)
@@ -3721,6 +3727,13 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 	        hitOnce = true;
 	        return true;
 	} */
+	/* static bool hitOnce = false;
+	if (seg == 0x01E7 && off == 0x747E && !hitOnce) {
+		hitOnce = true;
+		return true;
+	} 
+
+	*/
 	return false;
 }
 
