@@ -3759,8 +3759,8 @@ void SIS_Temp_HandleSkipDrawObject(Bitu seg, Bitu off)
 void SIS_LogAnimFrame(Bitu seg, Bitu off)
 {
 	if (seg == 0x01F7 && off == 0x174A) {
-		fprintf(stdout,
-		        "Results of 1480 call: %.4x:%.4x\n", reg_ax, reg_dx);
+		// fprintf(stdout,
+		  //       "Results of 1480 call: %.4x:%.4x\n", reg_ax, reg_dx);
 		return;
 	}
 
@@ -3818,7 +3818,7 @@ void SIS_LogAnimFrame(Bitu seg, Bitu off)
 	// call	far 00B7h:172Ch
 
 	uint16_t bp12 = mem_readw_inline(GetAddress(SegValue(ss), reg_bp - 0x12));
-	fprintf(stdout,
+	/* fprintf(stdout,
 	        "Arguments for 172C call: bp-12h: %.4x, di: %.4x - %.4x %.4x %.4x %.4x %.4x %.4x %.4x %.4x %.4x %.4x %.4x %.4x \n",
 	        bp12,
 	        reg_di,
@@ -3834,6 +3834,7 @@ void SIS_LogAnimFrame(Bitu seg, Bitu off)
 	        v10,
 	        v11,
 	        v12);
+			*/
 }
 
 void SIS_HandleAnimFrame(Bitu seg, Bitu off)
@@ -3847,24 +3848,112 @@ void SIS_HandleAnimFrame(Bitu seg, Bitu off)
 	}
 
 	if (off == 0x1615) {
-		fprintf(stdout, "fn00B7_1480: Results of call: %.4x %.4x\n", reg_ax, reg_dx);
+		// fprintf(stdout, "fn00B7_1480: Results of call: %.4x %.4x\n", reg_ax, reg_dx);
 	}
 }
 
 void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 {
+	static bool entered = false;
+	static bool firstReadDone = false;
+	static Bitu readSeg = 0xFFFF;
+	static Bitu readOffMin = 0x0000;
+	static Bitu readOffMax = 0xFFFF;
+	static Bitu mins[10];
+	static Bitu maxs[10];
+	static Bitu segments[10];
+
 	if (!debugLogEnabled[SIS_AnimFrame]) {
 		return;
 	}
-
+	
 	if (seg != 0x01F7) {
 		return;
+	}
+
+	if (off == 0x0ED1) {
+		/* fprintf(stdout,
+		        "0x0ED1: Entered\n"); */
+		entered = true;
+		firstReadDone = false;
+		readSeg = 0xFFFF;
+		readOffMin = 0xFFFF;
+		readOffMax = 0x0000;
+	}
+	if (!entered) {
+		return;
+	}
+	Bitu currSeg = 0x0000;
+	Bitu currOff = 0x0000;
+	if (off == 0x0FC6) {
+		firstReadDone = true;
+		// Clear segments and min max values
+
+
+		currSeg       = SegValue(ds);
+		currOff       = reg_bx + reg_si;
+		/* fprintf(stdout,
+		        "0x0FC6: Reading pixel %.2x from %.4x:%.4x\n",
+					reg_al, SegValue(ds), reg_bx + reg_si 
+		        ); */
+	} else if (off == 0x0FA6) // && !firstReadDone)
+	{
+		firstReadDone = true;
+		/* fprintf(stdout,
+		        "0x0FA6: Reading pixel %.2x from %.4x:%.4x\n",
+		        reg_al,
+		        SegValue(ds),
+		        reg_si); */
+		currSeg = SegValue(ds);
+		currOff = reg_si;
+	}
+	else if (off == 0x0F99)  // && !firstReadDone)
+	{
+		firstReadDone = true;
+		/* fprintf(stdout,
+		        "0x0F99: Reading pixel %.2x from %.4x:%.4x\n",
+		        reg_al,
+		        SegValue(ds),
+		        reg_bx);
+				*/
+		currSeg = SegValue(ds);
+		currOff = reg_bx;
+	} else if (off == 0x1027) {
+		entered = false;
+		fprintf(stdout,
+		        "Reading pixels between %.4x:%.4x and %.4x:%.4x\n",
+		        readSeg,
+				readOffMin,
+				readSeg,
+				readOffMax);
+		return;
+	}
+	else {
+		return;
+	}
+	
+	if (readSeg == 0xFFFF) {
+		readSeg = currSeg;
+	} else {
+		if (!(readSeg == currSeg)) {
+			fprintf(stdout,
+			        "Mismatch in segments %.4x and %.4x.\n",
+			        readSeg,
+			        currSeg);
+		}
+	}
+
+	if (readOffMin > currOff) {
+		readOffMin = currOff;
+	}
+	if (readOffMax < currOff) {
+		readOffMax = currOff;
 	}
 
 	// l00B7_0FA4:
 	// mov	al,[si]
 
-	if (off == 0x0FC9) {
+	/* if (off == 0x0FC9) {
 		// mov es : [di], al
 		fprintf(stdout,
 		        "Writing pixel %.2x to di: %.4x (%.4x:%.4x)\n",
@@ -3873,6 +3962,7 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 		        SegValue(es),
 		        reg_di);
 	}
+	*/
 }
 
 void SIS_HandleSIS(Bitu seg, Bitu off)
