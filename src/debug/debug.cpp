@@ -3852,16 +3852,23 @@ void SIS_HandleAnimFrame(Bitu seg, Bitu off)
 	}
 }
 
+void SIS_PrintMemoryRegion(Bitu startSeg, Bitu startOff, Bitu endOff) {
+	int num_byte_read = endOff - startOff;
+	for (int i = 0; i < num_byte_read; i++) {
+		uint8_t current_byte = mem_readb_inline(GetAddress(startSeg, startOff + i));
+		fprintf(stdout, "%02x", current_byte);
+	}
+}
+
 void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 {
 	static bool entered = false;
 	static bool firstReadDone = false;
-	static Bitu readSeg = 0xFFFF;
-	static Bitu readOffMin = 0x0000;
-	static Bitu readOffMax = 0xFFFF;
-	static Bitu mins[10];
-	static Bitu maxs[10];
-	static Bitu segments[10];
+	constexpr int numSegs = 10;
+	static Bitu mins[numSegs];
+	static Bitu maxs[numSegs];
+	static int counts[numSegs];
+	static Bitu segments[numSegs];
 
 	if (!debugLogEnabled[SIS_AnimFrame]) {
 		return;
@@ -3876,9 +3883,12 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 		        "0x0ED1: Entered\n"); */
 		entered = true;
 		firstReadDone = false;
-		readSeg = 0xFFFF;
-		readOffMin = 0xFFFF;
-		readOffMax = 0x0000;
+		for (int i = 0; i < numSegs; i++) {
+			mins[i] = 0xFFFF;
+			maxs[i] = 0x0000;
+			counts[i] = 0;
+			segments[i] = 0xFFFF;
+		}
 	}
 	if (!entered) {
 		return;
@@ -3887,9 +3897,6 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 	Bitu currOff = 0x0000;
 	if (off == 0x0FC6) {
 		firstReadDone = true;
-		// Clear segments and min max values
-
-
 		currSeg       = SegValue(ds);
 		currOff       = reg_bx + reg_si;
 		/* fprintf(stdout,
@@ -3921,34 +3928,54 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 	} else if (off == 0x1027) {
 		entered = false;
 		fprintf(stdout,
-		        "Reading pixels between %.4x:%.4x and %.4x:%.4x\n",
-		        readSeg,
-				readOffMin,
-				readSeg,
-				readOffMax);
+			"Reading pixels between: \n");
+		for (int i = 0; i < numSegs; i++) {
+			if (segments[i] == 0xFFFF) {
+				break;
+			}
+			fprintf(stdout, "%.4x:%.4x and %.4x:%.4x (%u) - values: \n", 
+				segments[i],
+				mins[i],
+				segments[i],
+				maxs[i],
+				counts[i]				
+				);
+			SIS_PrintMemoryRegion(segments[i], mins[i], maxs[i]);
+		}
+
+		fprintf(stdout, "\n");
 		return;
 	}
 	else {
 		return;
 	}
-	
-	if (readSeg == 0xFFFF) {
-		readSeg = currSeg;
-	} else {
-		if (!(readSeg == currSeg)) {
-			fprintf(stdout,
-			        "Mismatch in segments %.4x and %.4x.\n",
-			        readSeg,
-			        currSeg);
+
+	int s = -1;
+	for (int i = 0; i < numSegs; i++) {
+		if (currSeg == segments[i]) {
+			s = i;
+			break;
+		}
+		if (segments[i] == 0xFFFF) {
+			segments[i] = currSeg;
+			s = i;
+			break;
 		}
 	}
 
-	if (readOffMin > currOff) {
-		readOffMin = currOff;
+	if (s == -1) {
+		fprintf(stdout,
+			"Not enough space!\n");
+		return;
 	}
-	if (readOffMax < currOff) {
-		readOffMax = currOff;
+		
+	if (mins[s] > currOff) {
+		mins[s] = currOff;
 	}
+	if (maxs[s] < currOff) {
+		maxs[s] = currOff;
+	}
+	counts[s]++;
 
 	// l00B7_0FA4:
 	// mov	al,[si]
