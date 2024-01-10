@@ -4011,6 +4011,29 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 	*/
 }
 
+void SIS_HandleMouseCursor(Bitu seg, Bitu off) {
+	//14 is the eye
+	//        ? 15 is the hand 16 is the crosshair 19 is the red cursor 1A is the
+	                  //watch
+	// TODO: Find a nice place or implement some back-off logic
+	if (!(seg == 0x01E7 && off = 0x1234)) {
+		return;
+	}
+	if (!SIS_IsKeyPressed(SDL_SCANCODE_C)) {
+		return;
+	}
+	uint32_t address = GetAddress(0x0227, 0x0774);
+	uint16_t mode = mem_readw_inline(address);
+	mode++;
+	// Switch around back
+	if (mode > 0x16) {
+		mode = 0x13;
+	}
+
+	// Write back
+	mem_writew_inline(address, mode);
+}
+
 void SIS_HandleSIS(Bitu seg, Bitu off)
 {
 	// SIS_Temp_HandleSkipDrawObject(seg, off);
@@ -4018,6 +4041,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleAnimFrame(seg, off);
 	SIS_HandleAnimFramePainting(seg, off);
 	SIS_HandleGameLoad(seg, off);
+	SIS_HandleMouseCursor(seg, off);
 }
 
 bool SIS_ParseCommand(char* found, std::string command)
