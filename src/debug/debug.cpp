@@ -3701,11 +3701,28 @@ void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff)
 	reg_ip = off;
 }
 
+bool SIS_IsKeyPressed(SDL_Scancode scancode)
+{
+	int numkeys;
+	const Uint8* state = SDL_GetKeyboardState(&numkeys);
+	return state[scancode];
+}
+
 void SIS_HandleGameLoad(Bitu seg, Bitu off)
 {
-	static bool triggered = false;
+	static bool rightMouseInjected = false;
+	// Replace with negative value to skip loading a game
+	static int gameToLoad = 2;
+
+	// TODO: Must be close to l0017_0800:
+	bool lPressed = SIS_IsKeyPressed(SDL_SCANCODE_L);
+	if (seg == 0x01D7 && off == 0x800 && lPressed && !rightMouseInjected) {
+		rightMouseInjected = true;
+		// Bit #2 is for the right mouse button
+		reg_ax = 0x2;
+	}
 	// static int hitCounter = 0;
-	if (seg == 0x01D7 && off == 0x09D0) {
+	/* if (seg == 0x01D7 && off == 0x09D0) {
 		// hitCounter++;
 		// if (hitCounter == 1 && !triggered) {
 
@@ -3723,6 +3740,8 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off)
 			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09CB);
 		}
 	}
+
+	*/
 	
 }
 
