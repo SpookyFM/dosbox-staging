@@ -3941,6 +3941,7 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 				counts[i]				
 				);
 			SIS_PrintMemoryRegion(segments[i], mins[i], maxs[i]);
+			fprintf(stdout, "\n");
 		}
 
 		fprintf(stdout, "\n");
