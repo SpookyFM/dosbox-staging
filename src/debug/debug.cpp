@@ -3383,6 +3383,8 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 }
 
 void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
+	static int64_t filterSegment = 0x03E7;
+	
 	if (!isChannelActive("fileread")) {
 		// TODO: Use proper variable
 		return;
@@ -3407,6 +3409,11 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 
 		// This is the command after the INT21
 		uint16_t target_seg = SegValue(ds);
+		if (filterSegment > -1) {
+			if (filterSegment != target_seg) {
+				return;
+			}
+		}
 		uint32_t target_off = reg_dx;
 		uint32_t num_byte_read = reg_ax;
 		fprintf(stdout, "DOS file read from file %u (%s) bytes read %u to address: %.4x:%.4x, caller %.4x:%.4x, values: ", entry, name, num_byte_read, target_seg, target_off, ret_seg, ret_off);
@@ -3701,11 +3708,28 @@ void SIS_Call(Bitu seg, Bitu off, Bitu retSeg, Bitu retOff)
 	reg_ip = off;
 }
 
+bool SIS_IsKeyPressed(SDL_Scancode scancode)
+{
+	int numkeys;
+	const Uint8* state = SDL_GetKeyboardState(&numkeys);
+	return state[scancode];
+}
+
 void SIS_HandleGameLoad(Bitu seg, Bitu off)
 {
-	static bool triggered = false;
+	static bool rightMouseInjected = false;
+	// Replace with negative value to skip loading a game
+	static int gameToLoad = 2;
+
+	// TODO: Must be close to l0017_0800:
+	bool lPressed = SIS_IsKeyPressed(SDL_SCANCODE_L);
+	if (seg == 0x01D7 && off == 0x81A && lPressed && !rightMouseInjected) {
+		rightMouseInjected = true;
+		// Bit #2 is for the right mouse button
+		reg_ax = 0x2;
+	}
 	// static int hitCounter = 0;
-	if (seg == 0x01D7 && off == 0x09D0) {
+	/* if (seg == 0x01D7 && off == 0x09D0) {
 		// hitCounter++;
 		// if (hitCounter == 1 && !triggered) {
 
@@ -3723,6 +3747,8 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off)
 			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09CB);
 		}
 	}
+
+	*/
 	
 }
 
@@ -3993,6 +4019,31 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 	*/
 }
 
+void SIS_HandleMouseCursor(Bitu seg, Bitu off) {
+	//14 is the eye
+	//        ? 15 is the hand 16 is the crosshair 19 is the red cursor 1A is the
+	                  //watch
+	// TODO: Find a nice place or implement some back-off logic
+	// For now using the big "update objects" (?) function
+	if (!(seg == 0x01E7 && off == 0x90A2))
+	{
+		return;
+	}
+	if (!SIS_IsKeyPressed(SDL_SCANCODE_C)) {
+		return;
+	}
+	uint32_t address = GetAddress(0x0227, 0x0774);
+	uint16_t mode = mem_readw_inline(address);
+	mode++;
+	// Switch around back
+	if (mode > 0x16) {
+		mode = 0x13;
+	}
+
+	// Write back
+	mem_writew_inline(address, mode);
+}
+
 void SIS_HandleSIS(Bitu seg, Bitu off)
 {
 	// SIS_Temp_HandleSkipDrawObject(seg, off);
@@ -4000,6 +4051,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleAnimFrame(seg, off);
 	SIS_HandleAnimFramePainting(seg, off);
 	SIS_HandleGameLoad(seg, off);
+	SIS_HandleMouseCursor(seg, off);
 }
 
 bool SIS_ParseCommand(char* found, std::string command)
