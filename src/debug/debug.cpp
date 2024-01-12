@@ -3383,7 +3383,7 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 }
 
 void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
-	static int64_t filterSegment = 0x049F;
+	static int64_t filterSegment = 0x022F;
 	
 	if (!isChannelActive("fileread")) {
 		// TODO: Use proper variable
