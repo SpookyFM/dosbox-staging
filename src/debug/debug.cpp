@@ -4054,6 +4054,13 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleMouseCursor(seg, off);
 }
 
+void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
+	for (int i = 0; i < length; i++) {
+		mem_writeb_inline(GetAddress(seg, off + i), value);
+	}
+}
+
+
 bool SIS_ParseCommand(char* found, std::string command)
 {
 	if (command == "CALLER") {
