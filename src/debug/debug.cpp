@@ -4063,6 +4063,15 @@ void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
 
 bool SIS_ParseCommand(char* found, std::string command)
 {
+	if (command == "WIPE") {
+		// TODO: Expose these parameters
+		// TODO: More output for my own functions
+
+		SIS_WipeMemory(0x1234, 0x1234, 0xFF, 0x00);
+
+		return true;
+	}
+	
 	if (command == "CALLER") {
 		bool all       = !(*found);
 		uint8_t levels = all ? 1 : (uint8_t)GetHexValue(found, found);
