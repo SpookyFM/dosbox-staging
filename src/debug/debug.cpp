@@ -3728,27 +3728,22 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off)
 		// Bit #2 is for the right mouse button
 		reg_ax = 0x2;
 	}
-	// static int hitCounter = 0;
-	/* if (seg == 0x01D7 && off == 0x09D0) {
-		// hitCounter++;
-		// if (hitCounter == 1 && !triggered) {
 
-		int numkeys;
-		const Uint8* state = SDL_GetKeyboardState(&numkeys);
-		if (state[SDL_SCANCODE_L] && !triggered) {
-			triggered = true;
-			SIS_PushWord(0x0002);
-			// TODO: These probably don't matter that much?
-			SIS_PushWord(0x0098);
-			SIS_PushWord(0x003B);
-			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09D0);
-			// This next one at least works, but it still fails since the game is in the wrong state (not the menu state)
-			CPU_CALL(false, 0x01E7, 0x747E, 0x09D0);
-			// SIS_Call(0x01E7, 0x747E, 0x01D7, 0x09CB);
+	if (seg == 0x01D7 && off == 0x09D0) {
+		rightMouseInjected = false;
+		uint16_t menu_mode = mem_readw_inline(GetAddress(0x0227, 0x0FD2));
+		if (menu_mode != 0x04) {
+			return;
 		}
-	}
 
-	*/
+		SIS_PushWord(0x0002);
+		// TODO: These probably don't matter that much?
+		SIS_PushWord(0x0098);
+		SIS_PushWord(0x003B);
+		// This next one at least works, but it still fails since the
+		// game is in the wrong state (not the menu state)
+		CPU_CALL(false, 0x01E7, 0x747E, 0x09D0);
+	}
 	
 }
 
@@ -4060,14 +4055,21 @@ void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
 	}
 }
 
+void SIS_WipeMemoryFromTo(Bitu seg, Bitu off, Bitu off_end, uint8_t value) {
+	Bitu length = off_end - off;
+	SIS_WipeMemory(seg, off, length, value);
+}
+
 
 bool SIS_ParseCommand(char* found, std::string command)
 {
 	if (command == "WIPE") {
 		// TODO: Expose these parameters
 		// TODO: More output for my own functions
-
-		SIS_WipeMemory(0x1234, 0x1234, 0xFF, 0x00);
+		// 0387:0238 and 0387:1f08
+		// 038f:00f8 and 038f:0748
+		SIS_WipeMemoryFromTo(0x0387, 0x0238, 0x1f08, 0x00);
+		SIS_WipeMemoryFromTo(0x038f, 0x00f8, 0x0748, 0x00);
 
 		return true;
 	}
