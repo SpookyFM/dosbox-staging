@@ -3383,7 +3383,7 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 }
 
 void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
-	static int64_t filterSegment = 0x022F;
+	static int64_t filterSegment = 0x03F7;
 	
 	if (!isChannelActive("fileread")) {
 		// TODO: Use proper variable
@@ -3881,6 +3881,31 @@ void SIS_PrintMemoryRegion(Bitu startSeg, Bitu startOff, Bitu endOff) {
 	}
 }
 
+static void SIS_WriteSegRead(Bitu*& reads, int numSegs, Bitu seg)
+{
+	for (int i = 0; i < numSegs; i++) {
+		if (reads[i] == seg) {
+			return;
+		}
+		if (reads[i] == 0x0000) {
+			reads[i] = seg;
+			return;
+		}
+	}
+}
+
+static void SIS_PrintSegReads(Bitu*& reads, int numSegs, const char* name)
+{
+	fprintf(stdout, "%s: ");
+	for (int i = 0; i < numSegs; i++) {
+		if (reads[i] != 0x0000) {
+			fprintf(stdout, "%.4x, ", reads[i]);
+		}
+	}
+	fprintf(stdout, "\n");
+}
+
+
 void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 {
 	static bool entered = false;
@@ -3890,6 +3915,13 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 	static Bitu maxs[numSegs];
 	static int counts[numSegs];
 	static Bitu segments[numSegs];
+
+	static Bitu** segReads = new Bitu*[3];
+	for (int i = 0; i < 3; i++) {
+		segReads[i] = new Bitu[numSegs];
+	}
+
+
 
 	if (!debugLogEnabled[SIS_AnimFrame]) {
 		return;
@@ -3905,6 +3937,9 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 		entered = true;
 		firstReadDone = false;
 		for (int i = 0; i < numSegs; i++) {
+			for (int j = 0; j < 3; j++) {
+				segReads[j][i] = 0x0000;
+			}
 			mins[i] = 0xFFFF;
 			maxs[i] = 0x0000;
 			counts[i] = 0;
@@ -3920,6 +3955,7 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 		firstReadDone = true;
 		currSeg       = SegValue(ds);
 		currOff       = reg_bx + reg_si;
+		SIS_WriteSegRead(segReads[0], numSegs, currSeg);
 		/* fprintf(stdout,
 		        "0x0FC6: Reading pixel %.2x from %.4x:%.4x\n",
 					reg_al, SegValue(ds), reg_bx + reg_si 
@@ -3934,6 +3970,7 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 		        reg_si); */
 		currSeg = SegValue(ds);
 		currOff = reg_si;
+		SIS_WriteSegRead(segReads[1], numSegs, currSeg);
 	}
 	else if (off == 0x0F99)  // && !firstReadDone)
 	{
@@ -3946,6 +3983,7 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 				*/
 		currSeg = SegValue(ds);
 		currOff = reg_bx;
+		SIS_WriteSegRead(segReads[2], numSegs, currSeg);
 	} else if (off == 0x1027) {
 		entered = false;
 		fprintf(stdout,
@@ -3963,6 +4001,11 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 				);
 			SIS_PrintMemoryRegion(segments[i], mins[i], maxs[i]);
 			fprintf(stdout, "\n");
+			fprintf(stdout, "Locations: \n");
+			SIS_PrintSegReads(segReads[0], numSegs, "0x0FC6");
+			SIS_PrintSegReads(segReads[1], numSegs, "0x0FA6");
+			SIS_PrintSegReads(segReads[2], numSegs, "0x0F99");
+
 		}
 
 		fprintf(stdout, "\n");
