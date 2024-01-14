@@ -3896,7 +3896,7 @@ static void SIS_WriteSegRead(Bitu*& reads, int numSegs, Bitu seg)
 
 static void SIS_PrintSegReads(Bitu*& reads, int numSegs, const char* name)
 {
-	fprintf(stdout, "%s: ");
+	fprintf(stdout, "%s: ", name);
 	for (int i = 0; i < numSegs; i++) {
 		if (reads[i] != 0x0000) {
 			fprintf(stdout, "%.4x, ", reads[i]);
@@ -3917,9 +3917,14 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 	static Bitu segments[numSegs];
 
 	static Bitu** segReads = new Bitu*[3];
-	for (int i = 0; i < 3; i++) {
-		segReads[i] = new Bitu[numSegs];
+	static bool initialized = false;
+	if (!initialized) {
+		for (int i = 0; i < 3; i++) {
+			segReads[i] = new Bitu[numSegs];
+		}
+		initialized = true;
 	}
+	
 
 
 
