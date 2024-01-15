@@ -1457,6 +1457,11 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "CLS") {
+		fprintf(stdout, "\e[1;1H\e[2J");
+		return true;
+	}
+
 	if (command == "CHANNEL") {
 		while (*found == ' ') {
 			found++;
