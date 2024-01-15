@@ -2,6 +2,8 @@
 #include "debug.h"
 
 const std::string SIS_AnimFrame("animframe");
+const std::string SIS_OPL("opl");
+const std::string SIS_Palette("palette");
 
 void SIS_Init();
 

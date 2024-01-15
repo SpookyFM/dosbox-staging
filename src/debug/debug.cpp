@@ -3692,6 +3692,8 @@ void SIS_Init()
 	debugLogEnabled["special"]     = false;
 	debugLogEnabled["fileread"]    = false;
 	debugLogEnabled[SIS_AnimFrame] = false;
+	debugLogEnabled[SIS_OPL] = false;
+	debugLogEnabled[SIS_Palette] = false;
 }
 
 void SIS_PushWord(uint16_t value)
@@ -4087,13 +4089,29 @@ void SIS_HandleMouseCursor(Bitu seg, Bitu off) {
 	mem_writew_inline(address, mode);
 }
 
+void SIS_HandleOPL(Bitu seg, Bitu off) {
+	if (!isChannelActive(SIS_OPL)) {
+		return;
+	}
+
+	// First iteration, write out data channel writes to OPL chip, add the caller
+}
+
+void SIS_HandlePalette(Bitu seg, Bitu off) {
+	if (!isChannelActive(SIS_Palette)) {
+		return;
+	}
+
+	// First iteration, write out the index, the color, the CPU cylces and the caller
+}
+
 void SIS_HandleSIS(Bitu seg, Bitu off)
 {
 	// SIS_Temp_HandleSkipDrawObject(seg, off);
 	SIS_LogAnimFrame(seg, off);
 	SIS_HandleAnimFrame(seg, off);
 	SIS_HandleAnimFramePainting(seg, off);
-	SIS_HandleGameLoad(seg, off);
+	// SIS_HandleGameLoad(seg, off);
 	SIS_HandleMouseCursor(seg, off);
 }
 
