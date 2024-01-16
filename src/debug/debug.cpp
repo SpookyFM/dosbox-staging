@@ -1458,7 +1458,7 @@ bool ParseCommand(char* str) {
 	}
 
 	if (command == "CLS") {
-		fprintf(stdout, "\e[1;1H\e[2J");
+		system("CLS");
 		return true;
 	}
 
@@ -4099,13 +4099,125 @@ void SIS_HandleOPL(Bitu seg, Bitu off) {
 		return;
 	}
 
-	// First iteration, write out data channel writes to OPL chip, add the caller
+	// First iteration, write out data channel writes/reads to/from OPL chip, add the caller
+
+
+
+
+	/*
+	
+	fn0017_2792 proc
+	enter	4h,0h
+	mov	al,[bp+8h]
+	mov	dx,388h
+	out	dx,al
+	mov	dl,[bp+6h]
+	mov	al,[bp+8h]
+	xor	ah,ah
+	mov	di,ax
+	mov	[di+229Ch],dl
+	xor	ax,ax
+	mov	[bp-2h],ax
+	jmp	27B5h
+
+l0017_27B2:
+	inc	word ptr [bp-2h]
+
+l0017_27B5:
+	mov	dx,388h
+	in	al,dx
+	mov	[bp-3h],al
+	cmp	word ptr [bp-2h],6h
+	jnz	27B2h
+
+l0017_27C2:
+	mov	al,[bp+6h]
+	mov	dx,389h
+	out	dx,al
+	xor	ax,ax
+	mov	[bp-2h],ax
+	jmp	27D3h
+
+l0017_27D0:
+	inc	word ptr [bp-2h]
+
+l0017_27D3:
+	mov	dx,388h
+	in	al,dx
+	mov	[bp-3h],al
+	cmp	word ptr [bp-2h],24h
+	jnz	27D0h
+	
+	*/
+
+	// TODO: Consider adding entry and leave markers for this and the VGA one
+
+	if(seg != 0x01D7) {
+		return;
+	}
+
+
+	uint32_t ret_seg;
+	uint16_t ret_off;
+	SIS_GetCaller(ret_seg, ret_off);
+
+	if (off == 0x279C || off == 0x27C8) {
+		// Outs
+		fprintf(stdout,
+		        "OPL: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x\n",
+		        reg_al,
+		        reg_dx,
+		        ret_seg,
+		        ret_off,
+		        CPU_Cycles);
+	} else if (off == 0x2789 || off == 0x27D7) {
+		// Ins
+		fprintf(stdout,
+		        "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x - %.8x\n",
+		        reg_al,
+		        reg_dx,
+		        ret_seg,
+		        ret_off,
+		        CPU_Cycles);
+	}
 }
 
 void SIS_HandlePalette(Bitu seg, Bitu off) {
 	if (!isChannelActive(SIS_Palette)) {
 		return;
 	}
+
+	/*
+	l00B7_0156:
+	mov	dx,3C9h
+	lodsb
+	sub	al,bl
+	jnc	0160h
+
+l00B7_015E:
+	xor	al,al
+
+l00B7_0160:
+	out	dx,al
+	*/
+
+	if (!(seg == 0x01F7 && off == 0x0160)) {
+		return;
+	}
+	uint32_t ret_seg;
+	uint16_t ret_off;
+	SIS_GetCaller(ret_seg, ret_off);
+
+	fprintf(stdout,
+	        "VGA: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x\n",
+	        reg_al,
+	        reg_dx,
+	        ret_seg,
+	        ret_off,
+	        CPU_Cycles);
+
+
+
 
 	// First iteration, write out the index, the color, the CPU cylces and the caller
 }
@@ -4118,6 +4230,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleAnimFramePainting(seg, off);
 	// SIS_HandleGameLoad(seg, off);
 	SIS_HandleMouseCursor(seg, off);
+	SIS_HandlePalette(seg, off);
+	SIS_HandleOPL(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4129,6 +4243,27 @@ void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
 void SIS_WipeMemoryFromTo(Bitu seg, Bitu off, Bitu off_end, uint8_t value) {
 	Bitu length = off_end - off;
 	SIS_WipeMemory(seg, off, length, value);
+}
+
+void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*= 1*/) {
+	// At SS:BP, the old stack frame is saved, so we can use this to
+	// walk up
+	// TODO: Only works after enter has been executed
+	uint32_t calleeBP = reg_bp;
+	uint32_t callerBP = mem_readw_inline(
+	        GetAddress(SegValue(ss), calleeBP + 0x00));
+	out_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x02));
+	out_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x04));
+
+	while (num_levels != 1) {
+		// If need be, walk up again the same way we did before,
+		// just that we read the caller's BP from the stack
+		calleeBP = callerBP;
+		callerBP = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x00));
+		out_off = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x02));
+		out_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x04));
+		num_levels--;
+	}
 }
 
 
@@ -4154,23 +4289,9 @@ bool SIS_ParseCommand(char* found, std::string command)
 		uint32_t calleeBP = reg_bp;
 		uint32_t callerBP = mem_readw_inline(
 		        GetAddress(SegValue(ss), calleeBP + 0x00));
-		uint32_t ret_off = mem_readw_inline(
-		        GetAddress(SegValue(ss), calleeBP + 0x02));
-		uint32_t ret_seg = mem_readw_inline(
-		        GetAddress(SegValue(ss), calleeBP + 0x04));
-
-		while (levels != 1) {
-			// If need be, walk up again the same way we did before,
-			// just that we read the caller's BP from the stack
-			calleeBP = callerBP;
-			callerBP = mem_readw_inline(
-			        GetAddress(SegValue(ss), calleeBP + 0x00));
-			ret_off = mem_readw_inline(
-			        GetAddress(SegValue(ss), calleeBP + 0x02));
-			ret_seg = mem_readw_inline(
-			        GetAddress(SegValue(ss), calleeBP + 0x04));
-			levels--;
-		}
+		uint16_t ret_off;
+		uint32_t ret_seg;
+		SIS_GetCaller(ret_seg, ret_off, levels);
 
 		codeViewData.useCS     = ret_seg;
 		codeViewData.useEIP    = ret_off;
