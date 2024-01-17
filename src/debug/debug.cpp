@@ -4169,7 +4169,7 @@ l0017_27D3:
 		        reg_dx,
 		        ret_seg,
 		        ret_off,
-		        CPU_Cycles);
+				cycle_count);
 	} else if (off == 0x2789 || off == 0x27D7) {
 		// Ins
 		fprintf(stdout,
@@ -4178,7 +4178,7 @@ l0017_27D3:
 		        reg_dx,
 		        ret_seg,
 		        ret_off,
-		        CPU_Cycles);
+				cycle_count);
 	}
 }
 
@@ -4214,7 +4214,7 @@ l00B7_0160:
 	        reg_dx,
 	        ret_seg,
 	        ret_off,
-	        CPU_Cycles);
+			cycle_count);
 
 
 
