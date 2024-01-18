@@ -4253,7 +4253,7 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 	uint32_t callerBP = mem_readw_inline(
 	        GetAddress(SegValue(ss), calleeBP + 0x00));
 
-	out_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x02));
+	out_off = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x02));
 	out_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x04));
 
 	while (num_levels != 1) {
