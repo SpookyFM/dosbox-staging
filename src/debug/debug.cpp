@@ -3388,7 +3388,6 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 }
 
 void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
-	static int64_t filterSegment = 0x03F7;
 	
 	if (!isChannelActive("fileread")) {
 		// TODO: Use proper variable
@@ -3414,8 +3413,8 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 
 		// This is the command after the INT21
 		uint16_t target_seg = SegValue(ds);
-		if (filterSegment > -1) {
-			if (filterSegment != target_seg) {
+		if (SIS_filterSegment > -1) {
+			if (SIS_filterSegment != target_seg) {
 				return;
 			}
 		}
@@ -4173,7 +4172,7 @@ l0017_27D3:
 	} else if (off == 0x2789 || off == 0x27D7) {
 		// Ins
 		fprintf(stdout,
-		        "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x - %.8x\n",
+		        "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x - %.8x)\n",
 		        reg_al,
 		        reg_dx,
 		        ret_seg,
@@ -4201,6 +4200,16 @@ l00B7_0160:
 	out	dx,al
 	*/
 
+	if (seg == 0x01F7 && off == 0x012F) {
+		fprintf(stdout,
+		        "VGA: Function entered.\n");
+		return;
+	}
+	if (seg == 0x01F7 && off == 0x01A3) {
+		fprintf(stdout, "VGA: Function left.\n");
+		return;
+	}
+
 	if (!(seg == 0x01F7 && off == 0x0160)) {
 		return;
 	}
@@ -4209,7 +4218,7 @@ l00B7_0160:
 	SIS_GetCaller(ret_seg, ret_off);
 
 	fprintf(stdout,
-	        "VGA: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x\n",
+	        "VGA: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x)\n",
 	        reg_al,
 	        reg_dx,
 	        ret_seg,
@@ -4277,6 +4286,13 @@ bool SIS_ParseCommand(char* found, std::string command)
 		// 038f:00f8 and 038f:0748
 		SIS_WipeMemoryFromTo(0x0387, 0x0238, 0x1f08, 0x00);
 		SIS_WipeMemoryFromTo(0x038f, 0x00f8, 0x0748, 0x00);
+
+		return true;
+	}
+
+	if (command == "FS") {
+		SIS_filterSegment = GetHexValue(found, found);
+		DEBUG_ShowMsg("DEBUG: Setting file read filter segment to %04X\n", SIS_filterSegment);
 
 		return true;
 	}

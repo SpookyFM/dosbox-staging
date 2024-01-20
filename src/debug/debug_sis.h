@@ -5,6 +5,8 @@ const std::string SIS_AnimFrame("animframe");
 const std::string SIS_OPL("opl");
 const std::string SIS_Palette("palette");
 
+int64_t SIS_filterSegment = -1;
+
 void SIS_Init();
 
 
