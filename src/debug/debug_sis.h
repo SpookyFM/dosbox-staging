@@ -4,6 +4,8 @@
 const std::string SIS_AnimFrame("animframe");
 const std::string SIS_OPL("opl");
 const std::string SIS_Palette("palette");
+const std::string SIS_Script("script");
+const std::string SIS_Script_Verbose("script_verbose");
 
 int64_t SIS_filterSegment = -1;
 

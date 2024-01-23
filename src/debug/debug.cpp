@@ -3454,7 +3454,7 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 	}
 }
 void DEBUG_HandleScript(Bitu seg, Bitu off) {
-	if (!isChannelActive("script")) {
+	if (!(isChannelActive(SIS_Script) || isChannelActive(SIS_Script_Verbose))) {
 		return;
 	}
 	if (seg == 0x01D7 && off == 0x082A) {
@@ -3473,7 +3473,16 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	if (off == 0xDB56) {
 		std::chrono::time_point < std::chrono::system_clock > now = std::chrono::system_clock::now();
 		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now - script_last_leave).count();
-		fprintf(stdout, "----- Scripting function entered (%u ms since last leave)\n", milliseconds);
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout,
+			        "----- Scripting function entered (%u ms since last leave)\n",
+			        milliseconds);
+		}
+		else {
+			fprintf(stdout,
+			        "----- Scripting function entered\n",
+			        milliseconds);
+		}
 	}
 	else if (off == 0xDB89) {
 		// Check if we have a valid skip value
@@ -3694,6 +3703,8 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 void SIS_Init()
 {
 	debugLogEnabled["special"]     = false;
+	debugLogEnabled[SIS_Script] = false;
+	debugLogEnabled[SIS_Script_Verbose] = false;
 	debugLogEnabled["fileread"]    = false;
 	debugLogEnabled[SIS_AnimFrame] = false;
 	debugLogEnabled[SIS_OPL] = false;
