@@ -4093,18 +4093,17 @@ void SIS_HandleMouseCursor(Bitu seg, Bitu off) {
 	mem_writew_inline(address, mode);
 }
 
-void SIS_HandleOPL(Bitu seg, Bitu off) {
+void SIS_HandleOPL(Bitu seg, Bitu off)
+{
 	if (!isChannelActive(SIS_OPL)) {
 		return;
 	}
 
-	// First iteration, write out data channel writes/reads to/from OPL chip, add the caller
-
-
-
+	// First iteration, write out data channel writes/reads to/from OPL
+	// chip, add the caller
 
 	/*
-	
+
 	fn0017_2792 proc
 	enter	4h,0h
 	mov	al,[bp+8h]
@@ -4146,15 +4145,14 @@ l0017_27D3:
 	mov	[bp-3h],al
 	cmp	word ptr [bp-2h],24h
 	jnz	27D0h
-	
+
 	*/
 
 	// TODO: Consider adding entry and leave markers for this and the VGA one
 
-	if(seg != 0x01D7) {
+	if (seg != 0x01D7) {
 		return;
 	}
-
 
 	uint32_t ret_seg;
 	uint16_t ret_off;
@@ -4163,22 +4161,18 @@ l0017_27D3:
 	if (off == 0x279C || off == 0x27C8) {
 		// Outs
 		fprintf(stdout,
-		        "OPL: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x\n",
+		        "OPL: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x)\n",
 		        reg_al,
 		        reg_dx,
 		        ret_seg,
 		        ret_off,
-				cycle_count);
-	} else if (off == 0x2789 || off == 0x27D7) {
-		// Ins
-		fprintf(stdout,
-		        "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x - %.8x)\n",
-		        reg_al,
-		        reg_dx,
-		        ret_seg,
-		        ret_off,
-				cycle_count);
-	}
+		        cycle_count);
+	} /* else if (off == 0x2789 || off == 0x27D7) {
+	        // Ins
+	        fprintf(stdout,
+	                "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x -
+	%.8x)\n", reg_al, reg_dx, ret_seg, ret_off, cycle_count);
+	} */
 }
 
 void SIS_HandlePalette(Bitu seg, Bitu off) {
