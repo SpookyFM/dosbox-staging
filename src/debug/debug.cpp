@@ -3488,7 +3488,20 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		// Check if we have a valid skip value
 		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
 		if (script_off_skip_start == script_offset) {
-			fprintf(stdout, "----- Skipping script from %.4x:%.4x to %.4x:%.4x\n", SegValue(ds), script_off_skip_start, SegValue(ds), script_off_skip_end);
+			if (isChannelActive(SIS_Script_Verbose)) {
+				fprintf(stdout,
+				        "----- Skipping script from %.4x:%.4x to %.4x:%.4x\n",
+				        SegValue(ds),
+				        script_off_skip_start,
+				        SegValue(ds),
+				        script_off_skip_end);
+			}
+			else {
+				fprintf(stdout,
+				        "----- Skipping script from %.4x to %.4x\n",
+				        script_off_skip_start,
+				        script_off_skip_end);
+			}
 			mem_writew_inline(GetAddress(SegValue(ds), 0x0F8A), script_off_skip_end);
 		}
 	}
@@ -3499,9 +3512,22 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	if (off == 0x9F17) {
 		// This is the case where we read a byte from the file
 		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
-		fprintf(stdout, "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_al, SegValue(es), reg_di, script_offset, ret_seg, ret_off);
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout, "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_al, SegValue(es), reg_di, script_offset, ret_seg, ret_off);
+		}
+		else {
+			fprintf(stdout,
+			        "Script read (byte): %.2x at location %.4x\n",
+			        reg_al,
+			        script_offset
+				);
+		}
 		if (reg_di - script_last_read_off > 1) {
-			fprintf(stdout, "-- Gap of %u bytes\n", reg_di - script_last_read_off);
+			if (isChannelActive(SIS_Script_Verbose)) {
+				fprintf(stdout,
+				        "-- Gap of %u bytes\n",
+				        reg_di - script_last_read_off);
+			}
 		}
 		script_last_read_off = reg_di + 1;
 	}
@@ -3513,9 +3539,30 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	else if (off == 0x9F40) {
 		// Second stage of a script read for a pointed to value
 		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
-		fprintf(stdout, "Script read (word): %.4x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_ax, script_read_seg, script_read_off, script_offset, ret_seg, ret_off);
+		
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout,
+			        "Script read (word): %.4x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
+			        reg_ax,
+			        script_read_seg,
+			        script_read_off,
+			        script_offset,
+			        ret_seg,
+			        ret_off);
+		}
+		else {
+			fprintf(stdout,
+			        "Script read (word): %.4x at location %.4x\n",
+			        reg_ax,
+			        script_offset
+					);
+		}
 		if (script_read_off - script_last_read_off > 2) {
-			fprintf(stdout, "-- Gap of %u bytes\n", script_read_off - script_last_read_off);
+			if (isChannelActive(SIS_Script_Verbose)) {
+				fprintf(stdout,
+				        "-- Gap of %u bytes\n",
+				        script_read_off - script_last_read_off);
+			}
 		}
 		script_last_read_off = script_read_off + 2;
 	}
@@ -3526,17 +3573,53 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		fprintf(stdout, "- Second block opcode: %.2x\n", reg_al);
 	}
 	else if (off == 0x9F56) {
-		fprintf(stdout, "- 9F4D opcode: %.2x (%.4x:%.4x)\n", reg_al, ret_seg, ret_off);
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout, "- 9F4D opcode: %.2x (%.4x:%.4x)\n", reg_al, ret_seg, ret_off);
+		}
+		else {
+			fprintf(stdout,
+			        "- 9F4D opcode: %.2x\n",
+			        reg_al);
+		}
 	}
 	else if (off == 0xA332) {
-		fprintf(stdout, "- 9F4D results: %.4x %.4x (%.4x:%.4x)\n", reg_ax, reg_dx, ret_seg, ret_off);
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout,
+			        "- 9F4D results: %.4x %.4x (%.4x:%.4x)\n",
+			        reg_ax,
+			        reg_dx,
+			        ret_seg,
+			        ret_off);
+		}
+		else {
+			fprintf(stdout,
+			        "- 9F4D results: %.4x %.4x\n",
+			        reg_ax,
+			        reg_dx);
+		}
 	}
 	else if (off == 0xA417) {
 		// We are skipping bytes using A3D2
 		uint32_t num_bytes = reg_ax;
 		uint16_t opcode1 = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x1));
 		uint16_t skipValue = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x4));
-		fprintf(stdout, "- A3D2 skipping %u bytes for opcode %.2x [%u] (%.4x:%.4x)\n", num_bytes, opcode1, skipValue, ret_seg, ret_off);
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout,
+			        "- A3D2 skipping %u bytes for opcode %.2x [%u] (%.4x:%.4x)\n",
+			        num_bytes,
+			        opcode1,
+			        skipValue,
+			        ret_seg,
+			        ret_off);
+		}
+		else {
+			fprintf(stdout,
+			        "- A3D2 skipping %u bytes for opcode %.2x [%u]\n",
+			        num_bytes,
+			        opcode1,
+			        skipValue
+			);
+		}
 	}
 }
 
