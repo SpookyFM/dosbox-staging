@@ -6,6 +6,8 @@ const std::string SIS_OPL("opl");
 const std::string SIS_Palette("palette");
 const std::string SIS_Script("script");
 const std::string SIS_Script_Verbose("script_verbose");
+const std::string SIS_Pathfinding("pathfinding");
+const std::string SIS_Scaling("scaling");
 
 int64_t SIS_filterSegment = -1;
 
@@ -15,6 +17,10 @@ void SIS_Init();
 // TODO: Move my special handling into this file
 
 bool SIS_IsBreakpoint(Bitu seg, Bitu off);
+
+void SIS_HandleScaling(Bitu seg, Bitu off);
+
+void SIS_HandlePathfinding(Bitu seg, Bitu off);
 
 void SIS_HandleSIS(Bitu seg, Bitu off);
 

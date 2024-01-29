@@ -3792,6 +3792,8 @@ void SIS_Init()
 	debugLogEnabled[SIS_AnimFrame] = false;
 	debugLogEnabled[SIS_OPL] = false;
 	debugLogEnabled[SIS_Palette] = false;
+	debugLogEnabled[SIS_Pathfinding] = false;
+	debugLogEnabled[SIS_Scaling] = false;
 }
 
 void SIS_PushWord(uint16_t value)
@@ -3862,6 +3864,77 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 
 
 	return false;
+}
+
+void SIS_HandleScaling(Bitu seg, Bitu off) {
+	
+	if (!isChannelActive(SIS_Scaling)) {
+		return;
+	}
+	if (seg != 0x01F7) {
+		return;
+	}
+	
+
+	if (off == 0x1027) {
+		// This is where we leave the function
+		debugLogEnabled[SIS_Scaling] = false;
+	}
+	if (off == 0x0FA6) {
+				/*
+		l00B7_0FA4:
+		;; This is the only read that leads to a pixel being drawn
+		mov	al,[si]
+		or	al,al
+		*/
+		fprintf(stdout, "Reading value %.2x from %.4x:%.4x\n", reg_al, SegValue(ds), reg_si);
+	}
+
+	if (off == 0x0FC9) {
+		/*
+		l00B7_0FC9:
+		;; We are copying pixels of the character's animation here
+		;; This is also where a previusly blacked out pixel for hit detection is
+		being written
+		;; again
+		mov	es:[di],al
+		*/
+		fprintf(stdout,
+		        "Writing value %.2x to %.4x:%.4x\n",
+		        reg_al,
+		        SegValue(es),
+		        reg_di);
+	}
+
+	
+
+	
+
+
+
+
+}
+
+void SIS_HandlePathfinding(Bitu seg, Bitu off) {
+	bool isInGameCode = seg == 0x01F7 || seg == 0x01E7 ||
+	                           seg == 0x01D7 || seg == 0x0217;
+	if (!isInGameCode) {
+		return;
+	}
+	// Keep track of any changes to x and y
+	static uint16_t oldX = 0xFFFF;
+	static uint16_t oldY = 0xFFFF;
+	// We just trace any change to find all places where this changes
+	// if (seg == 0x01E7 && off == 0x1F4C && isChannelActive(SIS_Pathfinding)) {
+	if (isChannelActive(SIS_Pathfinding)) {
+		uint16_t x = mem_readw_inline(GetAddress(0x041F, 0x1448));
+		uint16_t y = mem_readw_inline(GetAddress(0x041F, 0x144A));
+		if (oldX != x || oldY != y) {
+			fprintf(stdout, "Pathfinding: Target changed from (%u,%u) to (%u,%u) - %.4x:%.4x\n", oldX, oldY, x, y, seg, off);
+			oldX = x;
+			oldY = y;
+		}
+	}
 }
 
 void SIS_Temp_HandleSkipDrawObject(Bitu seg, Bitu off)
@@ -4329,6 +4402,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleMouseCursor(seg, off);
 	SIS_HandlePalette(seg, off);
 	SIS_HandleOPL(seg, off);
+	SIS_HandlePathfinding(seg, off);
+	SIS_HandleScaling(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
