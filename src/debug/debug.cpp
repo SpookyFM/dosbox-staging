@@ -3389,10 +3389,16 @@ void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
 
 void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 	
+	static uint64_t positions[10];
+
 	if (!isChannelActive("fileread")) {
 		// TODO: Use proper variable
 		return;
 	}
+	if (seg == 0x01E7 && off == 0x068B) {
+		fprintf(stdout, "-- Starting to read an RLE image\n");
+	}
+
 	if (seg != 0x0217) {
 		return;
 	}
@@ -3407,20 +3413,27 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 			return;
 		};
 		const char* name = Files[handle]->GetName();
-
+		
 		uint32_t ret_seg = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x04));
 		uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
 
 		// This is the command after the INT21
 		uint16_t target_seg = SegValue(ds);
+		
+		uint32_t target_off = reg_dx;
+		uint32_t num_byte_read = reg_ax;
+		
+		uint64_t old_pos = positions[entry];
+		positions[entry] += num_byte_read;
+		
+		// Only filtering out here, since we want to be able to catch reads to other segments for keeping track of 
+		// the position in the file
 		if (SIS_filterSegment > -1) {
 			if (SIS_filterSegment != target_seg) {
 				return;
 			}
 		}
-		uint32_t target_off = reg_dx;
-		uint32_t num_byte_read = reg_ax;
-		fprintf(stdout, "DOS file read from file %u (%s) bytes read %u to address: %.4x:%.4x, caller %.4x:%.4x, values: ", entry, name, num_byte_read, target_seg, target_off, ret_seg, ret_off);
+		fprintf(stdout, "DOS file read from file %u (%s, %.8x) bytes read %u to address: %.4x:%.4x, caller %.4x:%.4x, values: ", entry, name, old_pos, num_byte_read, target_seg, target_off, ret_seg, ret_off);
 		for (int i = 0; i < num_byte_read; i++) {
 			uint8_t current_byte = mem_readb_inline(GetAddress(target_seg, target_off + i));
 			fprintf(stdout, "%02x", current_byte);
@@ -3450,7 +3463,8 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 		};
 		const char* name = Files[handle]->GetName();
 		
-		fprintf(stdout, "DOS file seek file %u new position: %.2x%.2x (%s), caller:  %.4x:%.4x\n", handle, msb, lsb, name, ret_seg, ret_off);
+		fprintf(stdout, "DOS file seek file %u new position: %.2x%.2x (%s), caller:  %.4x:%.4x\n", entry, msb, lsb, name, ret_seg, ret_off);
+		positions[entry] = ((uint64_t)msb << 16) + lsb;
 	}
 }
 void DEBUG_HandleScript(Bitu seg, Bitu off) {
