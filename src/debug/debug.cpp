@@ -4406,6 +4406,13 @@ l00B7_0160:
 	// First iteration, write out the index, the color, the CPU cylces and the caller
 }
 
+void SIS_HandleScaleChange(Bitu seg, Bitu off) {
+	if ((seg == 0x01F7) && (off == 0x0ED5)) {
+		// Inject the value
+		mem_writew_inline(GetAddress(SegValue(ss), reg_bp + 0x12), 0x64 * 3);
+	}
+}
+
 void SIS_HandleSIS(Bitu seg, Bitu off)
 {
 	// SIS_Temp_HandleSkipDrawObject(seg, off);
@@ -4418,6 +4425,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandleScaling(seg, off);
+	SIS_HandleScaleChange(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
