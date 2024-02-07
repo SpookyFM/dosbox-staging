@@ -4351,6 +4351,27 @@ l0017_27D3:
 		return;
 	}
 
+	if (off == 0x1B00) {
+		fprintf(stdout, "OPL: Early out at 1B00h?\n");
+		return;
+	}
+
+	if (off == 0x1B0C) {
+		uint16_t v1 = mem_readw_inline(GetAddress(SegValue(ds), 0x2254));
+		uint16_t v2 = mem_readw_inline(GetAddress(SegValue(ds), 0x2256));
+		fprintf(stdout, "OPL: Early out at 1B0Ch? %.4x %.4x\n", v1, v2);
+		return;
+	}
+	
+	if (off == 0x2416) {
+		uint16_t v1 = mem_readw_inline(GetAddress(SegValue(ds), 0x2254));
+		uint16_t v2 = mem_readw_inline(GetAddress(SegValue(ds), 0x2256));
+		fprintf(stdout, "OPL: Loop continuation check %.4x %.4x\n", v1, v2);
+		return;
+	}
+
+
+
 	if (off == 0x1B2E) {
 		fprintf(stdout, "OPL: Reading %.2x from %.4x:%.4x\n", reg_al, SegValue(es), reg_di);
 		return;
