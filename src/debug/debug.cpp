@@ -4335,6 +4335,27 @@ l0017_27D3:
 		return;
 	}
 
+	// Document the interrupt first
+	if (off == 0x1AA7) {
+		fprintf(stdout, "OPL: Interrupt handler 1AA7 entered\n");
+		return;
+	}
+
+	if (off == 0x244C) {
+		fprintf(stdout, "OPL: Interrupt handler 1AA7 left\n");
+		return;
+	}
+
+	if (off == 0x1B6A) {
+		fprintf(stdout, "OPL: Setting [bp-6h] opcode to %.2x\n", reg_al);
+		return;
+	}
+
+	if (off == 0x1B2E) {
+		fprintf(stdout, "OPL: Reading %.2x from %.4x:%.4x\n", reg_al, SegValue(es), reg_di);
+		return;
+	}
+
 	uint32_t ret_seg;
 	uint16_t ret_off;
 	SIS_GetCaller(ret_seg, ret_off);
