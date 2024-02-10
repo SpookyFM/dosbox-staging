@@ -4381,12 +4381,17 @@ l0017_27D3:
 	uint16_t ret_off;
 	SIS_GetCaller(ret_seg, ret_off);
 
-	if (off == 0x279C || off == 0x27C8) {
+	if (off == 0x279C) { // || off == 0x27C8)
+	
+	
+		uint8_t registerIndex = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
+		uint8_t value = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
+			
 		// Outs
 		fprintf(stdout,
-		        "OPL: Write %.2x to port %.4x (caller: %.4x:%.4x - %.8x)\n",
-		        reg_al,
-		        reg_dx,
+		        "OPL: Write %.2x to port %.2x (caller: %.4x:%.4x - %.8x)\n",
+		        registerIndex,
+				value,
 		        ret_seg,
 		        ret_off,
 		        cycle_count);
