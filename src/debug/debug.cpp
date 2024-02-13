@@ -3612,6 +3612,9 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        reg_dx);
 		}
 	}
+	else if (off == 0xA3D2) {
+		fprintf(stdout, "-- Entering A3D2\n");
+	}
 	else if (off == 0xA417) {
 		// We are skipping bytes using A3D2
 		uint32_t num_bytes = reg_ax;
