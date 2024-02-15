@@ -4475,7 +4475,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandleScaling(seg, off);
-	SIS_HandleScaleChange(seg, off);
+	// SIS_HandleScaleChange(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
