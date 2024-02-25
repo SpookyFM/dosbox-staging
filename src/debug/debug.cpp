@@ -4476,6 +4476,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
+	SIS_HandleSkip(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4511,6 +4512,31 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 	}
 }
 
+void SIS_HandleSkip(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	// Read opcode and length
+	// If we have the opcode: Set offset to new value, set instruction pointer to new iteration of
+	// the loop
+
+	// DB9C
+	// Opcode is in al
+	// Length is in mov	[bp-2h],al
+	if (off == 0xDB9C) {
+		uint8_t opcode = reg_al;
+		uint8_t length =  mem_readb_inline(GetAddress(SegValue(ss), reg_bp + -0x02));
+		if (opcode == SIS_skippedOpcode) {
+			// TODO: Check if this does the right thing or maybe some state remains
+			CPU_JMP(false, SegValue(cs), 0xDB73, reg_eip);
+			uint16_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+			// TODO: Confirm length - inclusive or exclusive of two already read values?
+			script_offset += length;
+			mem_writew_inline(GetAddress(SegValue(ds), 0x0F8A), script_offset);
+		}
+	}
+}
+
 
 bool SIS_ParseCommand(char* found, std::string command)
 {
@@ -4531,6 +4557,15 @@ bool SIS_ParseCommand(char* found, std::string command)
 
 		return true;
 	}
+
+	if (command == "SKIP2") {
+		SIS_skippedOpcode = GetHexValue(found, found);
+		DEBUG_ShowMsg("DEBUG: Setting skipped opcode to %02X\n",
+		              SIS_skippedOpcode);
+
+		return true;
+	}
+	
 	
 	if (command == "CALLER") {
 		bool all       = !(*found);

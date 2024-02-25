@@ -154,6 +154,11 @@ Bits CPU_Core_Normal_Run() noexcept
 			FillFlags();
 			return debugCallback;
 		};
+		// TODO (Florian): Adding this to allow the debugger to
+		// overwrite the EIP register to jump around
+		// TODO: Maybe also possible by breaking and resuming in the
+		// debugger code?
+		LOADIP;
 #endif
 		cycle_count++;
 #endif

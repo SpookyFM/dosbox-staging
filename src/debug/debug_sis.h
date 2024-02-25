@@ -10,6 +10,8 @@ const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
 
 int64_t SIS_filterSegment = -1;
+uint16_t SIS_skippedOpcode = -1;
+
 
 void SIS_Init();
 
@@ -27,3 +29,5 @@ void SIS_HandleSIS(Bitu seg, Bitu off);
 bool SIS_ParseCommand(char* found, std::string command);
 
 void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels = 1);
+
+void SIS_HandleSkip(Bitu seg, Bitu off);
