@@ -313,7 +313,7 @@ static std::vector<CDebugVar *> varList = {};
 
 bool skipFirstInstruction = false;
 
-enum EBreakpoint { BKPNT_UNKNOWN, BKPNT_PHYSICAL, BKPNT_INTERRUPT, BKPNT_MEMORY, BKPNT_MEMORY_PROT, BKPNT_MEMORY_LINEAR, BKPNT_REG, BKPNT_RETURN };
+enum EBreakpoint { BKPNT_UNKNOWN, BKPNT_PHYSICAL, BKPNT_INTERRUPT, BKPNT_MEMORY, BKPNT_MEMORY_PROT, BKPNT_MEMORY_LINEAR, BKPNT_REG, BKPNT_RETURN, BKPNT_SO };
 
 #define BPINT_ALL 0x100
 
@@ -364,6 +364,7 @@ public:
 	static CBreakpoint*		AddRegBreakpoint	(uint8_t reg);
 	static CBreakpoint* AddPixelBreakpoint(uint16_t x, uint16_t y);
 	static CBreakpoint* AddBackBufferPixelBreakpoint(uint16_t x, uint16_t y);
+	static CBreakpoint* AddScriptOpcodeBreakpoint(uint8_t opcode);
 	static void				DeactivateBreakpoints();
 	static void				ActivateBreakpoints	();
 	static void				ActivateBreakpointsExceptAt(PhysPt adr);
@@ -546,6 +547,17 @@ CBreakpoint* CBreakpoint::AddBackBufferPixelBreakpoint(uint16_t x, uint16_t y)
 	return CBreakpoint::AddMemBreakpoint(block, 0xc + blockOffset);
 }
 
+CBreakpoint* CBreakpoint::AddScriptOpcodeBreakpoint(uint8_t opcode)
+{
+	auto bp = new CBreakpoint();
+	// Piggybacking on top of the opcode
+	bp->SetRegister(opcode);
+	bp->SetType(BKPNT_SO);
+	bp->SetOnce(false);
+	BPoints.push_front(bp);
+	return bp;
+}
+
 
 
 void CBreakpoint::ActivateBreakpoints()
@@ -667,6 +679,18 @@ bool CBreakpoint::CheckBreakpoint(Bitu seg, Bitu off)
 			}
 		}
 #endif
+		if (bp->GetType() == BKPNT_SO) {
+			if (seg == 0x01E7 && off == 0xDB8E) {
+				if (bp->GetReg() == reg_al) {
+
+					DEBUG_ShowMsg("DEBUG: Script opcode breakpoint %.2x at offset \n",
+				}
+			}
+				    fprintf(stdout,
+				            "- First block opcode: %.2x\n",
+				            reg_al);
+			    })
+		}
 	}
 	return false;
 }
@@ -4584,6 +4608,39 @@ bool SIS_ParseCommand(char* found, std::string command)
 		codeViewData.useEIP    = ret_off;
 		codeViewData.cursorPos = 0;
 
+		return true;
+	}
+
+	if (command == "BPSO") { // Set a breakpoint for a given script opcode
+		return true;
+	}
+
+	if (command == "SLOC") { // Print the current location in the script
+		
+		return true;
+	}
+
+	if (command == "SSM") { // Set memory in the current script
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++;
+		uint32_t ofs = GetHexValue(found, found);
+		found++;
+		uint16_t count = 0;
+		while (*found) {
+			while (*found == ' ') {
+				found++;
+			}
+			if (*found) {
+				uint8_t value = (uint8_t)GetHexValue(found, found);
+				if (*found) {
+					found++;
+				}
+				mem_writeb_checked(GetAddress(seg, ofs + count),
+				                   value);
+				count++;
+			}
+		}
+		DEBUG_ShowMsg("DEBUG: Memory changed.\n");
 		return true;
 	}
 
