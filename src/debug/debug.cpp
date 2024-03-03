@@ -682,14 +682,20 @@ bool CBreakpoint::CheckBreakpoint(Bitu seg, Bitu off)
 		if (bp->GetType() == BKPNT_SO) {
 			if (seg == 0x01E7 && off == 0xDB8E) {
 				if (bp->GetReg() == reg_al) {
-
-					DEBUG_ShowMsg("DEBUG: Script opcode breakpoint %.2x at offset \n",
+					uint16_t script_offset;
+					uint16_t script_seg;
+					uint16_t script_off;
+					SIS_GetScriptInfos(script_offset,
+					                   script_seg,
+					                   script_off);
+					DEBUG_ShowMsg("DEBUG: Script opcode breakpoint %.2x at offset %.4x (%.4x:%.4x)\n",
+					              reg_al,
+					              script_offset,
+					              script_seg,
+					              script_off);
+					return true;
 				}
 			}
-				    fprintf(stdout,
-				            "- First block opcode: %.2x\n",
-				            reg_al);
-			    })
 		}
 	}
 	return false;
@@ -4561,6 +4567,13 @@ void SIS_HandleSkip(Bitu seg, Bitu off) {
 	}
 }
 
+void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
+{
+	script_offset = mem_readw_inline(GetAddress(0x0227, 0x0F8A));
+	seg           = mem_readw_inline(GetAddress(0x0227, 0x0F8C));
+	off           = mem_readw_inline(GetAddress(0x0227, 0x0F8C + 0x2));
+}
+
 
 bool SIS_ParseCommand(char* found, std::string command)
 {
@@ -4612,6 +4625,9 @@ bool SIS_ParseCommand(char* found, std::string command)
 	}
 
 	if (command == "BPSO") { // Set a breakpoint for a given script opcode
+		uint8_t opcode = (uint8_t)GetHexValue(found, found);
+		CBreakpoint::AddScriptOpcodeBreakpoint(opcode);
+		DEBUG_ShowMsg("DEBUG: Set script offset breakpoint for opcode %02X\n", opcode);
 		return true;
 	}
 

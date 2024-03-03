@@ -31,3 +31,5 @@ bool SIS_ParseCommand(char* found, std::string command);
 void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels = 1);
 
 void SIS_HandleSkip(Bitu seg, Bitu off);
+
+void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off);
