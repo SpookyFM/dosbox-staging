@@ -2,5 +2,6 @@
 .vs
 Debug
 Release
+FullRelease
 *.vcxproj.filters
 *.vcxproj.user
