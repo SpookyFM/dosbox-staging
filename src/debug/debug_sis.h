@@ -6,8 +6,16 @@ const std::string SIS_OPL("opl");
 const std::string SIS_Palette("palette");
 const std::string SIS_Script("script");
 const std::string SIS_Script_Verbose("script_verbose");
+const std::string SIS_Script_Minimal("script_minimal");
 const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
+
+inline bool isScriptChannelActive(){
+	
+	return isChannelActive(SIS_Script) ||
+	       isChannelActive(SIS_Script_Minimal) ||
+	       isChannelActive(SIS_Script_Verbose);
+}
 
 int64_t SIS_filterSegment = -1;
 uint16_t SIS_skippedOpcode = -1;

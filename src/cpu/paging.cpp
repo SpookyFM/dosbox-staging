@@ -44,6 +44,8 @@ bool outsideStackWriteBreakpoint;
 bool outsideStackWriteBreakpointHit;
 PhysPt memReadWatch1 = 0xDEADBEEF;
 PhysPt memReadWatch2 = 0xDEADBEEF;
+bool memReadWatchHit1 = false;
+bool memReadWatchHit2  = false;
 PhysPt memReadOverride = 0xFFFFFFFF;
 uint32_t memReadOverrideValue;
 std::vector<memwrite_entry> memwrites;

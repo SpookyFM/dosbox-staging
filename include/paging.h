@@ -338,6 +338,8 @@ static inline PhysPt PAGING_GetPhysicalAddress(PhysPt linAddr) {
 
 extern PhysPt memReadWatch1;
 extern PhysPt memReadWatch2;
+extern bool memReadWatchHit1;
+extern bool memReadWatchHit2;
 
 /* Special inlined memory reading/writing */
 
@@ -353,7 +355,11 @@ static inline uint8_t mem_readb_inline(PhysPt address) {
 	if (address == memReadWatch1 || address == memReadWatch2) {
 		uint16_t seg = SegValue(cs);
 		uint32_t off = reg_eip;
-
+		if (address == memReadWatch1) {
+			memReadWatchHit1 = true;
+		} else {
+			memReadWatchHit2 = true;
+		}
 		wasHit = true;
 	}
 	return result;
@@ -401,6 +407,12 @@ static inline uint16_t mem_readw_inline(PhysPt address) {
 	if (address == memReadWatch1 || address == memReadWatch2) {
 		uint16_t seg = SegValue(cs);
 		uint32_t off = reg_eip;
+
+		if (address == memReadWatch1) {
+			memReadWatchHit1 = true;
+		} else {
+			memReadWatchHit2 = true;
+		}
 
 		wasHit = true;
 	}

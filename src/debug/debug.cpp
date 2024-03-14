@@ -845,6 +845,11 @@ void CBreakpoint::ShowList(void)
 					// TODO: Display the name
 			              bp->GetReg());
 		}
+		else if (bp->GetType() == BKPNT_SO) {
+			DEBUG_ShowMsg("%02X. BPSO %02X\n",
+			              nr,
+			              bp->GetReg());
+		}
 		nr++;
 	}
 }
@@ -1222,6 +1227,8 @@ extern bool outsideStackWriteBreakpoint;
 extern bool outsideStackWriteBreakpointHit;
 extern PhysPt memReadWatch1;
 extern PhysPt memReadWatch2;
+extern bool memReadWatchHit1;
+extern bool memReadWatchHit2;
 extern PhysPt memReadOverride;
 extern uint32_t memReadOverrideValue;
 std::map<std::string, bool> debugLogEnabled;
@@ -3498,7 +3505,7 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 	}
 }
 void DEBUG_HandleScript(Bitu seg, Bitu off) {
-	if (!(isChannelActive(SIS_Script) || isChannelActive(SIS_Script_Verbose))) {
+	if (!isScriptChannelActive()) {
 		return;
 	}
 	if (seg == 0x01D7 && off == 0x082A) {
@@ -3540,7 +3547,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 				        SegValue(ds),
 				        script_off_skip_end);
 			}
-			else {
+			else if (isChannelActive(SIS_Script)) {
 				fprintf(stdout,
 				        "----- Skipping script from %.4x to %.4x\n",
 				        script_off_skip_start,
@@ -3558,8 +3565,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout, "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_al, SegValue(es), reg_di, script_offset, ret_seg, ret_off);
-		}
-		else {
+		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
 			        "Script read (byte): %.2x at location %.4x\n",
 			        reg_al,
@@ -3593,8 +3599,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        script_offset,
 			        ret_seg,
 			        ret_off);
-		}
-		else {
+		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
 			        "Script read (word): %.4x at location %.4x\n",
 			        reg_ax,
@@ -3619,8 +3624,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	else if (off == 0x9F56) {
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout, "- 9F4D opcode: %.2x (%.4x:%.4x)\n", reg_al, ret_seg, ret_off);
-		}
-		else {
+		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
 			        "- 9F4D opcode: %.2x\n",
 			        reg_al);
@@ -3634,8 +3638,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        reg_dx,
 			        ret_seg,
 			        ret_off);
-		}
-		else {
+		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
 			        "- 9F4D results: %.4x %.4x\n",
 			        reg_ax,
@@ -3658,8 +3661,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        skipValue,
 			        ret_seg,
 			        ret_off);
-		}
-		else {
+		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
 			        "- A3D2 skipping %u bytes for opcode %.2x [%u]\n",
 			        num_bytes,
@@ -3903,6 +3905,24 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 	        hitOnce = true;
 	        return true;
 	} */
+	static Bitu memReadWatchSeg = 0x0000;
+	static Bitu memReadWatchOff = 0x0000;
+	if (memReadWatchHit1 || memReadWatchHit2 ) {
+		if (memReadWatchSeg != seg && memReadWatchOff != off) {
+			DEBUG_ShowMsg("DEBUG: Memory read breakpoint hit.\n",
+			              SIS_filterSegment);
+			memReadWatchHit1 = false;
+			memReadWatchHit2 = false;
+			memReadWatchSeg  = seg;
+			memReadWatchOff  = off;
+			return true;
+		}
+	}
+	else {
+		// TODO: Check with full debug if there is a better alternative for this gating
+		memReadWatchSeg = 0x0000;
+		memReadWatchOff = 0x0000;
+	}
 	static bool hitOnce = false;
 	if (seg == 0x01E7 && off == 0x747E && !hitOnce) {
 		hitOnce = true;
