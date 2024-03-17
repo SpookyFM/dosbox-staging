@@ -4527,6 +4527,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
+	SIS_HandleInventoryIcons(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4587,11 +4588,36 @@ void SIS_HandleSkip(Bitu seg, Bitu off) {
 	}
 }
 
+void SIS_HandleInventoryIcons(Bitu seg, Bitu off) {
+	if (!(seg == 0x01E7 && off == 0x3AD8)) {
+		return;
+	}
+
+	fprintf(stdout,
+	        "Inventory Icons: %.4x %.4x %.4x %.4x\n",
+	        SIS_GetLocalWord(0x6),
+	        SIS_GetLocalWord(0x8),
+	        SIS_GetLocalWord(0xA),
+	        SIS_GetLocalWord(0xC)
+		);
+
+}
+
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 {
 	script_offset = mem_readw_inline(GetAddress(0x0227, 0x0F8A));
 	seg           = mem_readw_inline(GetAddress(0x0227, 0x0F8C));
 	off           = mem_readw_inline(GetAddress(0x0227, 0x0F8C + 0x2));
+}
+
+uint16_t SIS_GetLocalWord(Bitu off)
+{
+	return mem_readw_inline(GetAddress(SegValue(ss), reg_bp - off));
+}
+
+uint8_t SIS_GetLocalByte(Bitu off)
+{
+	return mem_readb_inline(GetAddress(SegValue(ss), reg_bp - off));
 }
 
 
