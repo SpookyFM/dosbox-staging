@@ -44,3 +44,9 @@ void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off);
 
 uint16_t SIS_GetLocalWord(Bitu off);
 uint8_t SIS_GetLocalByte(Bitu off);
+
+void SIS_HandleInventoryIcons(Bitu seg, Bitu off);
+
+void SIS_HandleDrawingFunction(Bitu seg, Bitu off);
+
+void SIS_DrawImage(Bitu seg, Bitu off);

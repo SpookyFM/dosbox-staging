@@ -3,7 +3,7 @@
  *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
+ *  it under the terms of the GNU General Public License as published 
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
  *
@@ -1588,6 +1588,11 @@ bool ParseCommand(char* str) {
 
 		return true;
 	}
+	if (command == "DI") {
+		SIS_DrawImage(0x03FF, 0x0C9C);
+		return true;
+	}
+
 	if (command == "BPMOUSE") { // Hacky "mouse press read memory" breakpoint
 		mouseBreakpoint = true;
 		mouseBreakpointHit = false;
@@ -4527,7 +4532,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
-	SIS_HandleInventoryIcons(seg, off);
+	// SIS_HandleInventoryIcons(seg, off);
+	SIS_HandleDrawingFunction(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4603,6 +4609,71 @@ void SIS_HandleInventoryIcons(Bitu seg, Bitu off) {
 
 }
 
+void SIS_HandleDrawingFunction(Bitu seg, Bitu off) {
+	if (!(seg == 0x01F7 && off == 0x0C8C)) {
+		return;
+	}
+	uint32_t caller_seg;
+	uint16_t caller_off;
+	SIS_GetCaller(caller_seg, caller_off);
+
+	fprintf(stdout,
+	        "01F7:088C: %.4x %.4x %.4x %.4x - caller %.4x:%.4x\n",
+	        SIS_GetLocalWord(0x6),
+	        SIS_GetLocalWord(0x8),
+	        SIS_GetLocalWord(0xA),
+	        SIS_GetLocalWord(0xC),
+			caller_seg, caller_off);
+
+}
+
+void SIS_DrawImage(Bitu seg, Bitu off) {
+	
+	constexpr auto palette_map = vga.dac.palette_map;
+	// TODO: Get actual values
+
+	int length = 500;
+	int width  = 50;
+	for (int i = 0; i < length; i++) {
+		uint16_t x = i % width;
+		uint16_t y = i / width;
+
+		const auto graphics_window  = GFX_GetSDLWindow();
+		const auto graphics_surface = SDL_GetWindowSurface(
+			    graphics_window);
+
+		uint32_t value = mem_readb(
+			    GetAddress(seg, off + i));
+		Uint32* target_pixel =
+			    (Uint32*)((Uint8*)graphics_surface->pixels +
+			                2 * y * graphics_surface->pitch +
+			                2 * x * graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+
+		target_pixel =
+			    (Uint32*)((Uint8*)graphics_surface->pixels +
+			                2 * y * graphics_surface->pitch +
+			                2 * x * graphics_surface->format->BytesPerPixel +
+			                graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+
+		target_pixel =
+			    (Uint32*)((Uint8*)graphics_surface->pixels +
+			                2 * y * graphics_surface->pitch +
+			                graphics_surface->pitch +
+			                2 * x * graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+
+		target_pixel =
+			    (Uint32*)((Uint8*)graphics_surface->pixels +
+			                2 * y * graphics_surface->pitch +
+			                graphics_surface->pitch +
+			                2 * x * graphics_surface->format->BytesPerPixel +
+			                graphics_surface->format->BytesPerPixel);
+		*target_pixel = *(palette_map + value);
+	}
+}
+
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 {
 	script_offset = mem_readw_inline(GetAddress(0x0227, 0x0F8A));
@@ -4612,12 +4683,12 @@ void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 
 uint16_t SIS_GetLocalWord(Bitu off)
 {
-	return mem_readw_inline(GetAddress(SegValue(ss), reg_bp - off));
+	return mem_readw_inline(GetAddress(SegValue(ss), reg_bp + off));
 }
 
 uint8_t SIS_GetLocalByte(Bitu off)
 {
-	return mem_readb_inline(GetAddress(SegValue(ss), reg_bp - off));
+	return mem_readb_inline(GetAddress(SegValue(ss), reg_bp + off));
 }
 
 
