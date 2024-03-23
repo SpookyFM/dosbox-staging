@@ -4674,6 +4674,18 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 	}
 }
 
+std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
+{
+	std::vector<std::string> ids;
+	for (int i = 0; i < 100; i++) {
+		ids.push_back("Unknown opcode");
+	}
+	ids[5] = "Test";
+
+
+	return std::string();
+}
+
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 {
 	script_offset = mem_readw_inline(GetAddress(0x0227, 0x0F8A));
