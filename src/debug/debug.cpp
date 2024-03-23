@@ -4632,15 +4632,17 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 	constexpr auto palette_map = vga.dac.palette_map;
 	// TODO: Get actual values
 
+	const auto graphics_window = GFX_GetSDLWindow();
+	const auto graphics_surface = SDL_GetWindowSurface(
+		graphics_window);
+
 	int length = 500;
 	int width  = 50;
 	for (int i = 0; i < length; i++) {
 		uint16_t x = i % width;
 		uint16_t y = i / width;
 
-		const auto graphics_window  = GFX_GetSDLWindow();
-		const auto graphics_surface = SDL_GetWindowSurface(
-			    graphics_window);
+		
 
 		uint32_t value = mem_readb(
 			    GetAddress(seg, off + i));
@@ -4672,6 +4674,12 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 			                graphics_surface->format->BytesPerPixel);
 		*target_pixel = *(palette_map + value);
 	}
+	// Update the surface
+	SDL_UpdateWindowSurface(graphics_window);
+
+	// Focus
+	SDL_RaiseWindow(graphics_window);
+
 }
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
