@@ -19,6 +19,7 @@ inline bool isScriptChannelActive(){
 
 int64_t SIS_filterSegment = -1;
 uint16_t SIS_skippedOpcode = -1;
+uint8_t SIS_currentOpcode1;
 
 
 void SIS_Init();

@@ -58,6 +58,7 @@ using namespace std;
 #include "vga.h"
 #include "std_filesystem.h"
 #include "sdlmain.h"
+#include <SDL2/SDL_syswm.h>
 
 #include "debug_sis.h"
 
@@ -1589,6 +1590,67 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 	if (command == "DI") {
+		DWORD size_pixels = 50 * 50 * 4;
+
+		HGLOBAL hMem = GlobalAlloc(GHND, sizeof(BITMAPV5HEADER) + size_pixels);
+		if (!hMem) {
+			// printErr("Error allocating memory for bitmap data");
+			return false;
+		}
+
+		BITMAPV5HEADER* hdr = (BITMAPV5HEADER*)GlobalLock(hMem);
+		if (!hdr) {
+			// printErr("Error accessing memory for bitmap data");
+			GlobalFree(hMem);
+			return false;
+		}
+		uint16_t img_width  = 50;
+		uint16_t img_height = 50;
+		hdr->bV5Size        = sizeof(BITMAPV5HEADER);
+		hdr->bV5Width       = img_width;
+		hdr->bV5Height      = -img_height;
+		hdr->bV5Planes      = 1;
+		hdr->bV5BitCount    = 32;
+		hdr->bV5Compression = BI_BITFIELDS;
+		hdr->bV5SizeImage   = size_pixels;
+		hdr->bV5RedMask     = 0xff000000;
+		hdr->bV5GreenMask   = 0x00ff0000;
+		hdr->bV5BlueMask    = 0x0000ff00;
+		hdr->bV5AlphaMask   = 0x000000ff;
+
+		// img_pixels_ptr is a unsigned char* to the pixels in
+		// non-planar RGBA format
+		// CopyMemory(hdr + 1, img_pixels_ptr, size_pixels);
+		GlobalUnlock(hMem);
+
+		SDL_SysWMinfo wmInfo;
+		SDL_VERSION(&wmInfo.version);
+		const auto graphics_window = GFX_GetSDLWindow();
+		SDL_GetWindowWMInfo(graphics_window, &wmInfo);
+		HWND hwnd = wmInfo.info.win.window;
+
+		if (!OpenClipboard(hwnd)) {
+			//printErr("Error opening clipboard");
+		} else {
+			if (!EmptyClipboard()) {
+				//printErr("Error emptying clipboard");
+			}
+
+			else if (!SetClipboardData(CF_DIBV5, hMem)) {
+			//printErr("Error setting bitmap on clipboard");
+			}
+
+			else {
+				hMem = NULL; // clipboard now owns the memory
+			}
+
+			CloseClipboard();
+		}
+
+		if (hMem) {
+			GlobalFree(hMem);
+		}
+
 		SIS_DrawImage(0x03FF, 0x0C9C);
 		return true;
 	}
@@ -3564,18 +3626,24 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	else if (off == 0xE3E5) {
 		fprintf(stdout, "----- Scripting function left\n");
 		script_last_leave = std::chrono::system_clock::now();
-	} else
-	if (off == 0x9F17) {
+	} else if (off == 0x9F17) {
 		// This is the case where we read a byte from the file
-		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+		uint32_t script_offset = mem_readw_inline(
+		        GetAddress(SegValue(ds), 0x0F8A));
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout, "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n", reg_al, SegValue(es), reg_di, script_offset, ret_seg, ret_off);
+			fprintf(stdout,
+			        "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
+			        reg_al,
+			        SegValue(es),
+			        reg_di,
+			        script_offset,
+			        ret_seg,
+			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
 			        "Script read (byte): %.2x at location %.4x\n",
 			        reg_al,
-			        script_offset
-				);
+			        script_offset);
 		}
 		if (reg_di - script_last_read_off > 1) {
 			if (isChannelActive(SIS_Script_Verbose)) {
@@ -3585,16 +3653,16 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			}
 		}
 		script_last_read_off = reg_di + 1;
-	}
-	else if (off == 0x9F34) {
-		// First stage of capturing script read: Save the location we are reading from
+	} else if (off == 0x9F34) {
+		// First stage of capturing script read: Save the location we
+		// are reading from
 		script_read_seg = reg_dx;
 		script_read_off = reg_ax;
-	}
-	else if (off == 0x9F40) {
+	} else if (off == 0x9F40) {
 		// Second stage of a script read for a pointed to value
-		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
-		
+		uint32_t script_offset = mem_readw_inline(
+		        GetAddress(SegValue(ds), 0x0F8A));
+
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout,
 			        "Script read (word): %.4x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
@@ -3608,8 +3676,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			fprintf(stdout,
 			        "Script read (word): %.4x at location %.4x\n",
 			        reg_ax,
-			        script_offset
-					);
+			        script_offset);
 		}
 		if (script_read_off - script_last_read_off > 2) {
 			if (isChannelActive(SIS_Script_Verbose)) {
@@ -3619,12 +3686,18 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			}
 		}
 		script_last_read_off = script_read_off + 2;
-	}
-	else if (off == 0xDB8E) {
-		fprintf(stdout, "- First block opcode: %.2x\n", reg_al);
+	} else if (off == 0xDB8E) {
+		SIS_currentOpcode1 = reg_al;
+		std::string opcodeInfo;
+		if (reg_al != 5) {
+			opcodeInfo = SIS_IdentifyScriptOpcode(reg_al, 0);
+		}
+		fprintf(stdout, "- First block opcode: %.2x %s\n", reg_al, opcodeInfo.c_str());
 	}
 	else if (off == 0xDC6B) {
-		fprintf(stdout, "- Second block opcode: %.2x\n", reg_al);
+		std::string opcodeInfo = SIS_IdentifyScriptOpcode(SIS_currentOpcode1,
+		                                                  reg_al);
+		fprintf(stdout, "- Second block opcode: %.2x %s\n", reg_al, opcodeInfo.c_str());
 	}
 	else if (off == 0x9F56) {
 		if (isChannelActive(SIS_Script_Verbose)) {
@@ -4688,7 +4761,8 @@ std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 	for (int i = 0; i < 100; i++) {
 		ids.push_back("Unknown opcode");
 	}
-	ids[5] = "Test";
+	ids[0x15] = "TBC: Start a dialogue";
+	ids[0x16] = "Add a dialogue option";
 
 
 	return std::string();
