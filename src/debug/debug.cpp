@@ -1590,68 +1590,14 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 	if (command == "DI") {
-		DWORD size_pixels = 50 * 50 * 4;
 
-		HGLOBAL hMem = GlobalAlloc(GHND, sizeof(BITMAPV5HEADER) + size_pixels);
-		if (!hMem) {
-			// printErr("Error allocating memory for bitmap data");
-			return false;
-		}
-
-		BITMAPV5HEADER* hdr = (BITMAPV5HEADER*)GlobalLock(hMem);
-		if (!hdr) {
-			// printErr("Error accessing memory for bitmap data");
-			GlobalFree(hMem);
-			return false;
-		}
-		uint16_t img_width  = 50;
-		uint16_t img_height = 50;
-		hdr->bV5Size        = sizeof(BITMAPV5HEADER);
-		hdr->bV5Width       = img_width;
-		hdr->bV5Height      = -img_height;
-		hdr->bV5Planes      = 1;
-		hdr->bV5BitCount    = 32;
-		hdr->bV5Compression = BI_BITFIELDS;
-		hdr->bV5SizeImage   = size_pixels;
-		hdr->bV5RedMask     = 0xff000000;
-		hdr->bV5GreenMask   = 0x00ff0000;
-		hdr->bV5BlueMask    = 0x0000ff00;
-		hdr->bV5AlphaMask   = 0x000000ff;
-
-		// img_pixels_ptr is a unsigned char* to the pixels in
-		// non-planar RGBA format
-		// CopyMemory(hdr + 1, img_pixels_ptr, size_pixels);
-		GlobalUnlock(hMem);
-
-		SDL_SysWMinfo wmInfo;
-		SDL_VERSION(&wmInfo.version);
-		const auto graphics_window = GFX_GetSDLWindow();
-		SDL_GetWindowWMInfo(graphics_window, &wmInfo);
-		HWND hwnd = wmInfo.info.win.window;
-
-		if (!OpenClipboard(hwnd)) {
-			//printErr("Error opening clipboard");
-		} else {
-			if (!EmptyClipboard()) {
-				//printErr("Error emptying clipboard");
-			}
-
-			else if (!SetClipboardData(CF_DIBV5, hMem)) {
-			//printErr("Error setting bitmap on clipboard");
-			}
-
-			else {
-				hMem = NULL; // clipboard now owns the memory
-			}
-
-			CloseClipboard();
-		}
-
-		if (hMem) {
-			GlobalFree(hMem);
-		}
-
-		SIS_DrawImage(0x03FF, 0x0C9C);
+		uint16_t img_width;
+		uint16_t img_height;
+		uint8_t* pixels;
+		SIS_ReadImageToPixels(0x3FF, 0x0C9C, img_width, img_height, pixels);
+		SIS_CopyImageToClipboard(img_width, img_height, pixels);
+		delete[] pixels;
+		
 		return true;
 	}
 
@@ -4766,6 +4712,60 @@ std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 
 
 	return std::string();
+}
+
+void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
+{
+	// COLORREF* colors = new COLORREF[width * height];
+
+	// Create bitmap
+	HBITMAP hBitmap = CreateBitmap(width, height, 1, 32, (void*)pixels);
+
+	// delete[] colors;
+	SDL_SysWMinfo wmInfo;
+	SDL_VERSION(&wmInfo.version);
+	const auto graphics_window = GFX_GetSDLWindow();
+	SDL_GetWindowWMInfo(graphics_window, &wmInfo);
+	HWND hwnd = wmInfo.info.win.window;
+
+	if (!OpenClipboard(hwnd)) {
+		DEBUG_ShowMsg("DEBUG: Error opening clipboard\n");
+	} else {
+		if (!EmptyClipboard()) {
+			DEBUG_ShowMsg("DEBUG: Error emptying clipboard\n");
+		}
+
+		else if (!SetClipboardData(CF_BITMAP, hBitmap)) {
+			DEBUG_ShowMsg("DEBUG: Error setting bitmap on clipboard\n");
+		}
+
+		// else
+		//     hMem = NULL; // clipboard now owns the memory
+
+		CloseClipboard();
+	}
+
+
+}
+
+void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width,
+                           uint16_t& height, uint8_t*& pixels)
+{
+	width = mem_readw_inline(GetAddress(seg, off + 0x2));
+	height = mem_readw_inline(GetAddress(seg, off + 0x4));
+	uint16_t size_pixels = width * height * 4;
+	pixels               = new uint8_t[size_pixels];
+
+	constexpr auto palette_map = vga.dac.palette_map;
+	uint32_t* cur = (uint32_t*) pixels;
+	for (int i = 0; i < size_pixels / 4; i++) {
+		uint8_t value = mem_readb_inline(GetAddress(seg, off + 0x06 + i));
+		uint32_t result = palette_map[value];
+		if (value != 0) {
+			result |= 0xFF000000;
+		}
+		cur[i] = result;
+	}
 }
 
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
