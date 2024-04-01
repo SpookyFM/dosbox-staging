@@ -4552,7 +4552,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
 	// SIS_HandleInventoryIcons(seg, off);
-	SIS_HandleDrawingFunction(seg, off);
+	// SIS_HandleDrawingFunction(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4703,15 +4703,29 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 {
+	// TODO: Initialize in a central space
+	// TODO: Clean up based on how the function actually works
+	// We handle it this way:
+	// ids has all opcodes for 1-4 and 6-end
+	// second_ids has those for the combination 5-1 through 5-6
 	std::vector<std::string> ids;
+	std::vector<std::string> second_ids;
 	for (int i = 0; i < 100; i++) {
 		ids.push_back("Unknown opcode");
+		second_ids.push_back("Unknown opcode");
 	}
 	ids[0x15] = "TBC: Start a dialogue";
 	ids[0x16] = "Add a dialogue option";
 
-
-	return std::string();
+	if (opcode != 0x05) {
+		return ids[opcode];
+	}
+	else if (opcode2 <= 0x06) {
+		return second_ids[opcode2];
+	}
+	else {
+		return ids[opcode];
+	}
 }
 
 void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
