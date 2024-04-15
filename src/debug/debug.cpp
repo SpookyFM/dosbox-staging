@@ -1594,7 +1594,11 @@ bool ParseCommand(char* str) {
 		uint16_t img_width;
 		uint16_t img_height;
 		uint8_t* pixels;
-		SIS_ReadImageToPixels(0x3FF, 0x0C9C, img_width, img_height, pixels);
+		uint16_t seg = (uint16_t)GetHexValue(found, found);
+		found++; // skip ":"
+		uint32_t ofs = GetHexValue(found, found);
+
+		SIS_ReadImageToPixels(seg, ofs, img_width, img_height, pixels);
 		SIS_CopyImageToClipboard(img_width, img_height, pixels);
 		delete[] pixels;
 		
@@ -4553,6 +4557,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleSkip(seg, off);
 	// SIS_HandleInventoryIcons(seg, off);
 	// SIS_HandleDrawingFunction(seg, off);
+	// SIS_HandleDataLoadvFunction(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4643,6 +4648,38 @@ void SIS_HandleDrawingFunction(Bitu seg, Bitu off) {
 	        SIS_GetLocalWord(0xA),
 	        SIS_GetLocalWord(0xC),
 			caller_seg, caller_off);
+
+}
+
+void SIS_HandleDataLoadFunction(Bitu seg, Bitu off) {
+	static uint16_t length;
+	if (seg == 0x01E7 && off == 0x0ACC) {
+		// Read the length
+		length = mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x04));
+		return;
+	}
+	if (seg == 0x01E7 && off == 0x0AD5) {
+		
+		fprintf(stdout,
+		        "01E7:0ACC: es:[di+4h]: %.4x - loaded to %.4x:%.4x\n",
+		        length,
+				reg_ax,
+				reg_dx);
+		return;
+	}
+	
+	if (!(seg == 0x01E7 && off == 0x0A3E)) {
+		return;
+	}
+	uint32_t caller_seg;
+	uint16_t caller_off;
+	SIS_GetCaller(caller_seg, caller_off);
+
+	fprintf(stdout,
+	        "01E7:0A3E: [bp-3h]: %.4x %.4x\n",
+	        SIS_GetLocalWord(0x6),
+	        SIS_GetLocalWord(-0x3)
+	);
 
 }
 
@@ -4765,15 +4802,15 @@ void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
 void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width,
                            uint16_t& height, uint8_t*& pixels)
 {
-	width = mem_readw_inline(GetAddress(seg, off + 0x2));
-	height = mem_readw_inline(GetAddress(seg, off + 0x4));
+	width = mem_readw_inline(GetAddress(seg, off + 0x0));
+	height = mem_readw_inline(GetAddress(seg, off + 0x2));
 	uint16_t size_pixels = width * height * 4;
 	pixels               = new uint8_t[size_pixels];
 
 	constexpr auto palette_map = vga.dac.palette_map;
 	uint32_t* cur = (uint32_t*) pixels;
 	for (int i = 0; i < size_pixels / 4; i++) {
-		uint8_t value = mem_readb_inline(GetAddress(seg, off + 0x06 + i));
+		uint8_t value = mem_readb_inline(GetAddress(seg, off + 0x04 + i));
 		uint32_t result = palette_map[value];
 		if (value != 0) {
 			result |= 0xFF000000;
