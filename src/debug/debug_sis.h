@@ -55,6 +55,7 @@ void SIS_HandleDataLoadFunction(Bitu seg, Bitu off);
 void SIS_DrawImage(Bitu seg, Bitu off);
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2);
+std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value);
 
 void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels);
 

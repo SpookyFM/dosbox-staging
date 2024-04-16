@@ -4751,8 +4751,18 @@ std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 		ids.push_back("Unknown opcode");
 		second_ids.push_back("Unknown opcode");
 	}
-	ids[0x15] = "TBC: Start a dialogue";
+	second_ids[0x1] = "Skip if two times 9F4D results differ";
+
+	ids[0x04] = "Skip if any 9F4D result is non-zero";
+	ids[0x0B] = "Load and place object in scene";
+	ids[0x0D] = "Simple speech act";
+	ids[0x0F] = "Wait for specific duration";
+	ids[0x10] = "Move to target location";
+	ids[0x11] = "Wait for object to reach target location";
+	ids[0x12] = "First guess: Adjustment to pathfinding information";
+	ids[0x15] = "TBC: Start a set of dialogue option";
 	ids[0x16] = "Add a dialogue option";
+	ids[0x18] = "Skip to end of script";
 
 	if (opcode != 0x05) {
 		return ids[opcode];
@@ -4763,6 +4773,11 @@ std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 	else {
 		return ids[opcode];
 	}
+}
+
+std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value)
+{
+	return std::string();
 }
 
 void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
