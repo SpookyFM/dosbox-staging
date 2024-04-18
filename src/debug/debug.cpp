@@ -3649,13 +3649,25 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		                                                  reg_al);
 		fprintf(stdout, "- Second block opcode: %.2x %s\n", reg_al, opcodeInfo.c_str());
 	}
-	else if (off == 0x9F56) {
+	else if (off == 0x9F5E) {
+		uint8_t opcode = SIS_GetLocalByte(-0x5);
+		uint16_t value = reg_ax;
+		std::string opcodeInfo =
+		        SIS_IdentifyHelperOpcode(opcode, value);
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout, "- 9F4D opcode: %.2x (%.4x:%.4x)\n", reg_al, ret_seg, ret_off);
+			fprintf(stdout,
+			        "- 9F4D opcode: %.2x %.4x %s (%.4x:%.4x)\n",
+			        opcode,
+			        value,
+			        opcodeInfo.c_str(),
+					ret_seg,
+			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
-			        "- 9F4D opcode: %.2x\n",
-			        reg_al);
+			        "- 9F4D opcode: %.2x %.4x %s\n",
+			        opcode,
+			        value,
+			        opcodeInfo.c_str());
 		}
 	}
 	else if (off == 0xA332) {
@@ -4777,7 +4789,44 @@ std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 
 std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value)
 {
-	return std::string();
+	// Opcode is [bp-5h]
+	// Value is [bp-7h]
+	
+	if (opcode == 0x00) {
+		return "Return the constant read value";
+	}
+
+	// l0037_9F72:
+	if (opcode > 0) {
+		// l0037_9F78:
+		if (opcode < 0xFF) {
+			// TODO: This still feels off since it should not be
+			// possible
+			if ((value < 1) || (value > 0x800)) {
+				return "Unknown opcode - value combination";
+			} else {
+				return "Read and return value of script variable";
+			}
+		}
+	}
+	// l0037_9FAE:
+	if (opcode != 0xFF) {
+		return "Unknown opcode - value combination";
+	}
+	// We are starting to execute opcode FFh here
+	// l0037_9FB7:
+	if (value == 0x1) {
+		// l0037_9FBF:
+		// TODO: Does the output depend on the mouse mode?
+		return "TBC: Return interacted object - also true for all modes?";
+		// l0037_A050:
+	} else if (value == 0x4) {
+		// TODO: What's the difference to 0x27?
+		return "TBC: Result of running 101D on the character's position";
+	} else if (value == 0x7) {
+		return "Unknown opcode - value combination";
+	}
+	return "Unknown opcode - value combination";
 }
 
 void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
