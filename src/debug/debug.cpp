@@ -4823,8 +4823,13 @@ std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value)
 	} else if (value == 0x4) {
 		// TODO: What's the difference to 0x27?
 		return "TBC: Result of running 101D on the character's position";
-	} else if (value == 0x7) {
+	} else if (value == 0x6) {
+		return "Return constant 1 0";
+	} 
+	else if (value == 0x7) {
 		return "Unknown opcode - value combination";
+	} else if (value == 0x2F) {
+		return "Return current scene index in first result";
 	}
 	return "Unknown opcode - value combination";
 }
