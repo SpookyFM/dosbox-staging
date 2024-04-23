@@ -4828,9 +4828,14 @@ std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value)
 	} 
 	else if (value == 0x7) {
 		return "Unknown opcode - value combination";
-	} else if (value == 0x2F) {
-		return "Return current scene index in first result";
+	} else if (value == 0x0b) {
+		return "Return value of [1012h] global";
+	} else if (value == 0x26) {
+		return "Return value of [1014h] global";
 	}
+	else if (value == 0x2F) {
+		return "Return current scene index in first result";
+	} 
 	return "Unknown opcode - value combination";
 }
 
