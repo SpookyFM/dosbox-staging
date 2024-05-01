@@ -4570,6 +4570,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleInventoryIcons(seg, off);
 	// SIS_HandleDrawingFunction(seg, off);
 	// SIS_HandleDataLoadvFunction(seg, off);
+	SIS_HandleBlobLoading(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4692,6 +4693,24 @@ void SIS_HandleDataLoadFunction(Bitu seg, Bitu off) {
 	        SIS_GetLocalWord(0x6),
 	        SIS_GetLocalWord(-0x3)
 	);
+
+}
+
+void SIS_HandleBlobLoading(Bitu seg, Bitu off) {
+	if (seg == 0x01E7 && off == 0x08F0) {
+		// The index of the object lives in bp+6h at this point
+		uint32_t objectIndex = SIS_GetLocalWord(+0x6);
+		fprintf(stdout,
+		        "01E7:08A0: Object index = %.4x\n",
+		       objectIndex);
+		return;
+	}
+	if (seg == 0x01E7 && off == 0x0A3E) {
+		uint32_t blobIndex = SIS_GetLocalWord(-0x3);
+		fprintf(stdout, "01E7:0A3E: Blob index = %.4x\n", blobIndex);
+		return;
+	
+	}
 
 }
 

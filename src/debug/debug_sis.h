@@ -52,6 +52,8 @@ void SIS_HandleDrawingFunction(Bitu seg, Bitu off);
 
 void SIS_HandleDataLoadFunction(Bitu seg, Bitu off);
 
+void SIS_HandleBlobLoading(Bitu seg, Bitu off);
+
 void SIS_DrawImage(Bitu seg, Bitu off);
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2);
