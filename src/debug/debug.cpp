@@ -3525,6 +3525,16 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	if (!isScriptChannelActive()) {
 		return;
 	}
+
+	if (seg == 0x01E7 && off == 0xE4BF) {
+		uint16_t objectIndex = mem_readw_inline(GetAddress(0x0227, 0x0F92));
+		fprintf(stdout,
+		        "----- Switching execution to script for object: %.4x\n",
+		        objectIndex);
+		return;
+	}
+
+
 	if (seg == 0x01D7 && off == 0x082A) {
 		fprintf(stdout, "*** Mouse press ***\n");
 		return;
@@ -4570,7 +4580,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleInventoryIcons(seg, off);
 	// SIS_HandleDrawingFunction(seg, off);
 	// SIS_HandleDataLoadvFunction(seg, off);
-	SIS_HandleBlobLoading(seg, off);
+	// SIS_HandleBlobLoading(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
