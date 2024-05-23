@@ -1,0 +1,3 @@
+[submodule "src/debug/SIS_OpcodeID"]
+	path = src/debug/SIS_OpcodeID
+	url = https://github.com/SpookyFM/SIS_OpcodeID.git

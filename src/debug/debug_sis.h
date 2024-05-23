@@ -9,6 +9,7 @@ const std::string SIS_Script_Verbose("script_verbose");
 const std::string SIS_Script_Minimal("script_minimal");
 const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
+const std::string SIS_RLE("rle");
 
 inline bool isScriptChannelActive(){
 	
@@ -54,7 +55,13 @@ void SIS_HandleDataLoadFunction(Bitu seg, Bitu off);
 
 void SIS_HandleBlobLoading(Bitu seg, Bitu off);
 
+void SIS_HandleRLEDecoding(Bitu seg, Bitu off);
+
+void SIS_HandlePaletteChange(Bitu seg, Bitu off);
+
 void SIS_DrawImage(Bitu seg, Bitu off);
+
+void SIS_DumpPalette();
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2);
 std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value);

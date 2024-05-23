@@ -1605,6 +1605,11 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "DP") {
+		SIS_DumpPalette();
+		return true;
+	}
+
 	if (command == "BPMOUSE") { // Hacky "mouse press read memory" breakpoint
 		mouseBreakpoint = true;
 		mouseBreakpointHit = false;
@@ -3893,6 +3898,7 @@ void SIS_Init()
 	debugLogEnabled[SIS_Palette] = false;
 	debugLogEnabled[SIS_Pathfinding] = false;
 	debugLogEnabled[SIS_Scaling] = false;
+	debugLogEnabled[SIS_RLE] = false;
 }
 
 void SIS_PushWord(uint16_t value)
@@ -4581,6 +4587,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleDrawingFunction(seg, off);
 	// SIS_HandleDataLoadvFunction(seg, off);
 	// SIS_HandleBlobLoading(seg, off);
+	SIS_HandleRLEDecoding(seg, off);
+	SIS_HandlePaletteChange(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4724,6 +4732,60 @@ void SIS_HandleBlobLoading(Bitu seg, Bitu off) {
 
 }
 
+void SIS_HandleRLEDecoding(Bitu seg, Bitu off) {
+	
+	if (!isChannelActive(SIS_RLE)) {
+		return;
+	}
+
+	static FILE* fp = fopen("rle_out.txt", "w");
+
+	if (seg != 0x01E7) {
+		return;
+	}
+
+	if (off == 0x06C9) {
+		uint16_t numRow = SIS_GetLocalWord(-0x2);
+		// TODO: No idea why the offset is so different between the deassembly
+		// and the runtime
+		uint16_t length = SIS_GetLocalWord(-0x0325);
+		fprintf(fp, "RLE: Row %.4x with %.4x bytes of data.\n", numRow, length);
+		return;
+	}
+
+	if (off == 0x06FC) {
+		uint8_t value = reg_al;
+		uint16_t remainingData = reg_bx;
+		fprintf(fp, "RLE: Literal pixel %.2x, remaining row data %.4x bytes.\n", value, remainingData);
+		return;
+	}
+	
+	if (off == 0x0706) {
+		uint8_t numReps = reg_cl;
+		uint8_t value = reg_al;
+		uint16_t remainingData = reg_bx;
+		fprintf(fp,
+		        "RLE: Encoded pixel %.2x for %.2x reps, remaining row data %.4x bytes.\n",
+		        value,
+				numReps,
+		        remainingData);
+		return;
+	}
+}
+
+void SIS_HandlePaletteChange(Bitu seg, Bitu off) {
+	if (!(seg == 0x01F7 && off == 0x0139)) {
+		return;
+	}
+	uint16_t p1 = SIS_GetLocalWord(+0x0C);
+	uint16_t p2 = SIS_GetLocalWord(+0x0E);
+	uint32_t callerSeg;
+	uint16_t callerOff;
+	SIS_GetCaller(callerSeg, callerOff);
+
+	fprintf(stdout, "Setting palette from %.4x:%.4x, caller %.4x:%.4x\n", p1, p2, callerSeg, callerOff);
+}
+
 void SIS_DrawImage(Bitu seg, Bitu off) {
 	
 	constexpr auto palette_map = vga.dac.palette_map;
@@ -4777,6 +4839,14 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 	// Focus
 	SDL_RaiseWindow(graphics_window);
 
+}
+
+void SIS_DumpPalette() {
+	constexpr auto palette = vga.dac.palette_map;
+	for (int i = 0; i < 256; i++) {
+		uint32_t currentEntry = palette[i];
+		fprintf(stdout, "Palette color %u: %.4x\n", i, currentEntry);
+	}
 }
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
