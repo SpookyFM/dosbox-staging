@@ -860,6 +860,9 @@
     <ClCompile Include="..\src\debug\debug_sis.cpp">
       <Filter>src\debug</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\debug\SIS_OpcodeID\sis_opcode.cpp">
+      <Filter>src\debug\SIS_OpcodeID</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\audio_frame.h">
@@ -1430,6 +1433,9 @@
     <ClInclude Include="..\src\debug\debug_sis.h">
       <Filter>src\debug</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\debug\SIS_OpcodeID\sis_opcode.h">
+      <Filter>src\debug\SIS_OpcodeID</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\winres.rc">
@@ -1564,6 +1570,9 @@
     </Filter>
     <Filter Include="src\libs\zmbv">
       <UniqueIdentifier>{99b19861-c042-4e3e-bf24-ee8a418866f6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\debug\SIS_OpcodeID">
+      <UniqueIdentifier>{cd2b43d1-0a75-425d-b5e9-2ec1a1c3a9b8}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

@@ -59,6 +59,7 @@ using namespace std;
 #include "std_filesystem.h"
 #include "sdlmain.h"
 #include <SDL2/SDL_syswm.h>
+#include "SIS_OpcodeID/sis_opcode.h"
 
 #include "debug_sis.h"
 
@@ -4851,6 +4852,8 @@ void SIS_DumpPalette() {
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 {
+	// TODO: Remove source code below when everything works
+	return SIS_OpcodeID::IdentifyScriptOpcode(opcode, opcode2);
 	// TODO: Initialize in a central space
 	// TODO: Clean up based on how the function actually works
 	// We handle it this way:
@@ -4888,6 +4891,8 @@ std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
 
 std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value)
 {
+	// TODO: Remove source code below when everything works
+	return SIS_OpcodeID::IdentifyHelperOpcode(opcode, value);
 	// Opcode is [bp-5h]
 	// Value is [bp-7h]
 	
