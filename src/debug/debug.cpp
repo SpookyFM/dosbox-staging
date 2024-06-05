@@ -3527,7 +3527,8 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 		positions[entry] = ((uint64_t)msb << 16) + lsb;
 	}
 }
-void DEBUG_HandleScript(Bitu seg, Bitu off) {
+void DEBUG_HandleScript(Bitu seg, Bitu off)
+{
 	if (!isScriptChannelActive()) {
 		return;
 	}
@@ -3540,12 +3541,10 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		return;
 	}
 
-
 	if (seg == 0x01D7 && off == 0x082A) {
 		fprintf(stdout, "*** Mouse press ***\n");
 		return;
 	}
-
 
 	if (seg != 0x01E7) {
 		return;
@@ -3555,22 +3554,24 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 	uint32_t ret_off = mem_readw_inline(GetAddress(SegValue(ss), reg_bp + 0x02));
 
 	if (off == 0xDB56) {
-		std::chrono::time_point < std::chrono::system_clock > now = std::chrono::system_clock::now();
-		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now - script_last_leave).count();
+		std::chrono::time_point<std::chrono::system_clock> now =
+		        std::chrono::system_clock::now();
+		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+		                            now - script_last_leave)
+		                            .count();
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout,
 			        "----- Scripting function entered (%u ms since last leave)\n",
 			        milliseconds);
-		}
-		else {
+		} else {
 			fprintf(stdout,
 			        "----- Scripting function entered\n",
 			        milliseconds);
 		}
-	}
-	else if (off == 0xDB89) {
+	} else if (off == 0xDB89) {
 		// Check if we have a valid skip value
-		uint32_t script_offset = mem_readw_inline(GetAddress(SegValue(ds), 0x0F8A));
+		uint32_t script_offset = mem_readw_inline(
+		        GetAddress(SegValue(ds), 0x0F8A));
 		if (script_off_skip_start == script_offset) {
 			if (isChannelActive(SIS_Script_Verbose)) {
 				fprintf(stdout,
@@ -3579,17 +3580,16 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 				        script_off_skip_start,
 				        SegValue(ds),
 				        script_off_skip_end);
-			}
-			else if (isChannelActive(SIS_Script)) {
+			} else if (isChannelActive(SIS_Script)) {
 				fprintf(stdout,
 				        "----- Skipping script from %.4x to %.4x\n",
 				        script_off_skip_start,
 				        script_off_skip_end);
 			}
-			mem_writew_inline(GetAddress(SegValue(ds), 0x0F8A), script_off_skip_end);
+			mem_writew_inline(GetAddress(SegValue(ds), 0x0F8A),
+			                  script_off_skip_end);
 		}
-	}
-	else if (off == 0xE3E5) {
+	} else if (off == 0xE3E5) {
 		fprintf(stdout, "----- Scripting function left\n");
 		script_last_leave = std::chrono::system_clock::now();
 	} else if (off == 0x9F17) {
@@ -3605,7 +3605,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        script_offset,
 			        ret_seg,
 			        ret_off);
-		} else if (isChannelActive(SIS_Script)) {
+		} else if (isChannelActive(SIS_Script) && !SIS_ScriptIsSkipping) {
 			fprintf(stdout,
 			        "Script read (byte): %.2x at location %.4x\n",
 			        reg_al,
@@ -3658,25 +3658,28 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 		if (reg_al != 5) {
 			opcodeInfo = SIS_IdentifyScriptOpcode(reg_al, 0);
 		}
-		fprintf(stdout, "- First block opcode: %.2x %s\n", reg_al, opcodeInfo.c_str());
-	}
-	else if (off == 0xDC6B) {
+		fprintf(stdout,
+		        "- First block opcode: %.2x %s\n",
+		        reg_al,
+		        opcodeInfo.c_str());
+	} else if (off == 0xDC6B) {
 		std::string opcodeInfo = SIS_IdentifyScriptOpcode(SIS_currentOpcode1,
 		                                                  reg_al);
-		fprintf(stdout, "- Second block opcode: %.2x %s\n", reg_al, opcodeInfo.c_str());
-	}
-	else if (off == 0x9F5E) {
+		fprintf(stdout,
+		        "- Second block opcode: %.2x %s\n",
+		        reg_al,
+		        opcodeInfo.c_str());
+	} else if (off == 0x9F5E) {
 		uint8_t opcode = SIS_GetLocalByte(-0x5);
 		uint16_t value = reg_ax;
-		std::string opcodeInfo =
-		        SIS_IdentifyHelperOpcode(opcode, value);
+		std::string opcodeInfo = SIS_IdentifyHelperOpcode(opcode, value);
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout,
 			        "- 9F4D opcode: %.2x %.4x %s (%.4x:%.4x)\n",
 			        opcode,
 			        value,
 			        opcodeInfo.c_str(),
-					ret_seg,
+			        ret_seg,
 			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
 			fprintf(stdout,
@@ -3685,8 +3688,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        value,
 			        opcodeInfo.c_str());
 		}
-	}
-	else if (off == 0xA332) {
+	} else if (off == 0xA332) {
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout,
 			        "- 9F4D results: %.4x %.4x (%.4x:%.4x)\n",
@@ -3695,20 +3697,22 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        ret_seg,
 			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
-			fprintf(stdout,
-			        "- 9F4D results: %.4x %.4x\n",
-			        reg_ax,
-			        reg_dx);
+			fprintf(stdout, "- 9F4D results: %.4x %.4x\n", reg_ax, reg_dx);
 		}
-	}
-	else if (off == 0xA3D2) {
-		fprintf(stdout, "-- Entering A3D2\n");
-	}
-	else if (off == 0xA417) {
+	} else if (off == 0xA3D2) {
+		SIS_ScriptIsSkipping = true;
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout, "-- Entering A3D2\n");
+		} else {
+			fprintf(stdout, "-- Skipping using A3D2\n");
+		}
+	} else if (off == 0xA417) {
 		// We are skipping bytes using A3D2
 		uint32_t num_bytes = reg_ax;
-		uint16_t opcode1 = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x1));
-		uint16_t skipValue = mem_readb_inline(GetAddress(SegValue(ss), reg_bp - 0x4));
+		uint16_t opcode1   = mem_readb_inline(
+                        GetAddress(SegValue(ss), reg_bp - 0x1));
+		uint16_t skipValue = mem_readb_inline(
+		        GetAddress(SegValue(ss), reg_bp - 0x4));
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout,
 			        "- A3D2 skipping %u bytes for opcode %.2x [%u] (%.4x:%.4x)\n",
@@ -3717,13 +3721,16 @@ void DEBUG_HandleScript(Bitu seg, Bitu off) {
 			        skipValue,
 			        ret_seg,
 			        ret_off);
-		} else if (isChannelActive(SIS_Script)) {
-			fprintf(stdout,
-			        "- A3D2 skipping %u bytes for opcode %.2x [%u]\n",
-			        num_bytes,
-			        opcode1,
-			        skipValue
-			);
+		} /* else if (isChannelActive(SIS_Script)) {
+		        fprintf(stdout,
+		                "- A3D2 skipping %u bytes for opcode %.2x
+		[%u]\n", num_bytes, opcode1, skipValue
+		        );
+		}*/
+	} else if (off == 0xA437) {
+		SIS_ScriptIsSkipping = false;
+		if (isChannelActive(SIS_Script_Verbose)) {
+			fprintf(stdout, "-- Leaving A3D2\n");
 		}
 	}
 }

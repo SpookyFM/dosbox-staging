@@ -6,6 +6,7 @@ const std::string SIS_OPL("opl");
 const std::string SIS_Palette("palette");
 const std::string SIS_Script("script");
 const std::string SIS_Script_Verbose("script_verbose");
+// TODO: Consider removing since I'm not using it
 const std::string SIS_Script_Minimal("script_minimal");
 const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
@@ -21,6 +22,8 @@ inline bool isScriptChannelActive(){
 int64_t SIS_filterSegment = -1;
 uint16_t SIS_skippedOpcode = -1;
 uint8_t SIS_currentOpcode1;
+
+bool SIS_ScriptIsSkipping = false;
 
 
 void SIS_Init();
