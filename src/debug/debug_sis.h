@@ -71,4 +71,17 @@ std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value);
 
 void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels);
 
+void SIS_HandleCharacterPos(Bitu seg, Bitu off);
+
+bool bgOriginalSaved;
+uint32_t bgOriginalSeg;
+uint16_t bgOriginalOff;
+
+uint16_t lastChangedMapLocalOffset;
+uint32_t lastChangedMapSeg;
+uint16_t lastChangedMapOff;
+
+void SIS_ChangeMapPointerToBackground(uint16_t localOffset);
+void SIS_ResetBackground();
+
 void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width, uint16_t& height, uint8_t*& pixels);

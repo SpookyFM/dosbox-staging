@@ -4597,6 +4597,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleBlobLoading(seg, off);
 	SIS_HandleRLEDecoding(seg, off);
 	SIS_HandlePaletteChange(seg, off);
+	SIS_HandleCharacterPos(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4984,6 +4985,41 @@ void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
 
 }
 
+void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
+	// TODO: Load the character data, read the x and y and mark some pixels there
+	/*
+		;; Note: This addresses the data of an object, e.g. the protagonist living at 03E7:078C
+	mov	di,[bp-2h]
+	shl	di,2h
+	les	di,[di+77Ch]
+	*/
+}
+
+void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
+	// TODO: Handle scene changes? Probably no need, will reset during loading
+	// but might stay persistently
+
+	// Load the scene data
+	// Save the original background (if not already changed)
+	// Load the pointer from the local offset
+	// Overwrite the background image pointer with the pointer
+
+	// Current scene data access - example pathfinding map
+
+	/*
+		les	di,[0778h]
+
+	mov	ax,es:[di+2017h]
+	mov	dx,es:[di+2019h]
+	*/
+
+
+}
+
+void SIS_ResetBackground() {
+	// TODO: Use the saved background to reset it
+}
+
 void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width,
                            uint16_t& height, uint8_t*& pixels)
 {
@@ -5104,6 +5140,22 @@ bool SIS_ParseCommand(char* found, std::string command)
 			}
 		}
 		DEBUG_ShowMsg("DEBUG: Memory changed.\n");
+		return true;
+	}
+
+	if (command == "BGC") { // Change the background image pointer
+		uint16_t localOffset = (uint16_t)GetHexValue(found, found);
+		SIS_ChangeMapPointerToBackground(localOffset);
+		DEBUG_ShowMsg("DEBUG: Changed background image to map with offset %.4x.\n", localOffset);
+
+		return true;
+	}
+
+	if (command == "BGR") { // Change the background back to the original
+		
+		SIS_ResetBackground();
+		DEBUG_ShowMsg("DEBUG: Reset background image.\n");
+
 		return true;
 	}
 
