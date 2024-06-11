@@ -4598,6 +4598,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleRLEDecoding(seg, off);
 	SIS_HandlePaletteChange(seg, off);
 	SIS_HandleCharacterPos(seg, off);
+	SIS_HandleStopWalking(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4632,6 +4633,15 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 		num_levels--;
 	}
 }
+
+void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
+{
+	outSeg = mem_readw_inline(GetAddress(seg, off));
+	outOff = mem_readw_inline(GetAddress(seg, off+4));
+}
+
+void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff)
+{}
 
 void SIS_HandleSkip(Bitu seg, Bitu off) {
 	if (seg != 0x01E7) {
@@ -4793,6 +4803,29 @@ void SIS_HandlePaletteChange(Bitu seg, Bitu off) {
 	SIS_GetCaller(callerSeg, callerOff);
 
 	fprintf(stdout, "Setting palette from %.4x:%.4x, caller %.4x:%.4x\n", p1, p2, callerSeg, callerOff);
+}
+
+void SIS_HandleStopWalking(Bitu seg, Bitu off) {
+	if (!seg == 0x01E7) {
+		return;
+	}
+	switch (off) {
+		case 0x1966: fprintf(stdout, "Entering 1966\n"); break;
+	case 0x1F40:
+		{		uint16_t posX = mem_readw_inline(
+		                GetAddress(SegValue(es), reg_di));
+		        fprintf(stdout, "Decreasing x position %.4x\n", posX);
+	}
+
+			break;
+	    case 0x2317: fprintf(stdout, "Setting [1020] to true\n"); break;
+	}
+	// fn0037_1966 proc: Function start
+	
+	// l0037_1F40: Decrease the x
+
+	// l0037_2317: Setting 1020 to true
+
 }
 
 void SIS_DrawImage(Bitu seg, Bitu off) {
@@ -4987,6 +5020,15 @@ void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
 
 void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	// TODO: Load the character data, read the x and y and mark some pixels there
+	uint32_t charSeg;
+	uint16_t charOff;
+	// TODO: Check if I maybe got the 32bit segment wrong
+	SIS_ReadAddress(0x0227, 0x077C, charSeg, charOff);
+	uint16_t charX = mem_readw_inline(GetAddress(charSeg, charOff));
+	uint16_t charY = mem_readw_inline(GetAddress(charSeg, charOff + 2));
+
+	// TODO: Find a good place (after character drawing)
+	// Write at least one pixel for the position (maybe a cross)
 	/*
 		;; Note: This addresses the data of an object, e.g. the protagonist living at 03E7:078C
 	mov	di,[bp-2h]
@@ -5000,7 +5042,23 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 	// but might stay persistently
 
 	// Load the scene data
+	uint32_t sceneSeg;
+	uint16_t sceneOff;
+	// TODO: Check if I maybe got the 32bit segment wrong
+	SIS_ReadAddress(0x0227, 0x0778, sceneSeg, sceneOff);
 	// Save the original background (if not already changed)
+	if (localOffset == 0) {
+		// We want to reset the background
+		// TODO: Implement this edge case
+	}
+	if (!bgOriginalChanged) {
+		bgOriginalChanged = true;
+		SIS_ReadAddress(0x227, 0x778 + 0x00, bgOriginalSeg, bgOriginalOff);
+	}
+
+	
+	
+
 	// Load the pointer from the local offset
 	// Overwrite the background image pointer with the pointer
 

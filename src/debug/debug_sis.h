@@ -43,6 +43,9 @@ bool SIS_ParseCommand(char* found, std::string command);
 
 void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels = 1);
 
+void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff);
+void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff);
+
 void SIS_HandleSkip(Bitu seg, Bitu off);
 
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off);
@@ -62,6 +65,8 @@ void SIS_HandleRLEDecoding(Bitu seg, Bitu off);
 
 void SIS_HandlePaletteChange(Bitu seg, Bitu off);
 
+void SIS_HandleStopWalking(Bitu seg, Bitu off);
+
 void SIS_DrawImage(Bitu seg, Bitu off);
 
 void SIS_DumpPalette();
@@ -73,7 +78,7 @@ void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels);
 
 void SIS_HandleCharacterPos(Bitu seg, Bitu off);
 
-bool bgOriginalSaved;
+bool bgOriginalChanged;
 uint32_t bgOriginalSeg;
 uint16_t bgOriginalOff;
 
