@@ -50,8 +50,8 @@ void SIS_HandleSkip(Bitu seg, Bitu off);
 
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off);
 
-uint16_t SIS_GetLocalWord(Bitu off);
-uint8_t SIS_GetLocalByte(Bitu off);
+uint16_t SIS_GetLocalWord(int16_t off);
+uint8_t SIS_GetLocalByte(int16_t off);
 
 void SIS_HandleInventoryIcons(Bitu seg, Bitu off);
 
@@ -90,3 +90,5 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset);
 void SIS_ResetBackground();
 
 void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width, uint16_t& height, uint8_t*& pixels);
+
+void SIS_HandleCharacterDrawing(Bitu seg, Bitu off);

@@ -4598,7 +4598,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleRLEDecoding(seg, off);
 	SIS_HandlePaletteChange(seg, off);
 	SIS_HandleCharacterPos(seg, off);
-	SIS_HandleStopWalking(seg, off);
+	// SIS_HandleStopWalking(seg, off);
+	SIS_HandleCharacterDrawing(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4637,7 +4638,7 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
 {
 	outSeg = mem_readw_inline(GetAddress(seg, off));
-	outOff = mem_readw_inline(GetAddress(seg, off+4));
+	outOff = mem_readw_inline(GetAddress(seg, off+2));
 }
 
 void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff)
@@ -5019,6 +5020,13 @@ void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
 }
 
 void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	if (off != 0x1B8F) {
+		return;
+	}
+
 	// TODO: Load the character data, read the x and y and mark some pixels there
 	uint32_t charSeg;
 	uint16_t charOff;
@@ -5026,6 +5034,8 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	SIS_ReadAddress(0x0227, 0x077C, charSeg, charOff);
 	uint16_t charX = mem_readw_inline(GetAddress(charSeg, charOff));
 	uint16_t charY = mem_readw_inline(GetAddress(charSeg, charOff + 2));
+
+	mem_writeb_inline(GetAddress(0xA000, charY * 320 + charX), 0xFF); 
 
 	// TODO: Find a good place (after character drawing)
 	// Write at least one pixel for the position (maybe a cross)
@@ -5053,10 +5063,13 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 	}
 	if (!bgOriginalChanged) {
 		bgOriginalChanged = true;
-		SIS_ReadAddress(0x227, 0x778 + 0x00, bgOriginalSeg, bgOriginalOff);
+		SIS_ReadAddress(sceneSeg, sceneOff + 0x00, bgOriginalSeg, bgOriginalOff);
 	}
 
-	
+	uint32_t newSeg;
+	uint16_t newOff;
+	SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
+	SIS_WriteAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
 	
 
 	// Load the pointer from the local offset
@@ -5076,6 +5089,15 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 
 void SIS_ResetBackground() {
 	// TODO: Use the saved background to reset it
+	if (!bgOriginalChanged) {
+		return;
+	}
+	
+	uint32_t sceneSeg;
+	uint16_t sceneOff;
+	// TODO: Check if I maybe got the 32bit segment wrong
+	SIS_ReadAddress(0x0227, 0x0778, sceneSeg, sceneOff);
+	SIS_WriteAddress(sceneSeg, sceneOff + 0x0, bgOriginalSeg, bgOriginalOff);
 }
 
 void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width,
@@ -5098,6 +5120,33 @@ void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width,
 	}
 }
 
+void SIS_HandleCharacterDrawing(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	
+	switch (off) {
+	case 0x92E5: fprintf(stdout, "Starting loop at 92E5\n");
+		break;
+	case 0x92ED: {
+		uint16_t i = SIS_GetLocalWord(-0x0A);
+		fprintf(stdout, "Loop iteration with counter %.4x\n", i);
+	} break;
+	case 0x958F: {
+		uint16_t value = SIS_GetLocalWord(-0x12);
+
+		uint32_t currentSeg;
+		uint16_t currentOff;
+		SIS_ReadAddress(SegValue(es), reg_di + 0x2C, currentSeg, currentOff);
+		fprintf(stdout,
+		        "Setting pointer for local variable %.4x to %.4x:%.4x\n",
+		        value,
+		        currentSeg,
+		        currentOff);
+	} break;
+	}
+}
+
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 {
 	script_offset = mem_readw_inline(GetAddress(0x0227, 0x0F8A));
@@ -5105,12 +5154,12 @@ void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 	off           = mem_readw_inline(GetAddress(0x0227, 0x0F8C + 0x2));
 }
 
-uint16_t SIS_GetLocalWord(Bitu off)
+uint16_t SIS_GetLocalWord(int16_t off)
 {
 	return mem_readw_inline(GetAddress(SegValue(ss), reg_bp + off));
 }
 
-uint8_t SIS_GetLocalByte(Bitu off)
+uint8_t SIS_GetLocalByte(int16_t off)
 {
 	return mem_readb_inline(GetAddress(SegValue(ss), reg_bp + off));
 }
