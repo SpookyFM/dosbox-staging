@@ -4642,7 +4642,10 @@ void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& out
 }
 
 void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff)
-{}
+{
+	mem_writew_inline(GetAddress(seg, off), outSeg);
+	mem_writew_inline(GetAddress(seg, off + 2), outOff);
+}
 
 void SIS_HandleSkip(Bitu seg, Bitu off) {
 	if (seg != 0x01E7) {
@@ -5069,7 +5072,7 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 	uint32_t newSeg;
 	uint16_t newOff;
 	SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
-	SIS_WriteAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
+	SIS_WriteAddress(sceneSeg, sceneOff + 0x00, newSeg, newOff);
 	
 
 	// Load the pointer from the local offset
