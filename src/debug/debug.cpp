@@ -4599,7 +4599,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandlePaletteChange(seg, off);
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
-	SIS_HandleCharacterDrawing(seg, off);
+	// SIS_HandleCharacterDrawing(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4637,14 +4637,14 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
 {
-	outSeg = mem_readw_inline(GetAddress(seg, off));
-	outOff = mem_readw_inline(GetAddress(seg, off+2));
+	outSeg = mem_readw_inline(GetAddress(seg, off+2));
+	outOff = mem_readw_inline(GetAddress(seg, off));
 }
 
 void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff)
 {
-	mem_writew_inline(GetAddress(seg, off), outSeg);
-	mem_writew_inline(GetAddress(seg, off + 2), outOff);
+	mem_writew_inline(GetAddress(seg, off+2), outSeg);
+	mem_writew_inline(GetAddress(seg, off), outOff);
 }
 
 void SIS_HandleSkip(Bitu seg, Bitu off) {
@@ -5030,13 +5030,12 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 		return;
 	}
 
-	// TODO: Load the character data, read the x and y and mark some pixels there
-	uint32_t charSeg;
-	uint16_t charOff;
-	// TODO: Check if I maybe got the 32bit segment wrong
-	SIS_ReadAddress(0x0227, 0x077C, charSeg, charOff);
-	uint16_t charX = mem_readw_inline(GetAddress(charSeg, charOff));
-	uint16_t charY = mem_readw_inline(GetAddress(charSeg, charOff + 2));
+	uint32_t protSeg;
+	uint16_t protOff;
+	// We shift left by 2 = *4
+	SIS_ReadAddress(0x227, 0x77C + 0x1 * 4, protSeg, protOff);
+	uint16_t charX = mem_readw_inline(GetAddress(protSeg, protOff + 0x0));
+	uint16_t charY = mem_readw_inline(GetAddress(protSeg, protOff + 0x2));
 
 	mem_writeb_inline(GetAddress(0xA000, charY * 320 + charX), 0xFF); 
 
@@ -5071,9 +5070,12 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 
 	uint32_t newSeg;
 	uint16_t newOff;
-	SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
-	SIS_WriteAddress(sceneSeg, sceneOff + 0x00, newSeg, newOff);
+
 	
+	SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
+	// SIS_WriteAddress(sceneSeg, sceneOff + 0x00, newSeg, newOff);
+	mem_writew_inline(GetAddress(0x0227, 0x0760), newSeg);
+	mem_writew_inline(GetAddress(0x0227, 0x075E), newOff);
 
 	// Load the pointer from the local offset
 	// Overwrite the background image pointer with the pointer
