@@ -4637,14 +4637,14 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
 {
-	outSeg = mem_readw_inline(GetAddress(seg, off+2));
-	outOff = mem_readw_inline(GetAddress(seg, off));
+	outSeg = mem_readw_inline(GetAddress(seg, off));
+	outOff = mem_readw_inline(GetAddress(seg, off+2));
 }
 
 void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff)
 {
-	mem_writew_inline(GetAddress(seg, off+2), outSeg);
-	mem_writew_inline(GetAddress(seg, off), outOff);
+	mem_writew_inline(GetAddress(seg, off), outSeg);
+	mem_writew_inline(GetAddress(seg, off+2), outOff);
 }
 
 void SIS_HandleSkip(Bitu seg, Bitu off) {
@@ -5065,7 +5065,7 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 	}
 	if (!bgOriginalChanged) {
 		bgOriginalChanged = true;
-		SIS_ReadAddress(sceneSeg, sceneOff + 0x00, bgOriginalSeg, bgOriginalOff);
+		SIS_ReadAddress(sceneSeg, sceneOff + 0x1 * 0x4, bgOriginalSeg, bgOriginalOff);
 	}
 
 	uint32_t newSeg;
@@ -5073,9 +5073,17 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 
 	
 	SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
+	for (int y = 0; y != 240; y++) {
+		for (int x = 0; x != 320; x++) {
+		
+			uint8_t value = mem_readb_inline(
+			        GetAddress(newSeg, newOff + 320 * y + x));
+			mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
+		}
+	}
 	// SIS_WriteAddress(sceneSeg, sceneOff + 0x00, newSeg, newOff);
-	mem_writew_inline(GetAddress(0x0227, 0x0760), newSeg);
-	mem_writew_inline(GetAddress(0x0227, 0x075E), newOff);
+	// mem_writew_inline(GetAddress(0x0227, 0x0770), newSeg);
+	// mem_writew_inline(GetAddress(0x0227, 0x0772), newOff);
 
 	// Load the pointer from the local offset
 	// Overwrite the background image pointer with the pointer
