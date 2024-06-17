@@ -5022,6 +5022,10 @@ void SIS_CopyImageToClipboard(uint16_t width, uint16_t height, uint8_t* pixels)
 
 }
 
+uint16_t lastFramePosX;
+uint16_t lastFramePosY;
+uint8_t lastFrameColor;
+
 void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	if (seg != 0x01E7) {
 		return;
@@ -5030,12 +5034,19 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 		return;
 	}
 
+	// Reset the last frame's pixel
+	mem_writeb_inline(GetAddress(0xA000, lastFramePosY * 320 + lastFramePosX), lastFrameColor);
+
 	uint32_t protSeg;
 	uint16_t protOff;
 	// We shift left by 2 = *4
 	SIS_ReadAddress(0x227, 0x77C + 0x1 * 4, protSeg, protOff);
 	uint16_t charX = mem_readw_inline(GetAddress(protSeg, protOff + 0x0));
 	uint16_t charY = mem_readw_inline(GetAddress(protSeg, protOff + 0x2));
+	
+	lastFramePosX = charX;
+	lastFramePosY = charY;
+	lastFrameColor = mem_readb_inline(GetAddress(0xA000, charY * 320 + charX));
 
 	mem_writeb_inline(GetAddress(0xA000, charY * 320 + charX), 0xFF); 
 
@@ -5082,7 +5093,8 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 		
 			uint8_t value = mem_readb_inline(
 			        GetAddress(rowSeg, rowOff + x));
-			mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
+			// mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
+			mem_writeb_inline(GetAddress(0xA000, 320 * y + x), 0x00);
 		}
 	}
 	// SIS_WriteAddress(sceneSeg, sceneOff + 0x00, newSeg, newOff);
