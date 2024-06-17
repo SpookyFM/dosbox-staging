@@ -4637,14 +4637,14 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
 {
-	outSeg = mem_readw_inline(GetAddress(seg, off));
-	outOff = mem_readw_inline(GetAddress(seg, off+2));
+	outSeg = mem_readw_inline(GetAddress(seg, off+2));
+	outOff = mem_readw_inline(GetAddress(seg, off));
 }
 
 void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outOff)
 {
-	mem_writew_inline(GetAddress(seg, off), outSeg);
-	mem_writew_inline(GetAddress(seg, off+2), outOff);
+	mem_writew_inline(GetAddress(seg, off+2), outSeg);
+	mem_writew_inline(GetAddress(seg, off), outOff);
 }
 
 void SIS_HandleSkip(Bitu seg, Bitu off) {
@@ -5068,16 +5068,20 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 		SIS_ReadAddress(sceneSeg, sceneOff + 0x1 * 0x4, bgOriginalSeg, bgOriginalOff);
 	}
 
-	uint32_t newSeg;
-	uint16_t newOff;
+	// uint32_t newSeg;
+	// uint16_t newOff;
 
 	
-	SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
+	// SIS_ReadAddress(sceneSeg, sceneOff + localOffset, newSeg, newOff);
 	for (int y = 0; y != 240; y++) {
+		// TODO: Make a pointer struct or check if there is one already
+		uint32_t rowSeg;
+		uint16_t rowOff;
+		SIS_ReadAddress(sceneSeg, sceneOff + localOffset + y * 0x4, rowSeg, rowOff);
 		for (int x = 0; x != 320; x++) {
 		
 			uint8_t value = mem_readb_inline(
-			        GetAddress(newSeg, newOff + 320 * y + x));
+			        GetAddress(rowSeg, rowOff + x));
 			mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
 		}
 	}
