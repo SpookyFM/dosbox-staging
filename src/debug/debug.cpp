@@ -3559,14 +3559,19 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 		                            now - script_last_leave)
 		                            .count();
+		uint16_t currentSceneID = mem_readw_inline(GetAddress(0x0227, 0x077C));
+		uint16_t global1012 = mem_readw_inline(GetAddress(0x0227, 0x1012));
+		uint16_t global1014 = mem_readw_inline(GetAddress(0x0227, 0x1014));
 		if (isChannelActive(SIS_Script_Verbose)) {
 			fprintf(stdout,
-			        "----- Scripting function entered (%u ms since last leave)\n",
-			        milliseconds);
+			        "----- Scripting function entered - scene: %.2x 1012: %.2x 1014: %.2x (%u ms since last leave)\n",
+			        currentSceneID, global1012, global1014, milliseconds);
 		} else {
 			fprintf(stdout,
-			        "----- Scripting function entered\n",
-			        milliseconds);
+			        "----- Scripting function entered - scene: %.2x 1014: %.2x 1012: %.2x\n",
+			        currentSceneID,
+			        global1012,
+			        global1014);
 		}
 	} else if (off == 0xDB89) {
 		// Check if we have a valid skip value
@@ -5089,7 +5094,7 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 		uint32_t rowSeg;
 		uint16_t rowOff;
 		SIS_ReadAddress(sceneSeg, sceneOff + localOffset + y * 0x4, rowSeg, rowOff);
-		SIS_WriteAddress(0x0227, 0x425C + y * 0x4, rowSeg, rowOff);
+		SIS_WriteAddress(0x0227, 0x245C + y * 0x4, rowSeg, rowOff);
 		/* for (int x = 0; x != 320; x++)
 		{
 		
