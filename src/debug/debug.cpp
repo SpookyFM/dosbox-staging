@@ -3570,8 +3570,9 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 			fprintf(stdout,
 			        "----- Scripting function entered - scene: %.2x 1014: %.2x 1012: %.2x\n",
 			        currentSceneID,
-			        global1012,
-			        global1014);
+			        global1014,
+			        global1012
+			        );
 		}
 	} else if (off == 0xDB89) {
 		// Check if we have a valid skip value
@@ -5094,15 +5095,18 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 		uint32_t rowSeg;
 		uint16_t rowOff;
 		SIS_ReadAddress(sceneSeg, sceneOff + localOffset + y * 0x4, rowSeg, rowOff);
-		SIS_WriteAddress(0x0227, 0x245C + y * 0x4, rowSeg, rowOff);
-		/* for (int x = 0; x != 320; x++)
+		uint32_t targetRowSeg;
+		uint16_t targetRowOff;
+		
+		SIS_ReadAddress(0x0227, 0x245C + y * 0x4, targetRowSeg, targetRowOff);
+		for (int x = 0; x != 320; x++)
 		{
 		
 			uint8_t value = mem_readb_inline(
 			        GetAddress(rowSeg, rowOff + x));
 			// mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
-			mem_writeb_inline(GetAddress(0xA000, 320 * y + x), 0x00);
-		} */
+			mem_writeb_inline(GetAddress(targetRowSeg, targetRowOff + x), value);
+		} 
 
 	}
 	// SIS_WriteAddress(sceneSeg, sceneOff + 0x00, newSeg, newOff);
