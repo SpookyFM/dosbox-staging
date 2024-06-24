@@ -5104,7 +5104,9 @@ void SIS_ChangeMapPointerToBackground(uint16_t localOffset) {
 		
 			uint8_t value = mem_readb_inline(
 			        GetAddress(rowSeg, rowOff + x));
-			// mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
+			// Copy to VGA memory for instant result and into the backbuffer so it does
+			// not get overwritten
+			mem_writeb_inline(GetAddress(0xA000, 320 * y + x), value);
 			mem_writeb_inline(GetAddress(targetRowSeg, targetRowOff + x), value);
 		} 
 
