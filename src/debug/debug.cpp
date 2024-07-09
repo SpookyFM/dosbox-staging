@@ -5308,6 +5308,21 @@ bool SIS_ParseCommand(char* found, std::string command)
 
 		return true;
 	}
+	if (command == "BPSV") { // Watch a script variable
+		uint16_t variableIndex = (uint16_t)GetHexValue(found, found);
+		
+		variableIndex << 2;
+		uint32_t seg;
+		uint16_t off;
+		SIS_ReadAddress(0x0227, 0x06C6, seg, off);
+		CBreakpoint::AddMemBreakpoint(seg, off + variableIndex);
+		CBreakpoint::AddMemBreakpoint(seg, off + variableIndex + 2);
+
+		DEBUG_ShowMsg("DEBUG: Watching script variable %.4x.\n",
+		              variableIndex);
+		
+		return true;
+	}
 
 	return false;
 }
