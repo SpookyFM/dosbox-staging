@@ -5311,7 +5311,7 @@ bool SIS_ParseCommand(char* found, std::string command)
 	if (command == "BPSV") { // Watch a script variable
 		uint16_t variableIndex = (uint16_t)GetHexValue(found, found);
 		
-		variableIndex << 2;
+		variableIndex = variableIndex << 2;
 		uint32_t seg;
 		uint16_t off;
 		SIS_ReadAddress(0x0227, 0x06C6, seg, off);
