@@ -32,6 +32,8 @@
 #include <regex>
 #include <queue>
 #include <chrono>
+#include <iostream>
+#include <cstdio>
 using namespace std;
 
 #include "debug.h"
@@ -4619,7 +4621,39 @@ void SIS_WipeMemoryFromTo(Bitu seg, Bitu off, Bitu off_end, uint8_t value) {
 	SIS_WipeMemory(seg, off, length, value);
 }
 
-void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*= 1*/) {
+void SIS_BeginBuffering() {
+	// Set the buffer for stdout
+	if (setvbuf(stdout, stdout_buffer, _IOFBF, sizeof(stdout_buffer)) != 0) {
+		std::cerr << "Failed to set buffer for stdout" << std::endl;
+	}
+	// We start buffering on each entry of the scripting function and each time we
+	// end the execution of an opcode
+	// We end buffering either on realizing that the opcode is not a branching one or after
+	// we have finished the execution of the opcode
+	// First step: Always print and make sure the script is the same output,
+	// then start adding conditions
+}
+
+void SIS_EndBuffering(bool print) {
+	if(print) {
+		// Flush the buffer manually
+		fflush(stdout);
+	} else {
+		// Optionally clear the buffer by resetting it
+		std::memset(stdout_buffer, 0, sizeof(stdout_buffer));
+		// Prevent any buffered content from being output
+		setvbuf(stdout, nullptr, _IONBF, 0); // Set no buffering mode to
+		                                     // ignore current buffer
+		setvbuf(stdout, stdout_buffer, _IOFBF, sizeof(stdout_buffer)); // Re-apply
+		                                                        // buffer
+	}
+
+	// Reset the buffer mode to default
+	setvbuf(stdout, nullptr, _IOLBF, 0);
+}
+
+void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*= 1*/)
+{
 	// At SS:BP, the old stack frame is saved, so we can use this to
 	// walk up
 	// TODO: Only works after enter has been executed
