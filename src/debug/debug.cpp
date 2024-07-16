@@ -3537,14 +3537,14 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 
 	if (seg == 0x01E7 && off == 0xE4BF) {
 		uint16_t objectIndex = mem_readw_inline(GetAddress(0x0227, 0x0F92));
-		fprintf(stdout,
+		SIS_Debug(
 		        "----- Switching execution to script for object: %.4x\n",
 		        objectIndex);
 		return;
 	}
 
 	if (seg == 0x01D7 && off == 0x082A) {
-		fprintf(stdout, "*** Mouse press ***\n");
+		SIS_Debug("*** Mouse press ***\n");
 		return;
 	}
 
@@ -3565,12 +3565,10 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint16_t global1012 = mem_readw_inline(GetAddress(0x0227, 0x1012));
 		uint16_t global1014 = mem_readw_inline(GetAddress(0x0227, 0x1014));
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout,
-			        "----- Scripting function entered - scene: %.2x 1012: %.2x 1014: %.2x (%u ms since last leave)\n",
+			SIS_Debug("----- Scripting function entered - scene: %.2x 1012: %.2x 1014: %.2x (%u ms since last leave)\n",
 			        currentSceneID, global1012, global1014, milliseconds);
 		} else {
-			fprintf(stdout,
-			        "----- Scripting function entered - scene: %.2x 1014: %.2x 1012: %.2x\n",
+			SIS_Debug("----- Scripting function entered - scene: %.2x 1014: %.2x 1012: %.2x\n",
 			        currentSceneID,
 			        global1014,
 			        global1012
@@ -3582,14 +3580,14 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		        GetAddress(SegValue(ds), 0x0F8A));
 		if (script_off_skip_start == script_offset) {
 			if (isChannelActive(SIS_Script_Verbose)) {
-				fprintf(stdout,
+				SIS_Debug(
 				        "----- Skipping script from %.4x:%.4x to %.4x:%.4x\n",
 				        SegValue(ds),
 				        script_off_skip_start,
 				        SegValue(ds),
 				        script_off_skip_end);
 			} else if (isChannelActive(SIS_Script)) {
-				fprintf(stdout,
+				SIS_Debug(
 				        "----- Skipping script from %.4x to %.4x\n",
 				        script_off_skip_start,
 				        script_off_skip_end);
@@ -3597,15 +3595,18 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 			mem_writew_inline(GetAddress(SegValue(ds), 0x0F8A),
 			                  script_off_skip_end);
 		}
+		// This is right before we start executing an opcode
+		SIS_BeginBuffering();
+		SIS_LastOpcodeTriggeredSkip = false;
 	} else if (off == 0xE3E5) {
-		fprintf(stdout, "----- Scripting function left\n");
+		SIS_Debug("----- Scripting function left\n");
 		script_last_leave = std::chrono::system_clock::now();
 	} else if (off == 0x9F17) {
 		// This is the case where we read a byte from the file
 		uint32_t script_offset = mem_readw_inline(
 		        GetAddress(SegValue(ds), 0x0F8A));
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout,
+			SIS_Debug(
 			        "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
 			        reg_al,
 			        SegValue(es),
@@ -3614,14 +3615,14 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 			        ret_seg,
 			        ret_off);
 		} else if (isChannelActive(SIS_Script) && !SIS_ScriptIsSkipping) {
-			fprintf(stdout,
+			SIS_Debug(
 			        "Script read (byte): %.2x at location %.4x\n",
 			        reg_al,
 			        script_offset);
 		}
 		if (reg_di - script_last_read_off > 1) {
 			if (isChannelActive(SIS_Script_Verbose)) {
-				fprintf(stdout,
+				SIS_Debug(
 				        "-- Gap of %u bytes\n",
 				        reg_di - script_last_read_off);
 			}
@@ -3638,7 +3639,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		        GetAddress(SegValue(ds), 0x0F8A));
 
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout,
+			SIS_Debug(
 			        "Script read (word): %.4x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
 			        reg_ax,
 			        script_read_seg,
@@ -3647,14 +3648,14 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 			        ret_seg,
 			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
-			fprintf(stdout,
+			SIS_Debug(
 			        "Script read (word): %.4x at location %.4x\n",
 			        reg_ax,
 			        script_offset);
 		}
 		if (script_read_off - script_last_read_off > 2) {
 			if (isChannelActive(SIS_Script_Verbose)) {
-				fprintf(stdout,
+				SIS_Debug(
 				        "-- Gap of %u bytes\n",
 				        script_read_off - script_last_read_off);
 			}
@@ -3666,15 +3667,13 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		if (reg_al != 5) {
 			opcodeInfo = SIS_IdentifyScriptOpcode(reg_al, 0);
 		}
-		fprintf(stdout,
-		        "- First block opcode: %.2x %s\n",
+		SIS_Debug("- First block opcode: %.2x %s\n",
 		        reg_al,
 		        opcodeInfo.c_str());
 	} else if (off == 0xDC6B) {
 		std::string opcodeInfo = SIS_IdentifyScriptOpcode(SIS_currentOpcode1,
 		                                                  reg_al);
-		fprintf(stdout,
-		        "- Second block opcode: %.2x %s\n",
+		SIS_Debug("- Second block opcode: %.2x %s\n",
 		        reg_al,
 		        opcodeInfo.c_str());
 	} else if (off == 0x9F5E) {
@@ -3682,37 +3681,35 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint16_t value = reg_ax;
 		std::string opcodeInfo = SIS_IdentifyHelperOpcode(opcode, value);
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout,
-			        "- 9F4D opcode: %.2x %.4x %s (%.4x:%.4x)\n",
+			SIS_Debug("- 9F4D opcode: %.2x %.4x %s (%.4x:%.4x)\n",
 			        opcode,
 			        value,
 			        opcodeInfo.c_str(),
 			        ret_seg,
 			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
-			fprintf(stdout,
-			        "- 9F4D opcode: %.2x %.4x %s\n",
+			SIS_Debug("- 9F4D opcode: %.2x %.4x %s\n",
 			        opcode,
 			        value,
 			        opcodeInfo.c_str());
 		}
 	} else if (off == 0xA332) {
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout,
-			        "- 9F4D results: %.4x %.4x (%.4x:%.4x)\n",
+			SIS_Debug("- 9F4D results: %.4x %.4x (%.4x:%.4x)\n",
 			        reg_ax,
 			        reg_dx,
 			        ret_seg,
 			        ret_off);
 		} else if (isChannelActive(SIS_Script)) {
-			fprintf(stdout, "- 9F4D results: %.4x %.4x\n", reg_ax, reg_dx);
+			SIS_Debug("- 9F4D results: %.4x %.4x\n", reg_ax, reg_dx);
 		}
 	} else if (off == 0xA3D2) {
 		SIS_ScriptIsSkipping = true;
+		SIS_LastOpcodeTriggeredSkip = true;
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout, "-- Entering A3D2\n");
+			SIS_Debug("-- Entering A3D2\n");
 		} else {
-			fprintf(stdout, "-- Skipping using A3D2\n");
+			SIS_Debug("-- Skipping using A3D2\n");
 		}
 	} else if (off == 0xA417) {
 		// We are skipping bytes using A3D2
@@ -3722,7 +3719,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint16_t skipValue = mem_readb_inline(
 		        GetAddress(SegValue(ss), reg_bp - 0x4));
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout,
+			SIS_Debug(
 			        "- A3D2 skipping %u bytes for opcode %.2x [%u] (%.4x:%.4x)\n",
 			        num_bytes,
 			        opcode1,
@@ -3738,8 +3735,12 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 	} else if (off == 0xA437) {
 		SIS_ScriptIsSkipping = false;
 		if (isChannelActive(SIS_Script_Verbose)) {
-			fprintf(stdout, "-- Leaving A3D2\n");
+			SIS_Debug("-- Leaving A3D2\n");
 		}
+	}
+	else if (off == 0xE3BA) {
+		// This is where we are finished executing an opcode
+		SIS_EndBuffering(!SIS_LastOpcodeTriggeredSkip);
 	}
 }
 
@@ -4622,6 +4623,7 @@ void SIS_WipeMemoryFromTo(Bitu seg, Bitu off, Bitu off_end, uint8_t value) {
 }
 
 void SIS_BeginBuffering() {
+	/* 
 	// Set the buffer for stdout
 	if (setvbuf(stdout, stdout_buffer, _IOFBF, sizeof(stdout_buffer)) != 0) {
 		std::cerr << "Failed to set buffer for stdout" << std::endl;
@@ -4632,10 +4634,12 @@ void SIS_BeginBuffering() {
 	// we have finished the execution of the opcode
 	// First step: Always print and make sure the script is the same output,
 	// then start adding conditions
+	*/
+
 }
 
 void SIS_EndBuffering(bool print) {
-	if(print) {
+	/* if(print) {
 		// Flush the buffer manually
 		fflush(stdout);
 	} else {
@@ -4650,6 +4654,15 @@ void SIS_EndBuffering(bool print) {
 
 	// Reset the buffer mode to default
 	setvbuf(stdout, nullptr, _IOLBF, 0);
+	fprintf(stdout, "Buffering ended, skipping detected: %.1x\n", !print);
+	*/
+	if (print) {
+		for (std::string str : DebugStrings) {
+			fprintf(stdout, str.c_str());
+		}
+	}
+	// Reset the buffer
+	DebugStrings.clear();
 }
 
 void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*= 1*/)
@@ -5222,6 +5235,35 @@ void SIS_HandleCharacterDrawing(Bitu seg, Bitu off) {
 		        currentOff);
 	} break;
 	}
+}
+
+void SIS_Debug(const char* format, ...) {
+	// Initialize a variable argument list
+	va_list args;
+	va_start(args, format);
+
+	// Determine the required size for the formatted string
+	va_list args_copy;
+	va_copy(args_copy, args);
+	int size = vsnprintf(nullptr, 0, format, args_copy);
+	va_end(args_copy);
+
+	if (size < 0) {
+		// TODO: Handle error
+		va_end(args);
+		// throw std::runtime_error("Error during formatting.");
+		return;
+	}
+
+	// Create a string with the required size
+	std::vector<char> buffer(size + 1);
+	vsnprintf(buffer.data(), buffer.size(), format, args);
+	va_end(args);
+
+	// Return the formatted string
+	std::string result = std::string(buffer.data(), size);
+	DebugStrings.push_back(result);
+
 }
 
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)

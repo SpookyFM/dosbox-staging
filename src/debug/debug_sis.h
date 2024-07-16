@@ -24,6 +24,7 @@ uint16_t SIS_skippedOpcode = -1;
 uint8_t SIS_currentOpcode1;
 
 bool SIS_ScriptIsSkipping = false;
+bool SIS_LastOpcodeTriggeredSkip = false;
 
 
 void SIS_Init();
@@ -98,3 +99,7 @@ void SIS_ResetBackground();
 void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width, uint16_t& height, uint8_t*& pixels);
 
 void SIS_HandleCharacterDrawing(Bitu seg, Bitu off);
+
+std::vector<std::string> DebugStrings;
+
+void SIS_Debug(const char* format, ...);
