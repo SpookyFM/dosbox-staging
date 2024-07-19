@@ -4656,10 +4656,9 @@ void SIS_EndBuffering(bool print) {
 	setvbuf(stdout, nullptr, _IOLBF, 0);
 	fprintf(stdout, "Buffering ended, skipping detected: %.1x\n", !print);
 	*/
-	if (print) {
-		for (std::string str : DebugStrings) {
-			fprintf(stdout, str.c_str());
-		}
+	const char* prefix = print ? "" : "** ";
+	for (std::string str : DebugStrings) {
+		fprintf(stdout, "%s %s", prefix, str.c_str());
 	}
 	// Reset the buffer
 	DebugStrings.clear();
@@ -5096,6 +5095,9 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	SIS_ReadAddress(0x227, 0x77C + 0x1 * 4, protSeg, protOff);
 	uint16_t charX = mem_readw_inline(GetAddress(protSeg, protOff + 0x0));
 	uint16_t charY = mem_readw_inline(GetAddress(protSeg, protOff + 0x2));
+	uint16_t charOrientation = mem_readw_inline(
+	        GetAddress(protSeg, protOff + 0x6));
+	// fprintf(stdout, "Player orientation: %.4x\n", charOrientation);
 	
 	lastFramePosX = charX;
 	lastFramePosY = charY;
@@ -5398,6 +5400,22 @@ bool SIS_ParseCommand(char* found, std::string command)
 		              variableIndex);
 		
 		return true;
+	}
+	if (command == "GIVEITEM") {
+		// Give an item to the protagonist
+		uint16_t objectIndex = (uint16_t)GetHexValue(found, found);
+
+		uint32_t objSeg;
+		uint16_t objOff;
+		// We shift left by 2 = *4
+		SIS_ReadAddress(0x227, 0x77C + objectIndex * 4, objSeg, objOff);
+		mem_writew_inline(GetAddress(objSeg, objOff + 0x4), 0x1);
+
+		DEBUG_ShowMsg("DEBUG: Giving item to player: %.4x.\n",
+		              objectIndex);
+
+		return true;
+
 	}
 
 	return false;
