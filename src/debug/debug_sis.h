@@ -53,6 +53,7 @@ void SIS_BeginBuffering();
 void SIS_EndBuffering(bool print = false);
 
 void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels = 1);
+void SIS_PrintCaller(uint16_t num_levels = 1);
 
 void SIS_ReadAddressFromLocal(int16_t offset, uint32_t& outSeg, uint16_t& outOff);
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff);

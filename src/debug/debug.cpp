@@ -4609,6 +4609,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
+	SIS_Handle1480(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4685,6 +4686,13 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 		out_seg = mem_readw_inline(GetAddress(SegValue(ss), calleeBP + 0x04));
 		num_levels--;
 	}
+}
+
+void SIS_PrintCaller(uint16_t num_levels) {
+	uint32_t seg;
+	uint16_t off;
+	SIS_GetCaller(seg, off, num_levels);
+	fprintf(stdout, "-- Caller: %.4x:%.4x\n", seg, off);
 }
 
 void SIS_ReadAddressFromLocal(int16_t offset, uint32_t& outSeg, uint16_t& outOff)
@@ -5433,6 +5441,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	}
 	if (off == 0x1484) {
 		// Print the arguments
+		SIS_PrintCaller();
 		SIS_PrintLocal("Argument - Byte value: ", +0x6, 1);
 		SIS_PrintLocal("Argument - Value between 0 and something around A4: ", +0x08, 2);
 		SIS_PrintLocal("Argument - Address: ", +0x0A, 4);
@@ -5473,15 +5482,16 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 	// Also handle 4 bytes as a pointer
 	uint16_t localValue;
 	char* valueFormat;
+	const char* offsetSign = offset >= 0 ? "+" : "-";
 	switch (numBytes) {
 	case 1: {
 		localValue = SIS_GetLocalByte(offset);
-		valueFormat = "[bp%+.2x]: %.2x\n";
+		valueFormat = "[bp%s%02x]: %.2x\n";
 	}
 		  break;
 	case 2: {
 		localValue  = SIS_GetLocalWord(offset);
-		valueFormat = "[bp%+.2x]: %.4x\n";
+		valueFormat = "[bp%s%02x]: %.4x\n";
 		  }
 		  break;
 	case 4: {
@@ -5489,12 +5499,14 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 				  uint16_t localOff;
 		          SIS_ReadAddressFromLocal(offset, localSeg, localOff);
 		                  fprintf(stdout,
-		                          "[bp%+.2x]: %.4x:%.4x\n",
+		                          "[bp%s%02x]: %.4x:%.4x\n",
+								  offsetSign,
+								  offset,
 		                          localSeg,
 		                          localOff);
 	}
 		return;
 	}
-	fprintf(stdout, valueFormat, offset, localValue);
+	fprintf(stdout, valueFormat, offsetSign, offset, localValue);
 
 }
