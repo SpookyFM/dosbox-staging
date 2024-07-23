@@ -5420,3 +5420,50 @@ bool SIS_ParseCommand(char* found, std::string command)
 
 	return false;
 }
+
+void SIS_Handle1480(Bitu seg, Bitu off) {
+	if (seg != 0x01F7) {
+		return;
+	}
+	// TODO: Find a better position
+	if (off == 0x1480) {
+		// Print the arguments
+
+
+	}
+}
+
+void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
+	// Initialize a variable argument list
+	va_list args;
+	va_start(args, format);
+
+	// Determine the required size for the formatted string
+	va_list args_copy;
+	va_copy(args_copy, args);
+	int size = vsnprintf(nullptr, 0, format, args_copy);
+	va_end(args_copy);
+
+	if (size < 0) {
+		// TODO: Handle error
+		va_end(args);
+		// throw std::runtime_error("Error during formatting.");
+		return;
+	}
+
+	// Create a string with the required size
+	std::vector<char> buffer(size + 1);
+	vsnprintf(buffer.data(), buffer.size(), format, args);
+	va_end(args);
+
+	// Return the formatted string
+	std::string result = std::string(buffer.data(), size);
+	fprintf(stdout, result.c_str());
+
+	// Read the local
+	// Also handle 4 bytes as a pointer
+	uint16_t localValue = numBytes == 1 ? SIS_GetLocalByte(offset)
+	                                : SIS_GetLocalWord(offset);
+	fprintf(stdout, "[bp%+.2x]: %.4x\n", offset, localValue);
+
+}

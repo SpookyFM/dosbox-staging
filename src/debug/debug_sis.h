@@ -42,6 +42,10 @@ void SIS_HandleSIS(Bitu seg, Bitu off);
 
 bool SIS_ParseCommand(char* found, std::string command);
 
+void SIS_Handle1480(Bitu seg, Bitu off);
+
+void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
+
  // Define a buffer for stdout
 char stdout_buffer[0xFFFF];
 
