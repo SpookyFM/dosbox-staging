@@ -4687,6 +4687,12 @@ void SIS_GetCaller(uint32_t& out_seg, uint16_t& out_off, uint16_t num_levels /*=
 	}
 }
 
+void SIS_ReadAddressFromLocal(int16_t offset, uint32_t& outSeg, uint16_t& outOff)
+{
+	outSeg = SIS_GetLocalWord(offset);
+	outOff = SIS_GetLocalWord(offset + 0x2);
+}
+
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
 {
 	outSeg = mem_readw_inline(GetAddress(seg, off+2));
@@ -5425,10 +5431,13 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	if (seg != 0x01F7) {
 		return;
 	}
-	// TODO: Find a better position
-	if (off == 0x1480) {
+	if (off == 0x1484) {
 		// Print the arguments
-
+		SIS_PrintLocal("Argument - Byte value: ", +0x6, 1);
+		SIS_PrintLocal("Argument - Value between 0 and something around A4: ", +0x08, 2);
+		SIS_PrintLocal("Argument - Address: ", +0x0A, 4);
+		SIS_PrintLocal("Argument - Address: ", +0x0E, 4);
+		SIS_PrintLocal("Argument - Address: ", +0x12, 4);
 
 	}
 }
@@ -5462,8 +5471,30 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 
 	// Read the local
 	// Also handle 4 bytes as a pointer
-	uint16_t localValue = numBytes == 1 ? SIS_GetLocalByte(offset)
-	                                : SIS_GetLocalWord(offset);
-	fprintf(stdout, "[bp%+.2x]: %.4x\n", offset, localValue);
+	uint16_t localValue;
+	char* valueFormat;
+	switch (numBytes) {
+	case 1: {
+		localValue = SIS_GetLocalByte(offset);
+		valueFormat = "[bp%+.2x]: %.2x\n";
+	}
+		  break;
+	case 2: {
+		localValue  = SIS_GetLocalWord(offset);
+		valueFormat = "[bp%+.2x]: %.4x\n";
+		  }
+		  break;
+	case 4: {
+		          uint32_t localSeg;
+				  uint16_t localOff;
+		          SIS_ReadAddressFromLocal(offset, localSeg, localOff);
+		                  fprintf(stdout,
+		                          "[bp%+.2x]: %.4x:%.4x\n",
+		                          localSeg,
+		                          localOff);
+	}
+		return;
+	}
+	fprintf(stdout, valueFormat, offset, localValue);
 
 }
