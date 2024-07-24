@@ -18,6 +18,8 @@ class TraceHelper {
 		// TODO: Also the best way to a pass a std::string?
 	    void AddTracePoint(uint16_t offset, const std::string& message);
 	    void HandleOffset(uint16_t offset);
+		// TODO: Added for ease of use
+	    TraceHelper();
 };
 
 inline bool isScriptChannelActive(){
@@ -50,6 +52,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off);
 
 bool SIS_ParseCommand(char* found, std::string command);
 
+bool is1480Filtered = false;
 void SIS_Handle1480(Bitu seg, Bitu off);
 
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);

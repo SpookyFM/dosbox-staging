@@ -63,6 +63,8 @@ using namespace std;
 #include <SDL2/SDL_syswm.h>
 #include "SIS_OpcodeID/sis_opcode.h"
 
+#include <map>
+
 #include "debug_sis.h"
 
 SDL_Window *GFX_GetSDLWindow(void);
@@ -5436,6 +5438,14 @@ bool SIS_ParseCommand(char* found, std::string command)
 }
 
 void SIS_Handle1480(Bitu seg, Bitu off) {
+	if (is1480Filtered) {
+		// We can only leave the filtering if we leave the function
+		if (off == 0x1615) {
+			is1480Filtered = false;
+		}
+		return;
+	}
+
 	if (seg != 0x01F7) {
 		return;
 	}
@@ -5449,6 +5459,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Argument - Address: ", +0x12, 4);
 	}
 	if (off == 0x1615) {
+		// Handle the result
 		uint32_t caller_seg;
 		uint16_t caller_off;
 		SIS_GetCaller(caller_seg, caller_off);
@@ -5523,5 +5534,24 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 		return;
 	}
 	fprintf(stdout, valueFormat, offsetSign, positiveOffset, localValue);
+
+}
+
+
+void TraceHelper::AddTracePoint(uint16_t offset, const std::string& message) {
+	tracePoints[offset] = message;
+}
+
+void TraceHelper::HandleOffset(uint16_t offset) {
+	map<uint16_t, string>::iterator it = tracePoints.find(offset);
+	if (it != tracePoints.end()) {
+		const std::string& traceMessage = it->second;
+		fprintf(stdout, "%.4x: %s\n", offset, traceMessage.c_str());
+	}
+}
+
+TraceHelper::TraceHelper() {
+	AddTracePoint(0x14EA, "Adjusting [bp-6] to 1");
+	AddTracePoint(0x14F7, "Adjusting [bp-6] to 1");
 
 }
