@@ -12,6 +12,14 @@ const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
 const std::string SIS_RLE("rle");
 
+class TraceHelper {
+	public: 
+		std::map<uint16_t, std::string> tracePoints;
+		// TODO: Also the best way to a pass a std::string?
+	    void AddTracePoint(uint16_t offset, const std::string& message);
+	    void HandleOffset(uint16_t offset);
+};
+
 inline bool isScriptChannelActive(){
 	
 	return isChannelActive(SIS_Script) ||
