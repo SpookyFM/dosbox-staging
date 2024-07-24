@@ -5447,7 +5447,21 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Argument - Address: ", +0x0A, 4);
 		SIS_PrintLocal("Argument - Address: ", +0x0E, 4);
 		SIS_PrintLocal("Argument - Address: ", +0x12, 4);
-
+	}
+	if (off == 0x1615) {
+		uint32_t caller_seg;
+		uint16_t caller_off;
+		SIS_GetCaller(caller_seg, caller_off);
+		SIS_PrintLocal("Result - Segment: ", -0x04, 2);
+		SIS_PrintLocal("Result - Offset: ", -0x02, 2);
+		// if (caller_off == 0x1832) {
+		// if (caller_off == 0x17F9) {
+		if (caller_off == 0x174a) {
+			// Testing out overwriting with a fixed result
+			fprintf(stdout, "Overwriting results\n");
+			reg_ax = 0x0015;
+			reg_dx = 0x049F;
+		}
 	}
 }
 
@@ -5483,15 +5497,16 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 	uint16_t localValue;
 	char* valueFormat;
 	const char* offsetSign = offset >= 0 ? "+" : "-";
+	uint16_t positiveOffset = offset >= 0 ? offset : -offset;
 	switch (numBytes) {
 	case 1: {
 		localValue = SIS_GetLocalByte(offset);
-		valueFormat = "[bp%s%02x]: %.2x\n";
+		valueFormat = "[bp%s%.2x]: %.2x\n";
 	}
 		  break;
 	case 2: {
 		localValue  = SIS_GetLocalWord(offset);
-		valueFormat = "[bp%s%02x]: %.4x\n";
+		valueFormat = "[bp%s%.2x]: %.4x\n";
 		  }
 		  break;
 	case 4: {
@@ -5499,14 +5514,14 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 				  uint16_t localOff;
 		          SIS_ReadAddressFromLocal(offset, localSeg, localOff);
 		                  fprintf(stdout,
-		                          "[bp%s%02x]: %.4x:%.4x\n",
+		                          "[bp%s%.2x]: %.4x:%.4x\n",
 								  offsetSign,
-								  offset,
+								  positiveOffset,
 		                          localSeg,
 		                          localOff);
 	}
 		return;
 	}
-	fprintf(stdout, valueFormat, offsetSign, offset, localValue);
+	fprintf(stdout, valueFormat, offsetSign, positiveOffset, localValue);
 
 }
