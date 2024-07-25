@@ -5438,6 +5438,7 @@ bool SIS_ParseCommand(char* found, std::string command)
 }
 
 void SIS_Handle1480(Bitu seg, Bitu off) {
+	static TraceHelper traceHelper;
 	if (is1480Filtered) {
 		// We can only leave the filtering if we leave the function
 		if (off == 0x1615) {
@@ -5450,6 +5451,25 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		return;
 	}
 	if (off == 0x1484) {
+		// Figure out if we are called from the right function
+		uint32_t caller_seg;
+		uint16_t caller_off;
+		SIS_GetCaller(caller_seg, caller_off);
+		if (caller_off != 0x174a) {
+			is1480Filtered = true;
+			return;
+		}
+
+		// Filter by a specific animation set (walking to the left)
+		uint32_t animSeg;
+		uint16_t animOff;
+		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
+		// TODO: I think I have these backwards
+		if (animOff != 0x0477) {
+			is1480Filtered = true;
+			return;
+		}
+
 		// Print the arguments
 		SIS_PrintCaller();
 		SIS_PrintLocal("Argument - Byte value: ", +0x6, 1);
@@ -5458,6 +5478,21 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Argument - Address: ", +0x0E, 4);
 		SIS_PrintLocal("Argument - Address: ", +0x12, 4);
 	}
+
+	// Let the trace helper try handling it
+	traceHelper.HandleOffset(off);
+
+	if (off == 0x14AC) {
+		// Print the read values
+		SIS_PrintLocal("Read value 1: ", -0x22, 2);
+		SIS_PrintLocal("Read value 2: ", -0x06, 2);
+		SIS_PrintLocal("Read value 3: ", -0x08, 2);
+		SIS_PrintLocal("Read value 4: ", -0x0A, 2);
+		SIS_PrintLocal("Read value 5: ", -0x10, 2);
+		SIS_PrintLocal("Read value 6 (incremented by 1): ", -0x0E, 2);
+		SIS_PrintLocal("Read value 7 (via [bp-06h]): ", -0x0C, 1);
+	}
+
 	if (off == 0x1615) {
 		// Handle the result
 		uint32_t caller_seg;
@@ -5467,12 +5502,12 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Result - Offset: ", -0x02, 2);
 		// if (caller_off == 0x1832) {
 		// if (caller_off == 0x17F9) {
-		if (caller_off == 0x174a) {
+		/* if (caller_off == 0x174a) {
 			// Testing out overwriting with a fixed result
 			fprintf(stdout, "Overwriting results\n");
 			reg_ax = 0x0015;
 			reg_dx = 0x049F;
-		}
+		}*/
 	}
 }
 
