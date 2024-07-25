@@ -5464,7 +5464,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		uint32_t animSeg;
 		uint16_t animOff;
 		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
-		// TODO: I think I have these backwards
+		// TODO: I think I have these backwards, this should be segment
 		if (animOff != 0x0477) {
 			is1480Filtered = true;
 			return;
@@ -5491,6 +5491,14 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Read value 5: ", -0x10, 2);
 		SIS_PrintLocal("Read value 6 (incremented by 1): ", -0x0E, 2);
 		SIS_PrintLocal("Read value 7 (via [bp-06h]): ", -0x0C, 1);
+	}
+	if (off == 0x1587) {
+		// This is the loop during which we iterate over animations?
+		fprintf(stdout, "Loop: cx = %.4x\n", reg_cx);
+		SIS_PrintLocal("Loop: Read value 1: ", -0x1A, 2);
+		SIS_PrintLocal("Loop: Read value 2: ", -0x1C, 2);
+		SIS_PrintLocal("Loop: Read value 3 (skipped a word): ", -0x16, 2);
+		SIS_PrintLocal("Loop: Read value 4: ", -0x18, 2);
 	}
 
 	if (off == 0x1615) {
