@@ -5492,6 +5492,20 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Read value 6 (incremented by 1): ", -0x0E, 2);
 		SIS_PrintLocal("Read value 7 (via [bp-06h]): ", -0x0C, 1);
 	}
+
+	if (off == 0x1500) {
+		SIS_PrintLocal("Loop at 1500h: ", -0x06, 2);
+	}
+
+	if (off == 0x1519) {
+		// TODO: Could also be that we don't reach this place, right?
+		SIS_PrintLocal("Read value (determines a switch): ", -0x0C, 1);
+	}
+
+	if (off == 0x1566) {
+		SIS_PrintLocal("Read value (determines wrap-around): ", -0x24, 2);
+	}
+
 	if (off == 0x1587) {
 		// This is the loop during which we iterate over animations?
 		fprintf(stdout, "Loop: cx = %.4x\n", reg_cx);
@@ -5594,7 +5608,11 @@ void TraceHelper::HandleOffset(uint16_t offset) {
 }
 
 TraceHelper::TraceHelper() {
+	// Trace all times that we are wrapping around
+	AddTracePoint(0x14BE, "Adjusting [bp-6] to 1");
 	AddTracePoint(0x14EA, "Adjusting [bp-6] to 1");
 	AddTracePoint(0x14F7, "Adjusting [bp-6] to 1");
+	AddTracePoint(0x1505, "Adjusting [bp-6] to 1");
+	AddTracePoint(0x15CB, "Adjusting [bp-6] to 1");
 
 }
