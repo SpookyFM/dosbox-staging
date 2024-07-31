@@ -5433,6 +5433,36 @@ bool SIS_ParseCommand(char* found, std::string command)
 		return true;
 
 	}
+	if (command == "SO") {
+		// Set the orientation of the protagonist
+		uint16_t orientation = (uint16_t)GetHexValue(found, found);
+
+		uint32_t protSeg;
+		uint16_t protOff;
+		// We shift left by 2 = *4
+		SIS_ReadAddress(0x227, 0x77C + 0x1 * 4, protSeg, protOff);
+		uint16_t charX = mem_readw_inline(GetAddress(protSeg, protOff + 0x0));
+		uint16_t charY = mem_readw_inline(GetAddress(protSeg, protOff + 0x2));
+		mem_writew_inline(
+		        GetAddress(protSeg, protOff + 0x6), orientation);
+		
+		DEBUG_ShowMsg("DEBUG: Setting player orientation to: %.4x.\n", orientation);
+
+		return true;
+	}
+
+	if (command == "BLOB") {
+		// Temp command for blob debugging
+		
+		uint16_t blobIndex = (uint16_t)GetHexValue(found, found);
+
+		uint32_t protSeg;
+		uint16_t protOff;
+		// We shift left by 2 = *4
+		SIS_ReadAddress(0x227, 0x77C + 0x1 * 4, protSeg, protOff);
+
+		return true;
+	}
 
 	return false;
 }
@@ -5465,10 +5495,10 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		uint16_t animOff;
 		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
 		// TODO: I think I have these backwards, this should be segment
-		if (animOff != 0x0477) {
+		/* if (animOff != 0x0477) {
 			is1480Filtered = true;
 			return;
-		}
+		} */
 
 		// Print the arguments
 		SIS_PrintCaller();
