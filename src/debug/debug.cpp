@@ -4512,17 +4512,21 @@ l0017_27D3:
 	if (off == 0x279C) { // || off == 0x27C8)
 	
 	
-		uint8_t registerIndex = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
-		uint8_t value = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
+		uint8_t value = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
+		uint8_t registerIndex = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
 			
 		// Outs
 		fprintf(stdout,
 		        "OPL: Write %.2x to port %.2x (caller: %.4x:%.4x - %.8x)\n",
-		        registerIndex,
-				value,
+		        value,
+				registerIndex,
 		        ret_seg,
 		        ret_off,
 		        cycle_count);
+		std::string output = SIS_OpcodeID::IdentifyOPLWrite(registerIndex,
+		                                                    value);
+		fprintf(stdout, "%s\n", output.c_str());
+
 	} /* else if (off == 0x2789 || off == 0x27D7) {
 	        // Ins
 	        fprintf(stdout,
@@ -4611,7 +4615,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	SIS_Handle1480(seg, off);
+	//	SIS_Handle1480(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
