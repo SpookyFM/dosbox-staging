@@ -4517,12 +4517,14 @@ l0017_27D3:
 			
 		// Outs
 		fprintf(stdout,
-		        "OPL: Write %.2x to port %.2x (caller: %.4x:%.4x - %.8x)\n",
+		        "OPL: Write %.2x to port %.2x (caller: %.4x:%.4x - %.8x) - %4.x:%.4x\n",
 		        value,
 				registerIndex,
 		        ret_seg,
 		        ret_off,
-		        cycle_count);
+		        cycle_count,
+				SegValue(ds),
+				reg_si);
 		std::string output = SIS_OpcodeID::IdentifyOPLWrite(registerIndex,
 		                                                    value);
 		fprintf(stdout, "%s\n", output.c_str());
