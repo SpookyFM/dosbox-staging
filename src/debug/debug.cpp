@@ -4463,6 +4463,14 @@ l0017_27D3:
 		return;
 	}
 
+	// Handling of setting the data variable in fn0017_294E
+	if (off == 0x2976 || off == 0x29E9) {
+		SIS_PrintLocal("OPL: Setting data local at %.4x.", -0x2, 2, off);
+	}
+	else if (off == 0x2A4C) {
+		fprintf(stdout, "OPL: Setting data local at %.4x to: %.4x", off, reg_ax);
+	}
+
 	// Document the interrupt first
 	if (off == 0x1AA7) {
 		fprintf(stdout, "OPL: Interrupt handler 1AA7 entered\n");
