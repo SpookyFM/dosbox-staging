@@ -3975,6 +3975,9 @@ void SIS_HandleGameLoad(Bitu seg, Bitu off)
 
 bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 {
+
+
+
 	/* static bool hitOnce = false;
 	if (seg == 0x01E7 && off == 0xDB56 && !hitOnce) {
 	        hitOnce = true;
@@ -4522,6 +4525,12 @@ l0017_27D3:
 	
 		uint8_t value = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
 		uint8_t registerIndex = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
+
+		if (ret_seg == 0x01D7 && ret_off == 0x275F) {
+			// Filter out the big initialization where we set all registers to 0
+			return;
+		}
+	
 			
 		// Outs
 		fprintf(stdout,
@@ -4625,7 +4634,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	//	SIS_Handle1480(seg, off);
+	SIS_Handle1480(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5499,7 +5508,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		uint32_t caller_seg;
 		uint16_t caller_off;
 		SIS_GetCaller(caller_seg, caller_off);
-		if (caller_off != 0x174a) {
+		if (caller_off < 0xB768 || caller_off > 0xB78B) {
 			is1480Filtered = true;
 			return;
 		}
