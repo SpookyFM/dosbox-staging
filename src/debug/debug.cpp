@@ -4407,6 +4407,23 @@ void SIS_HandleMouseCursor(Bitu seg, Bitu off) {
 
 void SIS_HandleOPL(Bitu seg, Bitu off)
 {
+	if (seg != 0x01D7) {
+		return;
+	}
+	if (off == 0x1B77) {
+		fprintf(stdout, "*** Reading at 1B77: ES:DI: %.4X:%.4X, AL: %.2X\n",
+		        SegValue(es),
+		        reg_di,
+		        reg_al);
+	}
+	if (off == 0x2A84) {
+		fprintf(stdout, "*** Entering 2A80\n");
+		SIS_PrintCaller();
+		SIS_PrintLocal("Local: ", +0x6, 2);
+		SIS_PrintLocal("Local: ", +0x8, 2);
+		SIS_PrintLocal("Local: ", +0xA, 2);
+	}
+
 	if (!isChannelActive(SIS_OPL)) {
 		return;
 	}
