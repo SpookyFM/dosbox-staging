@@ -4410,6 +4410,22 @@ void SIS_HandleOPL(Bitu seg, Bitu off)
 	if (seg != 0x01D7) {
 		return;
 	}
+
+	// Trace for accesses to the 2250 global
+	uint32_t globalSeg;
+	uint16_t globalOff;
+	SIS_ReadAddress(0x0227, 0x2250, globalSeg, globalOff);
+	uint8_t value = mem_readb_inline(GetAddress(globalSeg, globalOff));
+	static bool globalLoaded = false;
+	bool globalNowLoaded = (SegValue(es) == globalSeg && reg_di == globalOff);
+	if ((globalNowLoaded && !globalLoaded) || (off == 0x1A13) || (off == 0x1B1E) || (off == 0x1B2B)) {
+		fprintf(stdout, "Global [2250] loaded into ES:DI at %.4X:%.4X, value %.2X, DI: %.4X\n", seg, off, value, reg_di);
+		globalLoaded = true;
+	} else {
+		globalLoaded = globalNowLoaded;
+	}
+
+
 	if (off == 0x1B77) {
 		fprintf(stdout, "*** Reading at 1B77: ES:DI: %.4X:%.4X, AL: %.2X\n",
 		        SegValue(es),
@@ -4637,7 +4653,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleGameLoad(seg, off);
 	SIS_HandleMouseCursor(seg, off);
 	SIS_HandlePalette(seg, off);
-	SIS_HandleOPL(seg, off);
+	// SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
@@ -4652,6 +4668,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
 	SIS_Handle1480(seg, off);
+	SIS_HandleBGAnimDrawing(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5295,6 +5312,20 @@ void SIS_HandleCharacterDrawing(Bitu seg, Bitu off) {
 	}
 }
 
+void SIS_HandleBGAnimDrawing(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+
+	if (off == 0x99D3) {
+		SIS_PrintLocal("BG Anims: Loop entered for index", -0x0C, 2);
+	}
+	if (off == 0x9A18) {
+		SIS_PrintLocal("BG Anims: Drawing part for index", -0x0C, 2);
+	}
+
+}
+
 void SIS_Debug(const char* format, ...) {
 	// Initialize a variable argument list
 	va_list args;
@@ -5511,9 +5542,9 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	static TraceHelper traceHelper;
 	if (is1480Filtered) {
 		// We can only leave the filtering if we leave the function
-		if (off == 0x1615) {
-			is1480Filtered = false;
-		}
+		//if (off == 0x1615) {
+		//	is1480Filtered = false;
+		//}
 		return;
 	}
 
@@ -5526,7 +5557,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		uint16_t caller_off;
 		SIS_GetCaller(caller_seg, caller_off);
 		if (caller_off < 0xB768 || caller_off > 0xB78B) {
-			is1480Filtered = true;
+			// is1480Filtered = true;
 			return;
 		}
 

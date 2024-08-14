@@ -117,6 +117,8 @@ void SIS_ReadImageToPixels(Bitu seg, Bitu off, uint16_t& width, uint16_t& height
 
 void SIS_HandleCharacterDrawing(Bitu seg, Bitu off);
 
+void SIS_HandleBGAnimDrawing(Bitu seg, Bitu off);
+
 std::vector<std::string> DebugStrings;
 
 void SIS_Debug(const char* format, ...);
