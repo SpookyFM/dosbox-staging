@@ -5558,7 +5558,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_GetCaller(caller_seg, caller_off);
 		if (caller_off < 0xB768 || caller_off > 0xB78B) {
 			// is1480Filtered = true;
-			return;
+			// return;
 		}
 
 		// Filter by a specific animation set (walking to the left)
