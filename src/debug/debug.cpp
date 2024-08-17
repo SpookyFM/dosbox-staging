@@ -1237,8 +1237,8 @@ extern bool memReadWatchHit1;
 extern bool memReadWatchHit2;
 extern PhysPt memReadOverride;
 extern uint32_t memReadOverrideValue;
-std::map<std::string, bool> debugLogEnabled;
-
+std::map<std::string, SIS_ChannelID> channelIDNames;
+std::map<SIS_ChannelID, bool> debugLogEnabledID;
 
 void DrawBackBuffer(uint16_t source_segment, uint16_t target_offset, uint16_t length) {
 	constexpr auto palette_map = vga.dac.palette_map;
@@ -1509,11 +1509,14 @@ bool ParseCommand(char* str) {
 		while (*found == ' ') {
 			found++;
 		}
-		if (debugLogEnabled.count(found) == 1) {
-			debugLogEnabled[found] = !debugLogEnabled[found];
+		
+
+		if (channelIDNames.count(found) == 1) {
+			SIS_ChannelID foundID     = channelIDNames[found];
+			debugLogEnabledID[foundID] = !debugLogEnabledID[foundID];
 			DEBUG_ShowMsg("DEBUG: Setting debug channel %s to %u\n",
 			              found,
-			              debugLogEnabled[found]);
+			              debugLogEnabledID[foundID]);
 		} else {
 			DEBUG_ShowMsg("Unknown debug log channel %s\n", found);
 		}
@@ -1522,8 +1525,12 @@ bool ParseCommand(char* str) {
 
 	if (command == "CHANNELLIST") {
 		DEBUG_ShowMsg("DEBUG: Log channels:\n");
-		for (auto it = debugLogEnabled.begin(); it != debugLogEnabled.end(); it++) {
-			DEBUG_ShowMsg("%s: %u\n", it->first.c_str(), it->second);
+		for (auto it = channelIDNames.begin(); it != channelIDNames.end(); it++) {
+			std::string currentName = it->first;
+			SIS_ChannelID currentID = it->second;
+			DEBUG_ShowMsg("%s: %u\n",
+			              currentName.c_str(),
+			              debugLogEnabledID[currentID]);
 		}
 		return true;
 	}
@@ -3399,7 +3406,7 @@ uint8_t old_AH = 0xFF;
 
 
 void DEBUG_HandleBackbufferBlit(Bitu seg, Bitu off) {
-	if (!isChannelActive("special")) {
+	if (!isChannelActive(SIS_ChannelID::Special)) {
 		return;
 	}
 
@@ -3455,7 +3462,7 @@ void DEBUG_HandleFileAccess(Bitu seg, Bitu off) {
 	
 	static uint64_t positions[10];
 
-	if (!isChannelActive("fileread")) {
+	if (!isChannelActive(SIS_ChannelID::Fileread)) {
 		// TODO: Use proper variable
 		return;
 	}
@@ -3566,7 +3573,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint16_t currentSceneID = mem_readw_inline(GetAddress(0x0227, 0x077C));
 		uint16_t global1012 = mem_readw_inline(GetAddress(0x0227, 0x1012));
 		uint16_t global1014 = mem_readw_inline(GetAddress(0x0227, 0x1014));
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug("----- Scripting function entered - scene: %.2x 1012: %.2x 1014: %.2x (%u ms since last leave)\n",
 			        currentSceneID, global1012, global1014, milliseconds);
 		} else {
@@ -3581,14 +3588,14 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint32_t script_offset = mem_readw_inline(
 		        GetAddress(SegValue(ds), 0x0F8A));
 		if (script_off_skip_start == script_offset) {
-			if (isChannelActive(SIS_Script_Verbose)) {
+			if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 				SIS_Debug(
 				        "----- Skipping script from %.4x:%.4x to %.4x:%.4x\n",
 				        SegValue(ds),
 				        script_off_skip_start,
 				        SegValue(ds),
 				        script_off_skip_end);
-			} else if (isChannelActive(SIS_Script)) {
+			} else if (isChannelActive(SIS_ChannelID::Script)) {
 				SIS_Debug(
 				        "----- Skipping script from %.4x to %.4x\n",
 				        script_off_skip_start,
@@ -3607,7 +3614,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		// This is the case where we read a byte from the file
 		uint32_t script_offset = mem_readw_inline(
 		        GetAddress(SegValue(ds), 0x0F8A));
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug(
 			        "Script read (byte): %.2x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
 			        reg_al,
@@ -3616,14 +3623,15 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 			        script_offset,
 			        ret_seg,
 			        ret_off);
-		} else if (isChannelActive(SIS_Script) && !SIS_ScriptIsSkipping) {
+		} else if (isChannelActive(SIS_ChannelID::Script) &&
+		           !SIS_ScriptIsSkipping) {
 			SIS_Debug(
 			        "Script read (byte): %.2x at location %.4x\n",
 			        reg_al,
 			        script_offset);
 		}
 		if (reg_di - script_last_read_off > 1) {
-			if (isChannelActive(SIS_Script_Verbose)) {
+			if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 				SIS_Debug(
 				        "-- Gap of %u bytes\n",
 				        reg_di - script_last_read_off);
@@ -3640,7 +3648,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint32_t script_offset = mem_readw_inline(
 		        GetAddress(SegValue(ds), 0x0F8A));
 
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug(
 			        "Script read (word): %.4x at location %.4x:%.4x | %.4x (%.4x:%.4x)\n",
 			        reg_ax,
@@ -3649,7 +3657,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 			        script_offset,
 			        ret_seg,
 			        ret_off);
-		} else if (isChannelActive(SIS_Script)) {
+		} else if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug(
 			        "Script read (word): %.4x at location %.4x\n",
 			        reg_ax,
@@ -3682,33 +3690,33 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		uint8_t opcode = SIS_GetLocalByte(-0x5);
 		uint16_t value = reg_ax;
 		std::string opcodeInfo = SIS_IdentifyHelperOpcode(opcode, value);
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug("- 9F4D opcode: %.2x %.4x %s (%.4x:%.4x)\n",
 			        opcode,
 			        value,
 			        opcodeInfo.c_str(),
 			        ret_seg,
 			        ret_off);
-		} else if (isChannelActive(SIS_Script)) {
+		} else if (isChannelActive(SIS_ChannelID::Script)) {
 			SIS_Debug("- 9F4D opcode: %.2x %.4x %s\n",
 			        opcode,
 			        value,
 			        opcodeInfo.c_str());
 		}
 	} else if (off == 0xA332) {
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug("- 9F4D results: %.4x %.4x (%.4x:%.4x)\n",
 			        reg_ax,
 			        reg_dx,
 			        ret_seg,
 			        ret_off);
-		} else if (isChannelActive(SIS_Script)) {
+		} else if (isChannelActive(SIS_ChannelID::Script)) {
 			SIS_Debug("- 9F4D results: %.4x %.4x\n", reg_ax, reg_dx);
 		}
 	} else if (off == 0xA3D2) {
 		SIS_ScriptIsSkipping = true;
 		SIS_LastOpcodeTriggeredSkip = true;
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug("-- Entering A3D2\n");
 		} else {
 			SIS_Debug("-- Skipping using A3D2\n");
@@ -3720,7 +3728,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
                         GetAddress(SegValue(ss), reg_bp - 0x1));
 		uint16_t skipValue = mem_readb_inline(
 		        GetAddress(SegValue(ss), reg_bp - 0x4));
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug(
 			        "- A3D2 skipping %u bytes for opcode %.2x [%u] (%.4x:%.4x)\n",
 			        num_bytes,
@@ -3736,7 +3744,7 @@ void DEBUG_HandleScript(Bitu seg, Bitu off)
 		}*/
 	} else if (off == 0xA437) {
 		SIS_ScriptIsSkipping = false;
-		if (isChannelActive(SIS_Script_Verbose)) {
+		if (isChannelActive(SIS_ChannelID::Script_Verbose)) {
 			SIS_Debug("-- Leaving A3D2\n");
 		}
 	}
@@ -3908,16 +3916,6 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 
 void SIS_Init()
 {
-	debugLogEnabled["special"]     = false;
-	debugLogEnabled[SIS_Script] = false;
-	debugLogEnabled[SIS_Script_Verbose] = false;
-	debugLogEnabled["fileread"]    = false;
-	debugLogEnabled[SIS_AnimFrame] = false;
-	debugLogEnabled[SIS_OPL] = false;
-	debugLogEnabled[SIS_Palette] = false;
-	debugLogEnabled[SIS_Pathfinding] = false;
-	debugLogEnabled[SIS_Scaling] = false;
-	debugLogEnabled[SIS_RLE] = false;
 }
 
 void SIS_PushWord(uint16_t value)
@@ -4013,7 +4011,7 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 
 void SIS_HandleScaling(Bitu seg, Bitu off) {
 	
-	if (!isChannelActive(SIS_Scaling)) {
+	if (!isChannelActive(SIS_ChannelID::Scaling)) {
 		return;
 	}
 	if (seg != 0x01F7) {
@@ -4023,7 +4021,7 @@ void SIS_HandleScaling(Bitu seg, Bitu off) {
 
 	if (off == 0x1027) {
 		// This is where we leave the function
-		debugLogEnabled[SIS_Scaling] = false;
+		isChannelActive(SIS_ChannelID::Scaling);
 	}
 	if (off == 0x0FA6) {
 				/*
@@ -4071,7 +4069,7 @@ void SIS_HandlePathfinding(Bitu seg, Bitu off) {
 	static uint16_t oldY = 0xFFFF;
 	// We just trace any change to find all places where this changes
 	// if (seg == 0x01E7 && off == 0x1F4C && isChannelActive(SIS_Pathfinding)) {
-	if (isChannelActive(SIS_Pathfinding)) {
+	if (isChannelActive(SIS_ChannelID::Pathfinding)) {
 		uint16_t x = mem_readw_inline(GetAddress(0x041F, 0x1448));
 		uint16_t y = mem_readw_inline(GetAddress(0x041F, 0x144A));
 		if (oldX != x || oldY != y) {
@@ -4178,7 +4176,7 @@ void SIS_LogAnimFrame(Bitu seg, Bitu off)
 
 void SIS_HandleAnimFrame(Bitu seg, Bitu off)
 {
-	if (!debugLogEnabled[SIS_AnimFrame]) {
+	if (!isChannelActive(SIS_ChannelID::AnimFrame)) {
 		return;
 	}
 
@@ -4246,7 +4244,7 @@ void SIS_HandleAnimFramePainting(Bitu seg, Bitu off)
 
 
 
-	if (!debugLogEnabled[SIS_AnimFrame]) {
+	if (!isChannelActive(SIS_ChannelID::AnimFrame)) {
 		return;
 	}
 	
@@ -4440,7 +4438,7 @@ void SIS_HandleOPL(Bitu seg, Bitu off)
 		SIS_PrintLocal("Local: ", +0xA, 2);
 	}
 
-	if (!isChannelActive(SIS_OPL)) {
+	if (!isChannelActive(SIS_ChannelID::OPL)) {
 		return;
 	}
 
@@ -4588,7 +4586,7 @@ l0017_27D3:
 }
 
 void SIS_HandlePalette(Bitu seg, Bitu off) {
-	if (!isChannelActive(SIS_Palette)) {
+	if (!isChannelActive(SIS_ChannelID::Palette)) {
 		return;
 	}
 
@@ -4667,8 +4665,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	SIS_Handle1480(seg, off);
-	SIS_HandleBGAnimDrawing(seg, off);
+	// SIS_Handle1480(seg, off);
+	// SIS_HandleBGAnimDrawing(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -4882,7 +4880,7 @@ void SIS_HandleBlobLoading(Bitu seg, Bitu off) {
 
 void SIS_HandleRLEDecoding(Bitu seg, Bitu off) {
 	
-	if (!isChannelActive(SIS_RLE)) {
+	if (!isChannelActive(SIS_ChannelID::RLE)) {
 		return;
 	}
 

@@ -1,6 +1,21 @@
 #pragma once
 #include "debug.h"
 
+enum class SIS_ChannelID {
+	AnimFrame,
+	OPL,
+	Palette,
+	Script,
+	Script_Verbose,
+	Script_Mínimal,
+	Pathfinding,
+	Scaling,
+	RLE,
+	Special,
+	Fileread
+};
+
+const std::string SIS_Special("special");
 const std::string SIS_AnimFrame("animframe");
 const std::string SIS_OPL("opl");
 const std::string SIS_Palette("palette");
@@ -11,6 +26,25 @@ const std::string SIS_Script_Minimal("script_minimal");
 const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
 const std::string SIS_RLE("rle");
+const std::string SIS_Fileread("fileread");
+
+extern std::map<std::string, SIS_ChannelID> channelIDNames;
+extern std::map<SIS_ChannelID, bool> debugLogEnabledID;
+
+inline bool isChannelActive(const std::string& name)
+{
+	// TODO: Consider a safety mode
+	return debugLogEnabledID[channelIDNames[name]];
+}
+
+inline bool isChannelActive(SIS_ChannelID channelID)
+{
+	return debugLogEnabledID[channelID];
+}
+
+inline void setIsChannelActive(SIS_ChannelID channelID, bool active) {
+	debugLogEnabledID[channelID] = active;
+}
 
 class TraceHelper {
 	public: 
@@ -24,9 +58,9 @@ class TraceHelper {
 
 inline bool isScriptChannelActive(){
 	
-	return isChannelActive(SIS_Script) ||
-	       isChannelActive(SIS_Script_Minimal) ||
-	       isChannelActive(SIS_Script_Verbose);
+	return isChannelActive(SIS_ChannelID::Script) ||
+	       isChannelActive(SIS_ChannelID::Script_Mínimal) ||
+	       isChannelActive(SIS_ChannelID::Script_Verbose);
 }
 
 int64_t SIS_filterSegment = -1;
