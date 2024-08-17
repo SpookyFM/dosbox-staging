@@ -3916,6 +3916,18 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 
 void SIS_Init()
 {
+	channelIDNames = std::map<std::string, SIS_ChannelID>{
+	        {SIS_AnimFrame, SIS_ChannelID::AnimFrame},
+	        {SIS_OPL, SIS_ChannelID::OPL},
+	        {SIS_Palette, SIS_ChannelID::Palette},
+	        {SIS_Script, SIS_ChannelID::Script},
+	        {SIS_Script_Verbose, SIS_ChannelID::Script_Verbose},
+	        {SIS_Script_Minimal, SIS_ChannelID::Script_Mínimal},
+	        {SIS_Pathfinding, SIS_ChannelID::Pathfinding},
+	        {SIS_Scaling, SIS_ChannelID::Scaling},
+	        {SIS_RLE, SIS_ChannelID::RLE},
+	        {SIS_Special, SIS_ChannelID::Special},
+	        {SIS_Fileread, SIS_ChannelID::Fileread}};
 }
 
 void SIS_PushWord(uint16_t value)
