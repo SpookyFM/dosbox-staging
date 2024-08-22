@@ -4677,7 +4677,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	// SIS_Handle1480(seg, off);
+	SIS_Handle1480(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
 }
 
@@ -5549,14 +5549,25 @@ bool SIS_ParseCommand(char* found, std::string command)
 }
 
 void SIS_Handle1480(Bitu seg, Bitu off) {
+
+	// These save the currently active special animation set
+	static int opcode26Seg = -1;
+	static int opcode26Off = -1;
+	if (seg == 0x01E7 && off == 0xCAE6) {
+		opcode26Seg = reg_ax;
+		opcode26Off = reg_dx;
+		return;
+	}
+
 	static TraceHelper traceHelper;
 	if (is1480Filtered) {
 		// We can only leave the filtering if we leave the function
-		//if (off == 0x1615) {
-		//	is1480Filtered = false;
-		//}
+		if (off == 0x1615) {
+			is1480Filtered = false;
+		}
 		return;
 	}
+
 
 	if (seg != 0x01F7) {
 		return;
@@ -5576,10 +5587,10 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		uint16_t animOff;
 		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
 		// TODO: I think I have these backwards, this should be segment
-		/* if (animOff != 0x0477) {
+		if (animOff != opcode26Off || animSeg != opcode26Seg) {
 			is1480Filtered = true;
 			return;
-		} */
+		}
 
 		// Print the arguments
 		SIS_PrintCaller();
