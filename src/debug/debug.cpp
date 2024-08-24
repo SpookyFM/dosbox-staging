@@ -5022,6 +5022,16 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 
 }
 
+void SIS_HandleSkippedCode(Bitu seg, Bitu off) {
+	static Bitu skipSeg = 0x01E7;
+	static Bitu skipStartOff;
+	static Bitu skipEndOff;
+
+	if (seg == skipSeg && off == skipStartOff) {
+		reg_eip = skipEndOff;
+	}
+}
+
 void SIS_DumpPalette() {
 	constexpr auto palette = vga.dac.palette_map;
 	for (int i = 0; i < 256; i++) {

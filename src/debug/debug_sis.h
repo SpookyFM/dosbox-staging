@@ -127,6 +127,8 @@ void SIS_HandleStopWalking(Bitu seg, Bitu off);
 
 void SIS_DrawImage(Bitu seg, Bitu off);
 
+void SIS_HandleSkippedCode(Bitu seg, Bitu off);
+
 void SIS_DumpPalette();
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2);
