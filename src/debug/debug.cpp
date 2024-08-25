@@ -4679,6 +4679,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleCharacterDrawing(seg, off);
 	SIS_Handle1480(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
+	// SIS_HandleSkippedCode(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5024,8 +5025,8 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 
 void SIS_HandleSkippedCode(Bitu seg, Bitu off) {
 	static Bitu skipSeg = 0x01E7;
-	static Bitu skipStartOff;
-	static Bitu skipEndOff;
+	static Bitu skipStartOff = 0x9A18;
+	static Bitu skipEndOff = 0x9A54;
 
 	if (seg == skipSeg && off == skipStartOff) {
 		reg_eip = skipEndOff;
@@ -5584,20 +5585,22 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	}
 	if (off == 0x1484) {
 		// Figure out if we are called from the right function
+		constexpr bool filterForCaller = true;
 		uint32_t caller_seg;
 		uint16_t caller_off;
-		SIS_GetCaller(caller_seg, caller_off);
-		if (caller_off < 0xB768 || caller_off > 0xB78B) {
-			// is1480Filtered = true;
-			// return;
+		SIS_GetCaller(caller_seg, caller_off, 2);
+		if (filterForCaller && (caller_off < 0x9A18 || caller_off > 0x9A5A)) {
+			is1480Filtered = true;
+			return;
 		}
 
 		// Filter by a specific animation set (walking to the left)
+		constexpr bool filterForAnimation = false;
 		uint32_t animSeg;
 		uint16_t animOff;
 		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
 		// TODO: I think I have these backwards, this should be segment
-		if (animOff != opcode26Off || animSeg != opcode26Seg) {
+		if (filterForAnimation && (animOff != opcode26Off || animSeg != opcode26Seg)) {
 			is1480Filtered = true;
 			return;
 		}
