@@ -4679,7 +4679,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleCharacterDrawing(seg, off);
 	SIS_Handle1480(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
-	// SIS_HandleSkippedCode(seg, off);
+	SIS_HandleSkippedCode(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5024,11 +5024,11 @@ void SIS_DrawImage(Bitu seg, Bitu off) {
 }
 
 void SIS_HandleSkippedCode(Bitu seg, Bitu off) {
-	static Bitu skipSeg = 0x01E7;
-	static Bitu skipStartOff = 0x9A18;
-	static Bitu skipEndOff = 0x9A54;
-
-	if (seg == skipSeg && off == skipStartOff) {
+	static Bitu skipSeg = 0x01F7;
+	static Bitu skipStartOff = 0x15EF;
+	static Bitu skipEndOff   = 0x1601;
+	constexpr bool checkSkipCondition = false;
+	if (checkSkipCondition && seg == skipSeg && off == skipStartOff) {
 		reg_eip = skipEndOff;
 	}
 }
@@ -5556,6 +5556,62 @@ bool SIS_ParseCommand(char* found, std::string command)
 		return true;
 	}
 
+	if (command == "ANIMDIS") {
+		// Disable 1480 filtering
+		SIS_1480_FilterForAddress = false;
+		SIS_1480_FilterForCaller  = false;
+
+		DEBUG_ShowMsg("DEBUG: Disabling 1480 filtering.\n");
+		return true;
+	}
+
+	if (command == "ANIMCALLER") {
+		// Enable 1480 filtering by caller
+		SIS_1480_FilterForAddress = false;
+		SIS_1480_FilterForCaller  = true;
+
+		SIS_1480_CallerDepth = (uint16_t)GetHexValue(found, found);
+		found++;
+		SIS_1480_CallerSeg = (uint16_t)GetHexValue(found, found);
+		found++;
+		SIS_1480_CallerOffMin = (uint16_t)GetHexValue(found, found);
+		found++;
+		SIS_1480_CallerOffMax = (uint16_t)GetHexValue(found, found);
+		found++;
+
+		DEBUG_ShowMsg("DEBUG: Filtering 1480 for caller at depth %.2X: %.4X:%.4X-%.4X.\n",
+			SIS_1480_CallerDepth, SIS_1480_CallerSeg, SIS_1480_CallerOffMin, SIS_1480_CallerOffMax);
+		return true;
+	}
+
+	if (command == "ANIMADDR") {
+		// Enable 1480 filtering by address
+		SIS_1480_FilterForAddress = true;
+		SIS_1480_FilterForCaller  = false;
+
+		SIS_1480_AnimSeg = (uint16_t)GetHexValue(found, found);
+		found++;
+		SIS_1480_AnimOff = (uint16_t)GetHexValue(found, found);
+		found++;
+		
+
+		DEBUG_ShowMsg("DEBUG: Filtering 1480 for address %.4X:%.4X.\n",
+		              SIS_1480_AnimSeg,
+		              SIS_1480_AnimOff);
+		return true;
+	}
+
+
+
+		uint16_t SIS_1480_CallerSeg;
+		uint16_t SIS_1480_CallerOffMin;
+		uint16_t SIS_1480_CallerOffMax;
+		bool SIS_1480_FilterForCaller;
+		bool SIS_1480_FilterForAddress;
+		uint16_t SIS_1480_AnimOff;
+		uint16_t SIS_1480_AnimSeg;
+	
+
 	return false;
 }
 
@@ -5585,22 +5641,26 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	}
 	if (off == 0x1484) {
 		// Figure out if we are called from the right function
-		constexpr bool filterForCaller = true;
+
 		uint32_t caller_seg;
 		uint16_t caller_off;
-		SIS_GetCaller(caller_seg, caller_off, 2);
-		if (filterForCaller && (caller_off < 0x9A18 || caller_off > 0x9A5A)) {
+
+		SIS_GetCaller(caller_seg, caller_off, SIS_1480_CallerDepth);
+		if (SIS_1480_FilterForCaller && caller_seg == SIS_1480_CallerSeg &&
+		                              (caller_off < SIS_1480_CallerOffMin ||
+		                               caller_off > SIS_1480_CallerOffMax)) {
 			is1480Filtered = true;
 			return;
 		}
 
 		// Filter by a specific animation set (walking to the left)
-		constexpr bool filterForAnimation = false;
 		uint32_t animSeg;
 		uint16_t animOff;
+
 		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
 		// TODO: I think I have these backwards, this should be segment
-		if (filterForAnimation && (animOff != opcode26Off || animSeg != opcode26Seg)) {
+		if (SIS_1480_FilterForAddress &&(animOff != SIS_1480_AnimOff ||
+		                                  animSeg != SIS_1480_AnimSeg)) {
 			is1480Filtered = true;
 			return;
 		}

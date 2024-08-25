@@ -87,6 +87,15 @@ void SIS_HandleSIS(Bitu seg, Bitu off);
 bool SIS_ParseCommand(char* found, std::string command);
 
 bool is1480Filtered = false;
+
+uint16_t SIS_1480_CallerDepth;
+uint16_t SIS_1480_CallerSeg;
+uint16_t SIS_1480_CallerOffMin;
+uint16_t SIS_1480_CallerOffMax;
+bool SIS_1480_FilterForCaller;
+bool SIS_1480_FilterForAddress;
+uint16_t SIS_1480_AnimOff;
+uint16_t SIS_1480_AnimSeg;
 void SIS_Handle1480(Bitu seg, Bitu off);
 
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
