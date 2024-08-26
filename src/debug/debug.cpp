@@ -4762,7 +4762,7 @@ void SIS_PrintCaller(uint16_t num_levels) {
 	uint32_t seg;
 	uint16_t off;
 	SIS_GetCaller(seg, off, num_levels);
-	fprintf(stdout, "-- Caller: %.4x:%.4x\n", seg, off);
+	fprintf(stdout, "-- Caller (%d): %.4x:%.4x\n", num_levels, seg, off);
 }
 
 void SIS_ReadAddressFromLocal(int16_t offset, uint32_t& outSeg, uint16_t& outOff)
@@ -5667,6 +5667,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 
 		// Print the arguments
 		SIS_PrintCaller();
+		SIS_PrintCaller(2);
 		SIS_PrintLocal("Argument - Byte value: ", +0x6, 1);
 		SIS_PrintLocal("Argument - Value between 0 and something around A4: ", +0x08, 2);
 		SIS_PrintLocal("Argument - Address: ", +0x0A, 4);
@@ -5708,6 +5709,22 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Loop: Read value 2: ", -0x1C, 2);
 		SIS_PrintLocal("Loop: Read value 3 (skipped a word): ", -0x16, 2);
 		SIS_PrintLocal("Loop: Read value 4: ", -0x18, 2);
+	}
+
+	if (off == 0x15EF && SIS_GetLocalByte(+0x6)) {
+		// Handle the writes
+		SIS_PrintLocal("Write back: ", -0x22, 2);
+		SIS_PrintLocal("Write back: ", -0x06, 2);
+		SIS_PrintLocal("Write back: ", -0x08, 2);
+		SIS_PrintLocal("Write back: ", -0x0A, 2);
+		SIS_PrintLocal("Write back: ", -0x10, 2);
+		SIS_PrintLocal("Write back: ", -0x22, 2);
+	}
+
+	if (off == 0x15EF) {
+		// Handle the other set of writes
+		SIS_PrintLocal("Write to target: ", -0x1A, 2);
+		SIS_PrintLocal("Write to target: ", -0x1C, 2);
 	}
 
 	if (off == 0x1615) {
