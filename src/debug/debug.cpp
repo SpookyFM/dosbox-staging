@@ -5626,6 +5626,12 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		return;
 	}
 
+	// Handle the background animation update loop index
+	if (seg == 0x01E7 && off == 0x9286) {
+		SIS_PrintLocal("** Updating bg anim ", -0xC, 2);
+		return;
+	}
+
 	static TraceHelper traceHelper;
 	if (is1480Filtered) {
 		// We can only leave the filtering if we leave the function
@@ -5718,7 +5724,6 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Write back: ", -0x08, 2);
 		SIS_PrintLocal("Write back: ", -0x0A, 2);
 		SIS_PrintLocal("Write back: ", -0x10, 2);
-		SIS_PrintLocal("Write back: ", -0x22, 2);
 	}
 
 	if (off == 0x15EF) {
