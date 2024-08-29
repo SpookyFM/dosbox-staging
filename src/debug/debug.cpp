@@ -4421,6 +4421,9 @@ void SIS_HandleOPL(Bitu seg, Bitu off)
 		return;
 	}
 
+	static TraceHelper traceHelper;
+	traceHelper.AddTracePoint(0x1B5F, "01D7:1B5F");
+
 	// Trace for accesses to the 2250 global
 	uint32_t globalSeg;
 	uint16_t globalOff;
@@ -5633,6 +5636,12 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	}
 
 	static TraceHelper traceHelper;
+	// Trace all times that we are wrapping around
+	traceHelper.AddTracePoint(0x14BE, "Adjusting [bp-6] to 1");
+	traceHelper.AddTracePoint(0x14EA, "Adjusting [bp-6] to 1");
+	traceHelper.AddTracePoint(0x14F7, "Adjusting [bp-6] to 1");
+	traceHelper.AddTracePoint(0x1505, "Adjusting [bp-6] to 1");
+	traceHelper.AddTracePoint(0x15CB, "Adjusting [bp-6] to 1");
 	if (is1480Filtered) {
 		// We can only leave the filtering if we leave the function
 		if (off == 0x1615) {
@@ -5825,11 +5834,6 @@ void TraceHelper::HandleOffset(uint16_t offset) {
 }
 
 TraceHelper::TraceHelper() {
-	// Trace all times that we are wrapping around
-	AddTracePoint(0x14BE, "Adjusting [bp-6] to 1");
-	AddTracePoint(0x14EA, "Adjusting [bp-6] to 1");
-	AddTracePoint(0x14F7, "Adjusting [bp-6] to 1");
-	AddTracePoint(0x1505, "Adjusting [bp-6] to 1");
-	AddTracePoint(0x15CB, "Adjusting [bp-6] to 1");
+	
 
 }
