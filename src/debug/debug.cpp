@@ -4802,7 +4802,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleGameLoad(seg, off);
 	SIS_HandleMouseCursor(seg, off);
 	SIS_HandlePalette(seg, off);
-	SIS_HandleOPL(seg, off);
+	// SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
