@@ -51,6 +51,7 @@ class TraceHelper {
 		std::map<uint16_t, std::string> tracePoints;
 		// TODO: Also the best way to a pass a std::string?
 	    void AddTracePoint(uint16_t offset, const std::string& message);
+	    void AddTracePoint(uint16_t offset);
 	    void HandleOffset(uint16_t offset);
 		// TODO: Added for ease of use
 	    TraceHelper();

@@ -4421,8 +4421,44 @@ void SIS_HandleOPL(Bitu seg, Bitu off)
 		return;
 	}
 
+	// Detailed trace between where we read from the song data and the note on
 	static TraceHelper traceHelper;
-	traceHelper.AddTracePoint(0x1B5F, "01D7:1B5F");
+	traceHelper.AddTracePoint(0x1B5F);
+	traceHelper.AddTracePoint(0x1B9E);
+	traceHelper.AddTracePoint(0x1BA1);
+	traceHelper.AddTracePoint(0x1BA7);
+	traceHelper.AddTracePoint(0x1BAA);
+	traceHelper.AddTracePoint(0x1BDB);
+	traceHelper.AddTracePoint(0x1BE1);
+	traceHelper.AddTracePoint(0x1BE4);
+	traceHelper.AddTracePoint(0x1BE9);
+	traceHelper.AddTracePoint(0x1BF3);
+	traceHelper.AddTracePoint(0x1BFD);
+	traceHelper.AddTracePoint(0x1C09);
+	traceHelper.AddTracePoint(0x1C15);
+	traceHelper.AddTracePoint(0x1C1A);
+	traceHelper.AddTracePoint(0x1C24);
+	traceHelper.AddTracePoint(0x1C27);
+	traceHelper.AddTracePoint(0x1C44);
+	traceHelper.AddTracePoint(0x1C49);
+	traceHelper.AddTracePoint(0x1C4C);
+	traceHelper.AddTracePoint(0x1C56);
+	traceHelper.AddTracePoint(0x1C5D);
+	traceHelper.AddTracePoint(0x1C6B);
+	traceHelper.AddTracePoint(0x1C7D);
+	traceHelper.AddTracePoint(0x1C85);
+	traceHelper.AddTracePoint(0x1C8B);
+	traceHelper.AddTracePoint(0x1CB1);
+	traceHelper.AddTracePoint(0x1CF2);
+	traceHelper.AddTracePoint(0x1CFC);
+	traceHelper.AddTracePoint(0x1CFF);
+	traceHelper.AddTracePoint(0x1DEC);
+	traceHelper.AddTracePoint(0x1DF0);
+	traceHelper.AddTracePoint(0x1DF6);
+	traceHelper.AddTracePoint(0x1DFA);
+
+	traceHelper.HandleOffset(off);
+
 
 	// Trace for accesses to the 2250 global
 	uint32_t globalSeg;
@@ -5823,6 +5859,10 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
 
 void TraceHelper::AddTracePoint(uint16_t offset, const std::string& message) {
 	tracePoints[offset] = message;
+}
+
+void TraceHelper::AddTracePoint(uint16_t offset) {
+	AddTracePoint(offset, std::string());
 }
 
 void TraceHelper::HandleOffset(uint16_t offset) {
