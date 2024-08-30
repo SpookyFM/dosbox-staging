@@ -4702,7 +4702,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleGameLoad(seg, off);
 	SIS_HandleMouseCursor(seg, off);
 	SIS_HandlePalette(seg, off);
-	// SIS_HandleOPL(seg, off);
+	SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
@@ -4716,9 +4716,9 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	SIS_Handle1480(seg, off);
+	// SIS_Handle1480(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
-	SIS_HandleSkippedCode(seg, off);
+	// SIS_HandleSkippedCode(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
