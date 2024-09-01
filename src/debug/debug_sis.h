@@ -165,6 +165,8 @@ void SIS_HandleCharacterDrawing(Bitu seg, Bitu off);
 
 void SIS_HandleBGAnimDrawing(Bitu seg, Bitu off);
 
+void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off);
+
 std::vector<std::string> DebugStrings;
 
 void SIS_Debug(const char* format, ...);

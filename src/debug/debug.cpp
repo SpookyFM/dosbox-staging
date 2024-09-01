@@ -5486,6 +5486,20 @@ void SIS_HandleBGAnimDrawing(Bitu seg, Bitu off) {
 
 }
 
+void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off) {
+	// TODO: Would be better to remove this one since it will only be used once
+	static bool modApplied = false;
+	if (modApplied) {
+		return;
+	}
+	if (seg == 0x01E7 && off == 0x1C1D) {
+		constexpr uint8_t factor = 0x10;
+		mem_writeb_checked(GetAddress(0x01E7, 0x1C1F), factor);
+		modApplied = true;
+	}
+
+}
+
 void SIS_Debug(const char* format, ...) {
 	// Initialize a variable argument list
 	va_list args;
