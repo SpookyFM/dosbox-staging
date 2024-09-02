@@ -4819,6 +4819,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_Handle1480(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
 	// SIS_HandleSkippedCode(seg, off);
+	SIS_HandleMovementSpeedMod(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5493,7 +5494,7 @@ void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off) {
 		return;
 	}
 	if (seg == 0x01E7 && off == 0x1C1D) {
-		constexpr uint8_t factor = 0x10;
+		constexpr uint8_t factor = 0x32;
 		mem_writeb_checked(GetAddress(0x01E7, 0x1C1F), factor);
 		modApplied = true;
 	}
