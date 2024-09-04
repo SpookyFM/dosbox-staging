@@ -4907,8 +4907,8 @@ void SIS_PrintCaller(uint16_t num_levels) {
 
 void SIS_ReadAddressFromLocal(int16_t offset, uint32_t& outSeg, uint16_t& outOff)
 {
-	outSeg = SIS_GetLocalWord(offset);
-	outOff = SIS_GetLocalWord(offset + 0x2);
+	outSeg = SIS_GetLocalWord(offset + 0x2);
+	outOff = SIS_GetLocalWord(offset);
 }
 
 void SIS_ReadAddress(uint32_t seg, uint16_t off, uint32_t& outSeg, uint16_t& outOff)
