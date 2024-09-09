@@ -5508,7 +5508,7 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		return;
 	}
 
-	if (off == 0x1968) {
+	if (off == 0x196A) {
 		SIS_Debug("--- Entering pathfinding function");
 		SIS_PrintCaller();
 	}
