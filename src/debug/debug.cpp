@@ -4804,6 +4804,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandlePalette(seg, off);
 	// SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
+	SIS_HandlePathfinding2(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
@@ -5498,6 +5499,20 @@ void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off) {
 		mem_writeb_checked(GetAddress(0x01E7, 0x1C1F), factor);
 		modApplied = true;
 	}
+
+}
+
+void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
+	// Newer code for more detailed analysis of the pathfinding
+	if (seg != 0x01E7) {
+		return;
+	}
+
+	if (off == 0x1968) {
+		SIS_Debug("--- Entering pathfinding function");
+		SIS_PrintCaller();
+	}
+
 
 }
 
