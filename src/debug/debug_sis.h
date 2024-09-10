@@ -99,6 +99,15 @@ uint16_t SIS_1480_AnimOff;
 uint16_t SIS_1480_AnimSeg;
 void SIS_Handle1480(Bitu seg, Bitu off);
 
+constexpr uint16_t SIS_Arg7 = +0x12;
+constexpr uint16_t SIS_Arg6 = +0x10;
+constexpr uint16_t SIS_Arg5 = +0xE;
+constexpr uint16_t SIS_Arg4 = +0xC;
+constexpr uint16_t SIS_Arg3 = +0xA;
+constexpr uint16_t SIS_Arg2 = +0x8;
+constexpr uint16_t SIS_Arg1 = +0x6;
+
+
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
 
  // Define a buffer for stdout
