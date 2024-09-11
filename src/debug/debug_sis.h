@@ -172,3 +172,7 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off);
 std::vector<std::string> DebugStrings;
 
 void SIS_Debug(const char* format, ...);
+
+void SIS_DebugScript(const char* format, ...);
+
+std::string SIS_DebugFormat(const char* format, va_list args);
