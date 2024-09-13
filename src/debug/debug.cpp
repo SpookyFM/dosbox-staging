@@ -5508,6 +5508,15 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		return;
 	}
 
+	if (off == 0x1196) {
+		SIS_Debug("--- Entering 1196 function\n");
+		SIS_PrintLocal("x1: ", SIS_Arg4, 2);
+		SIS_PrintLocal("y1: ", SIS_Arg3, 2);
+		SIS_PrintLocal("x2: ", SIS_Arg2, 2);
+		SIS_PrintLocal("y2: ", SIS_Arg1, 2);
+		return;
+	}
+
 	if (off == 0x196A) {
 		SIS_Debug("--- Entering pathfinding function\n");
 		SIS_PrintCaller();
@@ -5517,6 +5526,7 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		SIS_PrintLocal("y1: ", SIS_Arg3, 2);
 		SIS_PrintLocal("x2: ", SIS_Arg2, 2);
 		SIS_PrintLocal("y2: ", SIS_Arg1, 2);
+		return;
 	}
 
 
