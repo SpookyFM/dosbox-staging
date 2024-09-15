@@ -5508,8 +5508,9 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		return;
 	}
 
-	if (off == 0x1196) {
+	if (off == 0x119A) {
 		SIS_Debug("--- Entering 1196 function\n");
+		SIS_PrintCaller();
 		SIS_PrintLocal("x1: ", SIS_Arg4, 2);
 		SIS_PrintLocal("y1: ", SIS_Arg3, 2);
 		SIS_PrintLocal("x2: ", SIS_Arg2, 2);
