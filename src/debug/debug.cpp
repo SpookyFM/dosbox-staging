@@ -5508,6 +5508,15 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		return;
 	}
 
+	static uint16_t index;
+	static uint16_t x1;
+	static uint16_t y1;
+	static uint16_t x2;
+	static uint16_t y2;
+
+	// 0037:19CC - gather stack and index
+	// 0037 : 19D1 - gather the result
+
 	if (off == 0x119A) {
 		SIS_Debug("--- Entering 1196 function\n");
 		SIS_PrintCaller();
