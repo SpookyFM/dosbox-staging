@@ -108,6 +108,44 @@ constexpr uint16_t SIS_Arg2 = +0x8;
 constexpr uint16_t SIS_Arg1 = +0x6;
 
 
+
+class SIS_DeferredGetterBase {
+public:
+	
+	uint16_t seg;
+	uint16_t off;
+
+	virtual void Execute() = 0;
+};
+
+std::map<uint32_t, std::vector<SIS_DeferredGetterBase>> deferredGetters;
+
+template <class T> 
+class SIS_DeferredGetter : public SIS_DeferredGetterBase {
+public:
+	T result;
+
+	operator T();
+
+	uint16_t seg;
+	uint16_t off;
+	std::function<uint16_t()> lambda;
+
+	virtual void Execute() override;
+};
+
+
+
+// Capture
+// Need to add to a map of lists with address mapped to instruction
+// When the address is hit, execute all functions and save the results for later
+// Template class with return type as template
+// Handle the function as a lambda?
+// Retrieval
+// Give out a copy of the object which can grab the data
+SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff, uint16_t seg, uint16_t off);
+
+
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
 
  // Define a buffer for stdout
@@ -126,6 +164,10 @@ void SIS_WriteAddress(uint32_t seg, uint16_t off, uint32_t outSeg, uint16_t outO
 void SIS_HandleSkip(Bitu seg, Bitu off);
 
 void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off);
+
+
+uint16_t SIS_GetStackWord(int16_t off);
+uint8_t SIS_GetStackByte(int16_t off);
 
 uint16_t SIS_GetLocalWord(int16_t off);
 uint8_t SIS_GetLocalByte(int16_t off);
@@ -185,3 +227,9 @@ void SIS_Debug(const char* format, ...);
 void SIS_DebugScript(const char* format, ...);
 
 std::string SIS_DebugFormat(const char* format, va_list args);
+
+template <class T>
+inline void SIS_DeferredGetter<T>::Execute()
+{
+	result = lambda();
+}

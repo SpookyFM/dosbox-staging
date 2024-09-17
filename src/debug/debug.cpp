@@ -5508,15 +5508,33 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		return;
 	}
 
-	static uint16_t index;
-	static uint16_t x1;
-	static uint16_t y1;
-	static uint16_t x2;
-	static uint16_t y2;
+	{
+		static uint16_t index;
+		static uint16_t x1;
+		static uint16_t y1;
+		static uint16_t x2;
+		static uint16_t y2;
 
-	// 0037:19CC - gather stack and index
-	// 0037 : 19D1 - gather the result
+		// 0037:19CC - gather stack and index
+		// 0037 : 19D1 - gather the result
 
+		if (off == 0x19CC) {
+			index = SIS_GetLocalWord(-0x6);
+			x1    = SIS_GetStackWord(0x06);
+			y1    = SIS_GetStackWord(0x04);
+			x2 = SIS_GetStackWord(0x02);
+			y2 = SIS_GetStackWord(0x00);
+			return;
+		}
+
+		if (off == 0x19D1) {
+			uint8_t result = reg_al;
+			SIS_Debug("--- Calling 1196 on %u: (%u,%u) - (%u,%u) - result: %.2x\n",
+				index, x1, y1, x2, y2, result);
+			return;
+		}
+
+	}
 	if (off == 0x119A) {
 		SIS_Debug("--- Entering 1196 function\n");
 		SIS_PrintCaller();
@@ -5540,6 +5558,36 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 	}
 
 
+	{
+		static uint16_t index;
+		static uint16_t x1;
+		static uint16_t y1;
+		static uint16_t x2;
+		static uint16_t y2;
+
+
+		if (off == 0x1A39) {
+			index = SIS_GetLocalWord(-0x6);
+			x1    = SIS_GetStackWord(0x06);
+			y1    = SIS_GetStackWord(0x04);
+			x2    = SIS_GetStackWord(0x02);
+			y2    = SIS_GetStackWord(0x00);
+			return;
+		}
+		
+		if (off == 0x1A3E) {
+			uint16_t result = reg_ax;
+			SIS_Debug("--- Calling 1390 on %u: (%u,%u) - (%u,%u) - result: %u\n",
+			          index,
+			          x1,
+			          y1,
+			          x2,
+			          y2,
+			          result);
+			return;
+		}
+		
+	}
 }
 
 void SIS_Debug(const char* format, ...) {
@@ -5586,6 +5634,16 @@ void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off)
 	script_offset = mem_readw_inline(GetAddress(0x0227, 0x0F8A));
 	seg           = mem_readw_inline(GetAddress(0x0227, 0x0F8C));
 	off           = mem_readw_inline(GetAddress(0x0227, 0x0F8C + 0x2));
+}
+
+uint16_t SIS_GetStackWord(int16_t off)
+{
+	return mem_readw_inline(GetAddress(SegValue(ss), reg_sp + off));
+}
+
+uint8_t SIS_GetStackByte(int16_t off)
+{
+	return mem_readb_inline(GetAddress(SegValue(ss), reg_sp + off));
 }
 
 uint16_t SIS_GetLocalWord(int16_t off)
@@ -5966,7 +6024,18 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	}
 }
 
-void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...) {
+SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
+                                                      uint16_t seg, uint16_t off)
+{
+	SIS_DeferredGetter<uint16_t>* result = new SIS_DeferredGetter<uint16_t>();
+	result->lambda = [localOff]() -> uint16_t {
+		uint16_t lambdaResult = SIS_GetLocalWord(localOff);
+		return lambdaResult;
+	};
+}
+
+void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...)
+{
 	// Initialize a variable argument list
 	va_list args;
 	va_start(args, format);
