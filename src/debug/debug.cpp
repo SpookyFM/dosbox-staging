@@ -5557,7 +5557,6 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		return;
 	}
 
-
 	{
 		static uint16_t index;
 		static uint16_t x1;
@@ -5588,6 +5587,51 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		}
 		
 	}
+	{
+		// Call: 0037:1A4F
+		// Result: 1A54
+		// Comparison with bp-2 0037:1A57 
+		static uint16_t index;
+		static uint16_t x1;
+		static uint16_t y1;
+		static uint16_t x2;
+		static uint16_t y2;
+
+		if (off == 0x1A4F) {
+			index = SIS_GetLocalWord(-0x6);
+			x1    = SIS_GetStackWord(0x06);
+			y1    = SIS_GetStackWord(0x04);
+			x2    = SIS_GetStackWord(0x02);
+			y2    = SIS_GetStackWord(0x00);
+			return;
+		}
+
+		if (off == 0x1A54) {
+			uint16_t result = reg_ax;
+			SIS_Debug("--- Calling 1390 on %u: (%u,%u) - (%u,%u) - result: %u\n",
+			          index,
+			          x1,
+			          y1,
+			          x2,
+			          y2,
+			          result);
+			return;
+		}
+
+		if (off == 0x1A57) {
+			uint16_t total = reg_ax;
+			uint16_t comparison = SIS_GetLocalWord(-0x2);
+			SIS_Debug("Checking if total %u < %u.\n",
+			          total, comparison);
+			return;
+		}
+
+		
+	}
+
+	
+
+
 }
 
 void SIS_Debug(const char* format, ...) {
