@@ -5629,7 +5629,18 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		
 	}
 
-	
+	// Length function from here on
+	{
+		static bool lookupSmallerThanSum;
+		if (off == 0x1365) {
+			lookupSmallerThanSum = false;
+			return;
+		}
+		if (off == 0x1371) {
+			lookupSmallerThanSum = true;
+			return;
+		}
+	}
 
 
 }
