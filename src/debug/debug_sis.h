@@ -169,6 +169,7 @@ void SIS_GetScriptInfos(uint16_t& script_offset, uint16_t& seg, uint16_t& off);
 uint16_t SIS_GetStackWord(int16_t off);
 uint8_t SIS_GetStackByte(int16_t off);
 
+uint32_t SIS_GetLocalDoubleWord(int16_t off);
 uint16_t SIS_GetLocalWord(int16_t off);
 uint8_t SIS_GetLocalByte(int16_t off);
 

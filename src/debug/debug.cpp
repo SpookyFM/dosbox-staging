@@ -5629,15 +5629,31 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		
 	}
 
+	if (off == 0x1359) {
+		SIS_Debug("Looked up value: %.4x%.4x\n", reg_ax, reg_dx);
+		return;
+	}
+
 	// Length function from here on
 	{
 		static bool lookupSmallerThanSum;
+		static char* comparisonString;
 		if (off == 0x1365) {
 			lookupSmallerThanSum = false;
+			comparisonString     = "smaller";
 			return;
 		}
 		if (off == 0x1371) {
 			lookupSmallerThanSum = true;
+			comparisonString     = "larger";
+			return;
+		}
+
+		if (off == 0x137B) {
+			uint32_t total = SIS_GetLocalDoubleWord(-0x15);
+			SIS_Debug("Looked up value was %s than the total, new total: %.8x\n",
+			          comparisonString,
+			          total);
 			return;
 		}
 	}
@@ -5699,6 +5715,11 @@ uint16_t SIS_GetStackWord(int16_t off)
 uint8_t SIS_GetStackByte(int16_t off)
 {
 	return mem_readb_inline(GetAddress(SegValue(ss), reg_sp + off));
+}
+
+uint32_t SIS_GetLocalDoubleWord(int16_t off)
+{
+	return mem_readd_inline(GetAddress(SegValue(ss), reg_bp + off));
 }
 
 uint16_t SIS_GetLocalWord(int16_t off)
