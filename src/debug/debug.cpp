@@ -5627,13 +5627,38 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		}
 	}
 
-	if (off == 0x12D0) {
+	if (off == 0x12D2) {
 		// Handle x, y for both and the abolute differences
+		uint16_t x1 = SIS_GetLocalWord(SIS_Arg1);
+		uint16_t y1 = SIS_GetLocalWord(SIS_Arg2);
+		uint16_t x2 = SIS_GetLocalWord(SIS_Arg3);
+		uint16_t y2 = SIS_GetLocalWord(SIS_Arg4);
 
+		uint32_t absDiffX = SIS_GetLocalDoubleWord(-0x9);
+		uint32_t absDiffY = SIS_GetLocalDoubleWord(-0xD);
+
+		double result = sqrt(absDiffX * absDiffX + absDiffY * absDiffY);
+
+		SIS_Debug("Inputs are (%u,%u), (%u,%u)\n", x1, y1, x2, y2);
+		SIS_Debug("Absolute difference: (%u,%u)\n", absDiffX, absDiffY);
+		SIS_Debug("Result should be: %f\n", result);
+		return;
+	}
+	
+	if (off == 0x130E) {
+		uint32_t lookup = reg_cx << 16 + reg_bx;
+		SIS_Debug("First lookup: %u (%.4x%.4x)\n", lookup, reg_cx, reg_bx);
+		return;
+	}
+
+	if (off == 0x1323) {
+		uint32_t lookup = reg_ax << 16 + reg_dx;
+		SIS_Debug("Second lookup: %u (%.4x%.4x)\n", lookup, reg_ax, reg_dx);
+		return;
 	}
 
 	if (off == 0x132D) {
-		uint32_t referenceValue = SIS_GetLocalDoubleWord(-0x11);
+		uint32_t referenceValue = SIS_GetLocalWord(-0x11) << 16 + SIS_GetLocalWord(-0x0F);
 		SIS_Debug("Reference value: %u (%.8x)\n", referenceValue, referenceValue);
 		return;
 	}
