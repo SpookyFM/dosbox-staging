@@ -5625,17 +5625,30 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 			          total, comparison);
 			return;
 		}
-
-		
 	}
 
-	if (off == 0x1359) {
-		SIS_Debug("Looked up value: %.4x%.4x\n", reg_ax, reg_dx);
+	if (off == 0x132D) {
+		uint32_t referenceValue = SIS_GetLocalDoubleWord(-0x11);
+		SIS_Debug("Reference value: %u (%.8x)\n", referenceValue, referenceValue);
 		return;
 	}
 
-	// Length function from here on
+	if (off == 0x134A) {
+		uint16_t rightShifted = SIS_GetLocalWord(-0x1E);
+		uint16_t leftShifted  = reg_ax;
+		
+		SIS_Debug("Right shifted: %u (%.4xh) - Left shifted: %u (%.4xh)\n", rightShifted, rightShifted, leftShifted, leftShifted);
+		return;
+	}
+
+	if (off == 0x1359) {
+		SIS_Debug("Looked up value: %u %.4x%.4xh\n", reg_dx << 16 + reg_ax, reg_dx, reg_ax);
+		return;
+	}
+
 	{
+	// Length function from here on
+	
 		static bool lookupSmallerThanSum;
 		static char* comparisonString;
 		if (off == 0x1365) {
@@ -5651,14 +5664,13 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 
 		if (off == 0x137B) {
 			uint32_t total = SIS_GetLocalDoubleWord(-0x15);
-			SIS_Debug("Looked up value was %s than the total, new total: %.8x\n",
+			SIS_Debug("Looked up value was %s than the total, new total: %u (%.8xh)\n",
 			          comparisonString,
+				      total,
 			          total);
 			return;
 		}
 	}
-
-
 }
 
 void SIS_Debug(const char* format, ...) {
