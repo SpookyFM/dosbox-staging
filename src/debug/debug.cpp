@@ -5627,6 +5627,11 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 		}
 	}
 
+	if (off == 0x12D0) {
+		// Handle x, y for both and the abolute differences
+
+	}
+
 	if (off == 0x132D) {
 		uint32_t referenceValue = SIS_GetLocalDoubleWord(-0x11);
 		SIS_Debug("Reference value: %u (%.8x)\n", referenceValue, referenceValue);
