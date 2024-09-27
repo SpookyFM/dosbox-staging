@@ -5646,19 +5646,19 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 	}
 	
 	if (off == 0x130E) {
-		uint32_t lookup = reg_cx << 16 + reg_bx;
-		SIS_Debug("First lookup: %u (%.4x%.4x)\n", lookup, reg_cx, reg_bx);
+		uint32_t lookup = (reg_bx << 16) + reg_cx;
+		SIS_Debug("First lookup: %u (%.4x%.4x)\n", lookup, reg_bx, reg_cx);
 		return;
 	}
 
 	if (off == 0x1323) {
-		uint32_t lookup = reg_ax << 16 + reg_dx;
-		SIS_Debug("Second lookup: %u (%.4x%.4x)\n", lookup, reg_ax, reg_dx);
+		uint32_t lookup = (reg_dx << 16) + reg_ax;
+		SIS_Debug("Second lookup: %u (%.4x%.4x)\n", lookup, reg_dx, reg_ax);
 		return;
 	}
 
 	if (off == 0x132D) {
-		uint32_t referenceValue = SIS_GetLocalWord(-0x11) << 16 + SIS_GetLocalWord(-0x0F);
+		uint32_t referenceValue = (SIS_GetLocalWord(-0x0F) << 16) + SIS_GetLocalWord(-0x11);
 		SIS_Debug("Reference value: %u (%.8x)\n", referenceValue, referenceValue);
 		return;
 	}
@@ -5672,7 +5672,7 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 	}
 
 	if (off == 0x1359) {
-		SIS_Debug("Looked up value: %u %.4x%.4xh\n", reg_dx << 16 + reg_ax, reg_dx, reg_ax);
+		SIS_Debug("Looked up value: %u %.4x%.4xh\n", (reg_dx << 16) + reg_ax, reg_dx, reg_ax);
 		return;
 	}
 
@@ -5694,7 +5694,7 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 
 		if (off == 0x137B) {
 			uint32_t total = SIS_GetLocalDoubleWord(-0x15);
-			SIS_Debug("Looked up value was %s than the total, new total: %u (%.8xh)\n",
+			SIS_Debug("Looked up value was %s than the reference, new total: %u (%.8xh)\n",
 			          comparisonString,
 				      total,
 			          total);
