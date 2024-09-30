@@ -5711,14 +5711,14 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 
 	if (off == 0x15AC) {
 		SIS_Debug("--- Entering 15A8\n");
-		SIS_PrintLocal("TODO: Figure out", 2, SIS_Arg3);
-		SIS_PrintLocal("Index of point: ", 2, SIS_Arg2);
-		SIS_PrintLocal("Caller BP:", 2, SIS_Arg1);
+		SIS_PrintLocal("TODO: Figure out", SIS_Arg3, 2);
+		SIS_PrintLocal("Index of point: ", SIS_Arg2, 2);
+		SIS_PrintLocal("Caller BP:", SIS_Arg1, 2);
 		return;
 	}
 
 	if (off == 0x174B) {
-		SIS_PrintLocal("Result: ", 2, -0x2);
+		SIS_PrintLocal("Result: ", -0x2, 2);
 		return;
 	}
 
