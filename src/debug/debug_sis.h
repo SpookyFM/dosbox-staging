@@ -220,6 +220,7 @@ void SIS_HandleBGAnimDrawing(Bitu seg, Bitu off);
 void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off);
 
 void SIS_HandlePathfinding2(Bitu seg, Bitu off);
+void SIS_HandlePathfinding3(Bitu seg, Bitu off);
 
 std::vector<std::string> DebugStrings;
 

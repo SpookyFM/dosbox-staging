@@ -4805,6 +4805,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleOPL(seg, off);
 	SIS_HandlePathfinding(seg, off);
 	SIS_HandlePathfinding2(seg, off);
+	SIS_HandlePathfinding3(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
@@ -5701,6 +5702,26 @@ void SIS_HandlePathfinding2(Bitu seg, Bitu off) {
 			return;
 		}
 	}
+}
+
+void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+
+	if (off == 0x15AC) {
+		SIS_Debug("--- Entering 15A8\n");
+		SIS_PrintLocal("TODO: Figure out", 2, SIS_Arg3);
+		SIS_PrintLocal("Index of point: ", 2, SIS_Arg2);
+		SIS_PrintLocal("Caller BP:", 2, SIS_Arg1);
+		return;
+	}
+
+	if (off == 0x174B) {
+		SIS_PrintLocal("Result: ", 2, -0x2);
+		return;
+	}
+
 }
 
 void SIS_Debug(const char* format, ...) {
