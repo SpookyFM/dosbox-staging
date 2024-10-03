@@ -4803,8 +4803,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleMouseCursor(seg, off);
 	SIS_HandlePalette(seg, off);
 	// SIS_HandleOPL(seg, off);
-	SIS_HandlePathfinding(seg, off);
-	SIS_HandlePathfinding2(seg, off);
+	// SIS_HandlePathfinding(seg, off);
+	// SIS_HandlePathfinding2(seg, off);
 	SIS_HandlePathfinding3(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
@@ -5711,9 +5711,9 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 
 	if (off == 0x15AC) {
 		SIS_Debug("--- Entering 15A8\n");
-		SIS_PrintLocal("TODO: Figure out", 2, SIS_Arg3);
-		SIS_PrintLocal("Index of point: ", 2, SIS_Arg2);
-		SIS_PrintLocal("Caller BP:", 2, SIS_Arg1);
+		SIS_PrintLocal("TODO: Figure out", SIS_Arg3, 2);
+		SIS_PrintLocal("Index of point: ", SIS_Arg2, 2);
+		SIS_PrintLocal("Caller BP:", SIS_Arg1, 2);
 		return;
 	}
 
@@ -5733,7 +5733,7 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 	                                              0h
 
 	if (off == 0x174B) {
-		SIS_PrintLocal("Result: ", 2, -0x2);
+		SIS_PrintLocal("Result: ", -0x2, 2);
 		return;
 	}
 
