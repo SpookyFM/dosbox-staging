@@ -145,6 +145,7 @@ public:
 // Give out a copy of the object which can grab the data
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff, uint16_t seg, uint16_t off);
 
+constexpr uint16_t SIS_GlobalOffset = 0x0227;
 
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
 
