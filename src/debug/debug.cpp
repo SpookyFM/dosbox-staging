@@ -5722,15 +5722,12 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		SIS_Debug("Values in [50C2h] array: ");
 		for (int i = 0; i != 16; i++) {
 			uint8_t currentValue = mem_readb_inline(
-			        GetAddress(SIS_GlobalOffset, 0x50C2 + i));
+			        GetAddress(SegValue(es), 0x50C2 + i));
 			SIS_Debug("%.2X ", currentValue);
 		}
 		SIS_Debug("\n");
 		return;
 	}
-
-	 add di, ax 0037 : 15FF cmp byte ptr es : [di + 50C2h],
-	                                              0h
 
 	if (off == 0x174B) {
 		SIS_PrintLocal("Result: ", -0x2, 2);
