@@ -5734,6 +5734,24 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		return;
 	}
 
+	if (off == 0x15AC || off == 0x15F7 || off == 0x162B || off == 0x1748) {
+		SIS_Print15A8List(off);
+		return;
+	}
+
+}
+
+void SIS_Print15A8List(uint16_t off) {
+	
+	uint16_t offset = SIS_GetLocalWord(SIS_Arg1) - 0x2A;
+	uint16_t count  = mem_readw_inline(GetAddress(SegValue(ss), offset));
+	SIS_Debug("List in 15A8 at %.4x: Num elements: %u, Elements: ", off, count);
+	for (int i = 0; i < count; i++) {
+		uint16_t currentIndex = mem_readw_inline(
+		        GetAddress(SegValue(ss), offset + (i+1)*2));
+		SIS_Debug("%.2x ", currentIndex);
+	}
+	SIS_Debug("\n");
 }
 
 void SIS_Debug(const char* format, ...) {

@@ -223,6 +223,8 @@ void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off);
 void SIS_HandlePathfinding2(Bitu seg, Bitu off);
 void SIS_HandlePathfinding3(Bitu seg, Bitu off);
 
+void SIS_Print15A8List(uint16_t off);
+
 std::vector<std::string> DebugStrings;
 
 void SIS_Debug(const char* format, ...);
