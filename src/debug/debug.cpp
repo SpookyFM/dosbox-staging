@@ -5709,6 +5709,8 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		return;
 	}
 
+	SIS_WatchPath(seg, off);
+
 	if (off == 0x15AC) {
 		SIS_Debug("--- Entering 15A8\n");
 		SIS_PrintLocal("TODO: Figure out", SIS_Arg3, 2);
@@ -5739,6 +5741,30 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		return;
 	}
 
+}
+
+void SIS_WatchPath(Bitu seg, Bitu off) {
+	static bool initialized;
+	static uint32_t pSeg;
+	static uint16_t pOff;
+	if (!initialized) {
+		pSeg = SIS_GlobalOffset;
+		pOff = 0x77C + (1 << 2);
+		SIS_ReadAddress(pSeg, pOff, pSeg, pOff);
+		SIS_ReadAddress(pSeg, pOff + 0x0A, pSeg, pOff);
+	}
+	static uint16_t oldV1 = 0;
+	static uint16_t oldV2 = 0;
+
+	uint16_t v1 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2C));
+	uint16_t v2 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2E));
+
+	if ((oldV1 != v1) || (oldV2 != v2)) {
+		oldV1 = v1;
+		oldV2 = v2;
+		SIS_Debug("Change to pathfinding plan at %.4x:%.4x\n", seg, off);
+		SIS_PrintPath();
+	}
 }
 
 void SIS_PrintPath(uint16_t objectIndex) {
