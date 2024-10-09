@@ -5741,6 +5741,37 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 
 }
 
+void SIS_PrintPath(uint16_t objectIndex) {
+	// Get the base address first
+	/* mov di, [bp + 8h]
+	shl	di,2h
+	les	di,[di+77Ch]
+	les	di,es:[di+0Ah]*/
+	uint32_t pSeg = SIS_GlobalOffset;
+	uint16_t pOff = 0x77C + (objectIndex << 2);
+	SIS_Debug("Initial address: %.4x:%.4x\n", pSeg, pOff);
+	SIS_ReadAddress(pSeg, pOff, pSeg, pOff);
+	SIS_Debug("First read result: %.4x:%.4x\n", pSeg, pOff);
+	SIS_ReadAddress(pSeg, pOff + 0x0A, pSeg, pOff);
+	SIS_Debug("Second read result: %.4x:%.4x\n", pSeg, pOff);
+	uint16_t v1 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2C));
+	uint16_t v2 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2E));
+
+	SIS_Debug("Pathfinding plan: %u, %u: ", v1, v2);
+	// When we set up the line traces for each segment, we are iterating
+	// from 1
+	// to the di+2E value -1
+	// But since we add one in the line trace loop for the last one, we are iterating over 
+	// 1..[di-2E]
+	for (int i = 1; i <= v2; i++) {
+		uint16_t current = mem_readw_inline(
+		        GetAddress(pSeg, pOff + (i << 1) + 0x0A));
+		SIS_Debug("%u, ", current);
+	}
+	SIS_Debug("\n");
+
+}
+
 void SIS_Print15A8List(uint16_t off) {
 	
 	uint16_t offset = SIS_GetLocalWord(SIS_Arg1) - 0x2A;
@@ -6030,6 +6061,13 @@ bool SIS_ParseCommand(char* found, std::string command)
 		DEBUG_ShowMsg("DEBUG: Filtering 1480 for address %.4X:%.4X.\n",
 		              SIS_1480_AnimSeg,
 		              SIS_1480_AnimOff);
+		return true;
+	}
+
+	if (command == "PP") {
+		// Print the pathfinding path of the protagonist
+		DEBUG_ShowMsg("DEBUG: Printing the protagonist's pathfinding path");
+		SIS_PrintPath();
 		return true;
 	}
 
