@@ -223,6 +223,7 @@ void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off);
 void SIS_HandlePathfinding2(Bitu seg, Bitu off);
 void SIS_HandlePathfinding3(Bitu seg, Bitu off);
 
+bool SIS_FlagWatchPath = false;
 void SIS_WatchPath(Bitu seg, Bitu off);
 
 void SIS_PrintPath(uint16_t objectIndex = 1);

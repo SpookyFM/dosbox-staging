@@ -5709,6 +5709,7 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		return;
 	}
 
+	// TODO: Assuming we are only changing the path in code in this segment
 	SIS_WatchPath(seg, off);
 
 	if (off == 0x15AC) {
@@ -5747,22 +5748,41 @@ void SIS_WatchPath(Bitu seg, Bitu off) {
 	static bool initialized;
 	static uint32_t pSeg;
 	static uint16_t pOff;
+	
+
+	if (!SIS_FlagWatchPath) {
+		return;
+	}
 	if (!initialized) {
 		pSeg = SIS_GlobalOffset;
 		pOff = 0x77C + (1 << 2);
 		SIS_ReadAddress(pSeg, pOff, pSeg, pOff);
 		SIS_ReadAddress(pSeg, pOff + 0x0A, pSeg, pOff);
+		initialized = true;
 	}
 	static uint16_t oldV1 = 0;
 	static uint16_t oldV2 = 0;
+	static uint16_t oldData[0x2C - 0x0A];
 
 	uint16_t v1 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2C));
 	uint16_t v2 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2E));
+	constexpr uint16_t size = 0x2C - 0x0A;
+	uint8_t data[size];
+	MEM_BlockRead(GetAddress(pSeg, pOff + 0x0A), data, size);
 
-	if ((oldV1 != v1) || (oldV2 != v2)) {
+	bool dataDiffers = false;
+	for (int i = 0; i < size; i++) {
+		if (data[i] != oldData[i]) {
+			dataDiffers = true;
+		}
+		oldData[i] = data[i];
+	}
+	bool v1Differs = oldV1 != v1;
+	bool v2Differs = oldV2 != v2;
+	if (v1Differs || v2Differs || dataDiffers) {
 		oldV1 = v1;
 		oldV2 = v2;
-		SIS_Debug("Change to pathfinding plan at %.4x:%.4x\n", seg, off);
+		SIS_Debug("Change to pathfinding plan at %.4x:%.4x (%u %u %u)\n", seg, off, v1Differs, v2Differs, dataDiffers);
 		SIS_PrintPath();
 	}
 }
@@ -6094,6 +6114,13 @@ bool SIS_ParseCommand(char* found, std::string command)
 		// Print the pathfinding path of the protagonist
 		DEBUG_ShowMsg("DEBUG: Printing the protagonist's pathfinding path");
 		SIS_PrintPath();
+		return true;
+	}
+
+	if (command == "WP") {
+		// Start watching the path variables
+		DEBUG_ShowMsg("DEBUG: Starting watch of path variables");
+		SIS_FlagWatchPath = true;
 		return true;
 	}
 
