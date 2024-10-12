@@ -5795,11 +5795,11 @@ void SIS_PrintPath(uint16_t objectIndex) {
 	les	di,es:[di+0Ah]*/
 	uint32_t pSeg = SIS_GlobalOffset;
 	uint16_t pOff = 0x77C + (objectIndex << 2);
-	SIS_Debug("Initial address: %.4x:%.4x\n", pSeg, pOff);
+	// SIS_Debug("Initial address: %.4x:%.4x\n", pSeg, pOff);
 	SIS_ReadAddress(pSeg, pOff, pSeg, pOff);
-	SIS_Debug("First read result: %.4x:%.4x\n", pSeg, pOff);
+	// SIS_Debug("First read result: %.4x:%.4x\n", pSeg, pOff);
 	SIS_ReadAddress(pSeg, pOff + 0x0A, pSeg, pOff);
-	SIS_Debug("Second read result: %.4x:%.4x\n", pSeg, pOff);
+	// SIS_Debug("Second read result: %.4x:%.4x\n", pSeg, pOff);
 	uint16_t v1 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2C));
 	uint16_t v2 = mem_readw_inline(GetAddress(pSeg, pOff + 0x2E));
 
@@ -5809,9 +5809,12 @@ void SIS_PrintPath(uint16_t objectIndex) {
 	// to the di+2E value -1
 	// But since we add one in the line trace loop for the last one, we are iterating over 
 	// 1..[di-2E]
-	for (int i = 1; i <= v2; i++) {
+	for (int i = 0; i <= (0x2C - 0x0A) / 2; i++) {
 		uint16_t current = mem_readw_inline(
 		        GetAddress(pSeg, pOff + (i << 1) + 0x0A));
+		if (i == v2) {
+			SIS_Debug("_");
+		}
 		SIS_Debug("%u, ", current);
 	}
 	SIS_Debug("\n");
