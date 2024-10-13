@@ -5709,11 +5709,22 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		return;
 	}
 
+	static uint16_t depth = 0;
+	static bool isRecursive = false;
+
 	// TODO: Assuming we are only changing the path in code in this segment
 	SIS_WatchPath(seg, off);
 
 	if (off == 0x15AC) {
-		SIS_Debug("--- Entering 15A8\n");
+		uint32_t callerSeg;
+		uint16_t callerOff;
+
+		SIS_GetCaller(callerSeg, callerOff);
+		if ((callerSeg == 0x01E7) && (callerOff > 0x15A8) && (callerOff < 0x174C)) {
+			depth++;
+			isRecursive = true;
+		}
+		SIS_Debug("--- Entering 15A8 (%u)\n", depth);
 		SIS_PrintLocal("TODO: Figure out", SIS_Arg3, 2);
 		SIS_PrintLocal("Index of point: ", SIS_Arg2, 2);
 		SIS_PrintLocal("Caller BP:", SIS_Arg1, 2);
@@ -5734,6 +5745,10 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 
 	if (off == 0x174B) {
 		SIS_PrintLocal("Result: ", -0x2, 2);
+		if (isRecursive) {
+			depth--;
+			isRecursive = false;
+		}
 		return;
 	}
 
