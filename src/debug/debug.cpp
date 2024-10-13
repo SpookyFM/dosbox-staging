@@ -5747,7 +5747,7 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		SIS_PrintLocal("Result: ", -0x2, 2);
 		if (isRecursive) {
 			depth--;
-			isRecursive = false;
+			isRecursive = depth != 0;
 		}
 		return;
 	}
