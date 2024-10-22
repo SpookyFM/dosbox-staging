@@ -79,6 +79,8 @@ void SIS_Init();
 
 bool SIS_IsBreakpoint(Bitu seg, Bitu off);
 
+void SIS_HandleAnimatedPortraits(Bitu seg, Bitu off);
+
 void SIS_HandleScaling(Bitu seg, Bitu off);
 
 void SIS_HandlePathfinding(Bitu seg, Bitu off);

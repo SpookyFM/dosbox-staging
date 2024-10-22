@@ -4021,6 +4021,20 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 	return false;
 }
 
+void SIS_HandleAnimatedPortraits(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+
+
+	if (off == 0xB462) {
+		uint16_t index = mem_readw(GetAddress(SIS_GlobalOffset, 0x1006));
+		uint16_t v1 = mem_readw(GetAddress(SIS_GlobalOffset, 0x1000));
+		uint16_t v2 = mem_readw(GetAddress(SIS_GlobalOffset, 0x1002));
+		SIS_Debug("Index: %u, v1: %u, v2: %u", index, v1, v2);
+	}
+}
+
 void SIS_HandleScaling(Bitu seg, Bitu off) {
 	
 	if (!isChannelActive(SIS_ChannelID::Scaling)) {
@@ -4805,7 +4819,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleOPL(seg, off);
 	// SIS_HandlePathfinding(seg, off);
 	// SIS_HandlePathfinding2(seg, off);
-	SIS_HandlePathfinding3(seg, off);
+	// SIS_HandlePathfinding3(seg, off);
+	SIS_HandleAnimatedPortraits(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
