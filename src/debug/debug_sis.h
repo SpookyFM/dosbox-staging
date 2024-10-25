@@ -100,6 +100,8 @@ bool SIS_1480_FilterForAddress;
 uint16_t SIS_1480_AnimOff;
 uint16_t SIS_1480_AnimSeg;
 void SIS_Handle1480(Bitu seg, Bitu off);
+void SIS_Handle1480Short(Bitu seg, Bitu off);
+
 
 constexpr uint16_t SIS_Arg7 = +0x12;
 constexpr uint16_t SIS_Arg6 = +0x10;
@@ -150,6 +152,7 @@ SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff, uint16_
 constexpr uint16_t SIS_GlobalOffset = 0x0227;
 
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
+void SIS_PrintLocalShort(int16_t offset, uint8_t numBytes);
 
  // Define a buffer for stdout
 char stdout_buffer[0xFFFF];

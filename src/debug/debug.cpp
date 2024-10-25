@@ -4033,6 +4033,16 @@ void SIS_HandleAnimatedPortraits(Bitu seg, Bitu off) {
 		uint16_t v2 = mem_readw(GetAddress(SIS_GlobalOffset, 0x1002));
 		SIS_Debug("Index: %u, v1: %u, v2: %u", index, v1, v2);
 	}
+	if (off == 0xB4CB) {
+		uint16_t v1004 = mem_readw(GetAddress(SIS_GlobalOffset, 0x1004));
+		SIS_Debug("[1004h]: %u\n", v1004);
+	}
+
+	if (off == 0xB512) {
+		uint16_t v1000 = mem_readw(GetAddress(SIS_GlobalOffset, 0x1000));
+		uint16_t v1002 = mem_readw(GetAddress(SIS_GlobalOffset, 0x1002));
+		SIS_Debug("Call at B512: [1000h]: %u, [1002h]: %u\n", v1000, v1002);
+	}
 }
 
 void SIS_HandleScaling(Bitu seg, Bitu off) {
@@ -4833,7 +4843,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	SIS_Handle1480(seg, off);
+	// SIS_Handle1480(seg, off);
+	SIS_Handle1480Short(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
 	// SIS_HandleSkippedCode(seg, off);
 	SIS_HandleMovementSpeedMod(seg, off);
@@ -6317,6 +6328,36 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	}
 }
 
+void SIS_Handle1480Short(Bitu seg, Bitu off)
+{
+	if (off == 0x1484) {
+		// Figure out if we are called from the right function
+
+		SIS_Debug("Entering 1480: [+6]: ");
+		SIS_PrintLocalShort(+0x6, 1);
+		SIS_Debug(" [+8]: ");
+		SIS_PrintLocalShort(+0x8, 2);
+		SIS_Debug(" [+A]: ");
+		SIS_PrintLocalShort(+0xA, 4);
+		SIS_Debug(" [+E]: ");
+		SIS_PrintLocalShort(+0xE, 4);
+		SIS_Debug(" [+12]: ");
+		SIS_PrintLocalShort(+0x12, 4);
+		SIS_Debug("\n");
+	}
+
+	if (off == 0x1615) {
+		// Handle the result
+		uint32_t caller_seg;
+		uint16_t caller_off;
+		SIS_Debug("1480 result: Segment: ");
+		SIS_PrintLocalShort(-0x4, 2);
+		SIS_Debug(" Offset: ");
+		SIS_PrintLocalShort(-0x2, 2);
+		SIS_Debug("\n");
+	}
+}
+
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
                                                       uint16_t seg, uint16_t off)
 {
@@ -6329,64 +6370,39 @@ SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
 
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...)
 {
-	// Initialize a variable argument list
-	va_list args;
-	va_start(args, format);
+	const char* offsetSign = offset >= 0 ? "+" : "-";
+	uint16_t positiveOffset = offset >= 0 ? offset : -offset;
+	
+	SIS_Debug("[bp%s%.2x]: ", offsetSign, positiveOffset);
+	SIS_PrintLocalShort(offset, numBytes);
+	SIS_Debug("\n");
 
-	// Determine the required size for the formatted string
-	va_list args_copy;
-	va_copy(args_copy, args);
-	int size = vsnprintf(nullptr, 0, format, args_copy);
-	va_end(args_copy);
+}
 
-	if (size < 0) {
-		// TODO: Handle error
-		va_end(args);
-		// throw std::runtime_error("Error during formatting.");
-		return;
-	}
-
-	// Create a string with the required size
-	std::vector<char> buffer(size + 1);
-	vsnprintf(buffer.data(), buffer.size(), format, args);
-	va_end(args);
-
-	// Return the formatted string
-	std::string result = std::string(buffer.data(), size);
-	fprintf(stdout, result.c_str());
-
+void SIS_PrintLocalShort(int16_t offset, uint8_t numBytes) {
 	// Read the local
 	// Also handle 4 bytes as a pointer
 	uint16_t localValue;
 	char* valueFormat;
-	const char* offsetSign = offset >= 0 ? "+" : "-";
+	const char* offsetSign  = offset >= 0 ? "+" : "-";
 	uint16_t positiveOffset = offset >= 0 ? offset : -offset;
 	switch (numBytes) {
 	case 1: {
-		localValue = SIS_GetLocalByte(offset);
-		valueFormat = "[bp%s%.2x]: %.2x\n";
-	}
-		  break;
+		localValue  = SIS_GetLocalByte(offset);
+		SIS_Debug("%.2x", localValue);
+	} break;
 	case 2: {
 		localValue  = SIS_GetLocalWord(offset);
-		valueFormat = "[bp%s%.2x]: %.4x\n";
-		  }
-		  break;
+		SIS_Debug("%.4x", localValue);
+	} break;
 	case 4: {
-		          uint32_t localSeg;
-				  uint16_t localOff;
-		          SIS_ReadAddressFromLocal(offset, localSeg, localOff);
-		                  fprintf(stdout,
-		                          "[bp%s%.2x]: %.4x:%.4x\n",
-								  offsetSign,
-								  positiveOffset,
-		                          localSeg,
-		                          localOff);
+		uint32_t localSeg;
+		uint16_t localOff;
+		SIS_ReadAddressFromLocal(offset, localSeg, localOff);
+		SIS_Debug("%.4x:%.4x", localSeg, localOff);
 	}
 		return;
 	}
-	fprintf(stdout, valueFormat, offsetSign, positiveOffset, localValue);
-
 }
 
 
