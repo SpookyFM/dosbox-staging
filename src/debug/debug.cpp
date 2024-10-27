@@ -4830,7 +4830,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandlePathfinding(seg, off);
 	// SIS_HandlePathfinding2(seg, off);
 	// SIS_HandlePathfinding3(seg, off);
-	SIS_HandleAnimatedPortraits(seg, off);
+	// SIS_HandleAnimatedPortraits(seg, off);
 	SIS_HandleScaling(seg, off);
 	// SIS_HandleScaleChange(seg, off);
 	SIS_HandleSkip(seg, off);
@@ -4844,7 +4844,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
 	// SIS_Handle1480(seg, off);
-	SIS_Handle1480Short(seg, off);
+	// SIS_Handle1480Short(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
 	// SIS_HandleSkippedCode(seg, off);
 	SIS_HandleMovementSpeedMod(seg, off);
