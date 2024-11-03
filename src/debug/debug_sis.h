@@ -187,6 +187,8 @@ void SIS_HandleDataLoadFunction(Bitu seg, Bitu off);
 
 void SIS_HandleBlobLoading(Bitu seg, Bitu off);
 
+void SIS_HandleBlobLoading2(Bitu seg, Bitu off);
+
 void SIS_HandleRLEDecoding(Bitu seg, Bitu off);
 
 void SIS_HandlePaletteChange(Bitu seg, Bitu off);

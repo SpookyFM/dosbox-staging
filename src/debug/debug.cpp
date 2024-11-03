@@ -5059,6 +5059,27 @@ void SIS_HandleBlobLoading(Bitu seg, Bitu off) {
 
 }
 
+void SIS_HandleBlobLoading2(Bitu seg, Bitu off) {
+	// TBC: I think this covers blob loading during save game loading
+
+	if (seg == 0x01E7 && off == 0x8264) {
+		/*
+		0037:8288 	cmp	word ptr [bp+0FE6Fh],15h
+0037:828D 	jz	8292h
+
+l0037_828F:
+0037:828F 	jmp	818Ch
+
+l0037_8292:
+0037:8292 	cmp	word ptr [bp+0FE71h],200h#
+---
+0037:8260 	mov	es:[di+8h],ax
+0037:8264 	mov	es:[di+0Ah],dx
+
+*/
+	}
+}
+
 void SIS_HandleRLEDecoding(Bitu seg, Bitu off) {
 	
 	if (!isChannelActive(SIS_ChannelID::RLE)) {
