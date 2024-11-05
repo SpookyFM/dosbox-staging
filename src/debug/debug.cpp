@@ -4838,8 +4838,9 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleDrawingFunction(seg, off);
 	// SIS_HandleDataLoadvFunction(seg, off);
 	// SIS_HandleBlobLoading(seg, off);
-	SIS_HandleRLEDecoding(seg, off);
-	SIS_HandlePaletteChange(seg, off);
+	SIS_HandleBlobLoading2(seg, off);
+	// SIS_HandleRLEDecoding(seg, off);
+	// SIS_HandlePaletteChange(seg, off);
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
@@ -5063,20 +5064,16 @@ void SIS_HandleBlobLoading2(Bitu seg, Bitu off) {
 	// TBC: I think this covers blob loading during save game loading
 
 	if (seg == 0x01E7 && off == 0x8264) {
-		/*
-		0037:8288 	cmp	word ptr [bp+0FE6Fh],15h
-0037:828D 	jz	8292h
+		uint16_t blobIndex = SIS_GetLocalWord(+0x0FE6F);
+		uint16_t objectIndex = SIS_GetLocalWord(+0x0FE71);
+		uint16_t blobSeg = reg_ax;
+		uint16_t blobOff         = reg_dx;
 
-l0037_828F:
-0037:828F 	jmp	818Ch
-
-l0037_8292:
-0037:8292 	cmp	word ptr [bp+0FE71h],200h#
----
-0037:8260 	mov	es:[di+8h],ax
-0037:8264 	mov	es:[di+0Ah],dx
-
-*/
+		SIS_Debug("Blob loading 2: Object %.4x Blob %.2x at %.4x:%.4x\n",
+		          objectIndex,
+		          blobIndex,
+		          blobSeg,
+		          blobOff);
 	}
 }
 
@@ -6092,6 +6089,11 @@ bool SIS_ParseCommand(char* found, std::string command)
 		// We shift left by 2 = *4
 		SIS_ReadAddress(0x227, 0x77C + objectIndex * 4, objSeg, objOff);
 		mem_writew_inline(GetAddress(objSeg, objOff + 0x4), 0x1);
+
+		uint32_t numItemPtr = GetAddress(SIS_GlobalOffset, 0x222A);
+		uint16_t numItems = mem_readw_inline(numItemPtr);
+		mem_writew_inline(numItemPtr, numItems++);
+		mem_writeb_inline(GetAddress(SIS_GlobalOffset, numItems + 0x2029), objectIndex);
 
 		DEBUG_ShowMsg("DEBUG: Giving item to player: %.4x.\n",
 		              objectIndex);
