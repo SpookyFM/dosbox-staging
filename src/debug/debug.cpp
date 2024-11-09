@@ -4849,6 +4849,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleBGAnimDrawing(seg, off);
 	// SIS_HandleSkippedCode(seg, off);
 	SIS_HandleMovementSpeedMod(seg, off);
+	SIS_HandleFunctionInjection(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5075,6 +5076,22 @@ void SIS_HandleBlobLoading2(Bitu seg, Bitu off) {
 		          blobSeg,
 		          blobOff);
 	}
+}
+
+void SIS_HandleFunctionInjection(Bitu seg, Bitu off) {
+	if (injectFunction == false) {
+		return;
+	}
+	
+	constexpr Bitu injectSeg = 0x01E7;
+	constexpr Bitu injectOff = 0x0363;
+	if (seg == injectSeg && off == injectOff) {
+		// Let's get started, we first re-route the call towards the target function
+		// Segment is already correct
+		reg_eip = 0x08EC;
+		injectFunction = false;
+	}
+
 }
 
 void SIS_HandleRLEDecoding(Bitu seg, Bitu off) {
@@ -6083,17 +6100,23 @@ bool SIS_ParseCommand(char* found, std::string command)
 	if (command == "GIVEITEM") {
 		// Give an item to the protagonist
 		uint16_t objectIndex = (uint16_t)GetHexValue(found, found);
+		injectFunction = true;
 
 		uint32_t objSeg;
 		uint16_t objOff;
 		// We shift left by 2 = *4
-		SIS_ReadAddress(0x227, 0x77C + objectIndex * 4, objSeg, objOff);
-		mem_writew_inline(GetAddress(objSeg, objOff + 0x4), 0x1);
 
-		uint32_t numItemPtr = GetAddress(SIS_GlobalOffset, 0x222A);
+
+
+
+		SIS_ReadAddress(0x227, 0x77C + (objectIndex << 2), objSeg, objOff);
+		mem_writew_inline(GetAddress(objSeg, objOff + 0x4), 0x401);
+
+		/* uint32_t numItemPtr = GetAddress(SIS_GlobalOffset, 0x222A);
 		uint16_t numItems = mem_readw_inline(numItemPtr);
-		mem_writew_inline(numItemPtr, numItems++);
-		mem_writeb_inline(GetAddress(SIS_GlobalOffset, numItems + 0x2029), objectIndex);
+		numItems++;
+		mem_writew_inline(numItemPtr, numItems);
+		mem_writeb_inline(GetAddress(SIS_GlobalOffset, numItems + 0x2029), objectIndex); */
 
 		DEBUG_ShowMsg("DEBUG: Giving item to player: %.4x.\n",
 		              objectIndex);
