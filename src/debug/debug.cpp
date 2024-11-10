@@ -5087,6 +5087,17 @@ void SIS_HandleFunctionInjection(Bitu seg, Bitu off) {
 	constexpr Bitu injectOff = 0x0363;
 	if (seg == injectSeg && off == injectOff) {
 		// Let's get started, we first re-route the call towards the target function
+		
+		//  Push the argument - hardcoded for now
+		SIS_PushWord(0x8);
+
+		// Push the return address
+		SIS_PushWord(0x01E7);
+		SIS_PushWord(0x0363);
+		// SIS_PushWord(0x0364);
+
+		
+		// Set the IP to point to the entry point
 		// Segment is already correct
 		reg_eip = 0x08EC;
 		injectFunction = false;
