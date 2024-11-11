@@ -6123,11 +6123,11 @@ bool SIS_ParseCommand(char* found, std::string command)
 		SIS_ReadAddress(0x227, 0x77C + (objectIndex << 2), objSeg, objOff);
 		mem_writew_inline(GetAddress(objSeg, objOff + 0x4), 0x401);
 
-		/* uint32_t numItemPtr = GetAddress(SIS_GlobalOffset, 0x222A);
+		uint32_t numItemPtr = GetAddress(SIS_GlobalOffset, 0x222A);
 		uint16_t numItems = mem_readw_inline(numItemPtr);
 		numItems++;
 		mem_writew_inline(numItemPtr, numItems);
-		mem_writeb_inline(GetAddress(SIS_GlobalOffset, numItems + 0x2029), objectIndex); */
+		mem_writeb_inline(GetAddress(SIS_GlobalOffset, numItems + 0x2029), objectIndex);
 
 		DEBUG_ShowMsg("DEBUG: Giving item to player: %.4x.\n",
 		              objectIndex);
