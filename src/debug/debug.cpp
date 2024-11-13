@@ -5088,8 +5088,8 @@ void SIS_HandleFunctionInjection(Bitu seg, Bitu off) {
 	if (seg == injectSeg && off == injectOff) {
 		// Let's get started, we first re-route the call towards the target function
 		
-		//  Push the argument - hardcoded for now
-		SIS_PushWord(0x8);
+		//  Push the argument 
+		SIS_PushWord(giveItemObjectID);
 
 		// Push the return address
 		SIS_PushWord(0x01E7);
@@ -6111,6 +6111,7 @@ bool SIS_ParseCommand(char* found, std::string command)
 	if (command == "GIVEITEM") {
 		// Give an item to the protagonist
 		uint16_t objectIndex = (uint16_t)GetHexValue(found, found);
+		giveItemObjectID = objectIndex;
 		injectFunction = true;
 
 		uint32_t objSeg;
