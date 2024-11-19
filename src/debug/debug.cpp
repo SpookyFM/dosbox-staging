@@ -4851,7 +4851,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleMovementSpeedMod(seg, off);
 	SIS_HandleFunctionInjection(seg, off);
 	
-	// SIS_HandleScalingCalculation(seg, off);
+	SIS_HandleScalingCalculation(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5111,22 +5111,30 @@ void SIS_HandleScalingCalculation(Bitu seg, Bitu off) {
 	if (seg != 0x01E7) {
 		return;
 	}
-
+	static uint16_t depth;
 	if (off == 0x940A) {
+		depth = reg_ax;
+	}
+	else if (off == 0x9440) {
+		uint16_t result = reg_ax;
 		uint32_t pSceneSeg;
 		uint16_t pSceneOff;
 		SIS_ReadAddress(SIS_GlobalOffset, 0x0778, pSceneSeg, pSceneOff);
-		uint16_t v1 = mem_readw_inline(GetAddress(pSceneSeg, pSceneOff + 0x51FD));
+		uint16_t v1 = mem_readw_inline(
+		        GetAddress(pSceneSeg, pSceneOff + 0x51FD));
 		uint16_t v2 = mem_readw_inline(
 		        GetAddress(pSceneSeg, pSceneOff + 0x51FF));
 		uint16_t v3 = mem_readw_inline(
 		        GetAddress(pSceneSeg, pSceneOff + 0x5201));
-		uint16_t depth = reg_ax;
-		SIS_Debug("Scaling [51FDh]: %.4x [51FFh]: %.4x [5201h]: %.4x Depth: %.4x\n",
+		
+		uint16_t objectIndex = SIS_GetLocalWord(-0x0A);
+		SIS_Debug("Scaling object %4.x [51FDh]: %u [51FFh]: %u [5201h]: %u Depth: %u - Result: %u\n",
+		          objectIndex,
 		          v1,
 		          v2,
 		          v3,
-		          depth);
+		          depth,
+				  result);
 	}
 }
 
