@@ -4850,6 +4850,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleSkippedCode(seg, off);
 	SIS_HandleMovementSpeedMod(seg, off);
 	SIS_HandleFunctionInjection(seg, off);
+	
+	// SIS_HandleScalingCalculation(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5103,6 +5105,29 @@ void SIS_HandleFunctionInjection(Bitu seg, Bitu off) {
 		injectFunction = false;
 	}
 
+}
+
+void SIS_HandleScalingCalculation(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+
+	if (off == 0x940A) {
+		uint32_t pSceneSeg;
+		uint16_t pSceneOff;
+		SIS_ReadAddress(SIS_GlobalOffset, 0x0778, pSceneSeg, pSceneOff);
+		uint16_t v1 = mem_readw_inline(GetAddress(pSceneSeg, pSceneOff + 0x51FD));
+		uint16_t v2 = mem_readw_inline(
+		        GetAddress(pSceneSeg, pSceneOff + 0x51FF));
+		uint16_t v3 = mem_readw_inline(
+		        GetAddress(pSceneSeg, pSceneOff + 0x5201));
+		uint16_t depth = reg_ax;
+		SIS_Debug("Scaling [51FDh]: %.4x [51FFh]: %.4x [5201h]: %.4x Depth: %.4x\n",
+		          v1,
+		          v2,
+		          v3,
+		          depth);
+	}
 }
 
 void SIS_HandleRLEDecoding(Bitu seg, Bitu off) {

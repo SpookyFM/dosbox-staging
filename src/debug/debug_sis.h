@@ -194,6 +194,8 @@ bool injectFunction = false;
 uint16_t giveItemObjectID;
 void SIS_HandleFunctionInjection(Bitu seg, Bitu off);
 
+void SIS_HandleScalingCalculation(Bitu seg, Bitu off);
+
 void SIS_HandleRLEDecoding(Bitu seg, Bitu off);
 
 void SIS_HandlePaletteChange(Bitu seg, Bitu off);
