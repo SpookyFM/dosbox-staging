@@ -12,7 +12,8 @@ enum class SIS_ChannelID {
 	Scaling,
 	RLE,
 	Special,
-	Fileread
+	Fileread,
+	FrameUpdate
 };
 
 const std::string SIS_Special("special");
@@ -27,6 +28,7 @@ const std::string SIS_Pathfinding("pathfinding");
 const std::string SIS_Scaling("scaling");
 const std::string SIS_RLE("rle");
 const std::string SIS_Fileread("fileread");
+const std::string SIS_FrameUpdate("frame_update");
 
 extern std::map<std::string, SIS_ChannelID> channelIDNames;
 extern std::map<SIS_ChannelID, bool> debugLogEnabledID;

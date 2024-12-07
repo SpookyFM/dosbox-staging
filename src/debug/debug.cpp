@@ -3927,7 +3927,9 @@ void SIS_Init()
 	        {SIS_Scaling, SIS_ChannelID::Scaling},
 	        {SIS_RLE, SIS_ChannelID::RLE},
 	        {SIS_Special, SIS_ChannelID::Special},
-	        {SIS_Fileread, SIS_ChannelID::Fileread}};
+	        {SIS_Fileread, SIS_ChannelID::Fileread},
+	        {SIS_FrameUpdate, SIS_ChannelID::FrameUpdate}
+			};
 }
 
 void SIS_PushWord(uint16_t value)
@@ -4844,14 +4846,14 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleCharacterPos(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
-	// SIS_Handle1480(seg, off);
+	SIS_Handle1480(seg, off);
 	// SIS_Handle1480Short(seg, off);
 	// SIS_HandleBGAnimDrawing(seg, off);
 	// SIS_HandleSkippedCode(seg, off);
 	SIS_HandleMovementSpeedMod(seg, off);
 	SIS_HandleFunctionInjection(seg, off);
 	
-	SIS_HandleScalingCalculation(seg, off);
+	// SIS_HandleScalingCalculation(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -6274,6 +6276,9 @@ bool SIS_ParseCommand(char* found, std::string command)
 }
 
 void SIS_Handle1480(Bitu seg, Bitu off) {
+	if (!isChannelActive(SIS_FrameUpdate)) {
+		return;
+	}
 
 	// These save the currently active special animation set
 	static int opcode26Seg = -1;
@@ -6314,6 +6319,10 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	if (seg != 0x01F7) {
 		return;
 	}
+	// We use these to track the offset we are currently at
+	static uint32_t animSeg;
+	static uint16_t animOff;
+
 	if (off == 0x1484) {
 		// Figure out if we are called from the right function
 
@@ -6329,9 +6338,6 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 		}
 
 		// Filter by a specific animation set (walking to the left)
-		uint32_t animSeg;
-		uint16_t animOff;
-
 		SIS_ReadAddressFromLocal(+0x12, animSeg, animOff);
 		// TODO: I think I have these backwards, this should be segment
 		if (SIS_1480_FilterForAddress &&(animOff != SIS_1480_AnimOff ||
@@ -6380,6 +6386,7 @@ void SIS_Handle1480(Bitu seg, Bitu off) {
 	if (off == 0x1587) {
 		// This is the loop during which we iterate over animations?
 		fprintf(stdout, "Loop: cx = %.4x\n", reg_cx);
+		SIS_Debug("Offset at end of loop: %.4x\n", reg_si - animOff);
 		SIS_PrintLocal("Loop: Read value 1: ", -0x1A, 2);
 		SIS_PrintLocal("Loop: Read value 2: ", -0x1C, 2);
 		SIS_PrintLocal("Loop: Read value 3 (skipped a word): ", -0x16, 2);
