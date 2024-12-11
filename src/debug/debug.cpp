@@ -6189,6 +6189,22 @@ bool SIS_ParseCommand(char* found, std::string command)
 		return true;
 	}
 
+	if (command == "GO") {
+		// Get the orientation of the object
+		uint16_t index = (uint16_t)GetHexValue(found, found);
+
+		uint32_t objSeg;
+		uint16_t objOff;
+		// We shift left by 2 = *4
+		SIS_ReadAddress(0x227, 0x77C + index * 4, objSeg, objOff);
+		uint16_t orientation = mem_readw_inline(GetAddress(objSeg, objOff + 0x6));
+
+		DEBUG_ShowMsg("DEBUG: Orientation of object %.4x is %.4x.\n", index,
+		              orientation);
+
+		return true;
+	}
+
 	if (command == "BLOB") {
 		// Temp command for blob debugging
 		
