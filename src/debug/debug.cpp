@@ -6205,6 +6205,37 @@ bool SIS_ParseCommand(char* found, std::string command)
 		return true;
 	}
 
+	if (command == "DBA") {
+		// Disable background animations
+		
+		uint32_t sceneDataSeg;
+		uint16_t sceneDataOff;
+		SIS_ReadAddress(0x227, 0x778, sceneDataSeg, sceneDataOff);
+		mem_writew_inline(GetAddress(sceneDataSeg, sceneDataOff + 0x50F5), 0);
+		DEBUG_ShowMsg("DEBUG: Disabling background animations.\n");
+	}
+
+	if (command == "MOS") {
+		// Move the object to the specific scene
+		uint16_t index = (uint16_t)GetHexValue(found, found);
+		found++;
+		uint16_t sceneIndex = (uint16_t)GetHexValue(found, found);
+
+		uint32_t objSeg;
+		uint16_t objOff;
+		// We shift left by 2 = *4
+		SIS_ReadAddress(0x227, 0x77C + index * 4, objSeg, objOff);
+		mem_writew_inline(
+		        GetAddress(objSeg, objOff + 0x4), sceneIndex);
+
+		DEBUG_ShowMsg("DEBUG: Moving object %.4x to scene %.4x.\n",
+		              index,
+		              sceneIndex);
+
+		return true;
+	}
+
+
 	if (command == "BLOB") {
 		// Temp command for blob debugging
 		
