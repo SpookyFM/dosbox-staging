@@ -239,6 +239,9 @@ void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off);
 void SIS_HandlePathfinding2(Bitu seg, Bitu off);
 void SIS_HandlePathfinding3(Bitu seg, Bitu off);
 
+uint16_t SIS_InitialSceneOverride = 0x06;
+void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off);
+
 bool SIS_FlagWatchPath = false;
 void SIS_WatchPath(Bitu seg, Bitu off);
 

@@ -4852,6 +4852,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleSkippedCode(seg, off);
 	SIS_HandleMovementSpeedMod(seg, off);
 	SIS_HandleFunctionInjection(seg, off);
+	SIS_HandleInitialSceneOverride(seg, off);
 	
 	// SIS_HandleScalingCalculation(seg, off);
 }
@@ -5866,6 +5867,13 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 
 }
 
+void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off) {
+	if (seg == 0x01E7 && off == 0x3213) {
+		mem_writew_inline(GetAddress(0x0227, 0x77C), SIS_InitialSceneOverride);
+		reg_ax = SIS_InitialSceneOverride;
+	}
+}
+
 void SIS_WatchPath(Bitu seg, Bitu off) {
 	static bool initialized;
 	static uint32_t pSeg;
@@ -6306,6 +6314,13 @@ bool SIS_ParseCommand(char* found, std::string command)
 		DEBUG_ShowMsg("DEBUG: Starting watch of path variables");
 		SIS_FlagWatchPath = true;
 		return true;
+	}
+
+	if (command == "SIS") {
+		// Set the initial scene (smart abbrevation, right?)
+		SIS_InitialSceneOverride = (uint16_t)GetHexValue(found, found);
+		found++;
+		DEBUG_ShowMsg("DEBUG: Setting initial scene override to %.x.", SIS_InitialSceneOverride);
 	}
 
 
