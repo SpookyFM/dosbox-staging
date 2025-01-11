@@ -5871,6 +5871,13 @@ void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off) {
 	if (seg == 0x01E7 && off == 0x3213) {
 		mem_writew_inline(GetAddress(0x0227, 0x77C), SIS_InitialSceneOverride);
 		reg_ax = SIS_InitialSceneOverride;
+
+		// While we're at it, let's also disable sound
+		mem_writeb_inline(GetAddress(0x0227, 0x1F4C), SIS_UseSound);
+	}
+	else if (seg == 0x01E7 && off == 0x7686) {
+		// And also disable sound after loading
+		mem_writeb_inline(GetAddress(0x0227, 0x1F4C), SIS_UseSound);
 	}
 }
 
@@ -6321,6 +6328,7 @@ bool SIS_ParseCommand(char* found, std::string command)
 		SIS_InitialSceneOverride = (uint16_t)GetHexValue(found, found);
 		found++;
 		DEBUG_ShowMsg("DEBUG: Setting initial scene override to %.x.", SIS_InitialSceneOverride);
+		return true;
 	}
 
 
