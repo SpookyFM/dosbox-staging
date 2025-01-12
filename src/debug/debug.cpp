@@ -4839,8 +4839,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleInventoryIcons(seg, off);
 	// SIS_HandleDrawingFunction(seg, off);
 	// SIS_HandleDataLoadvFunction(seg, off);
-	// SIS_HandleBlobLoading(seg, off);
-	SIS_HandleBlobLoading2(seg, off);
+	SIS_HandleBlobLoading(seg, off);
+	// SIS_HandleBlobLoading2(seg, off);
 	// SIS_HandleRLEDecoding(seg, off);
 	// SIS_HandlePaletteChange(seg, off);
 	SIS_HandleCharacterPos(seg, off);
@@ -5061,7 +5061,12 @@ void SIS_HandleBlobLoading(Bitu seg, Bitu off) {
 		uint32_t blobIndex = SIS_GetLocalWord(-0x3);
 		fprintf(stdout, "01E7:0A3E: Blob index = %.4x\n", blobIndex);
 		return;
-	
+	}
+
+	if (seg == 0x01E7 && off == 0x0BBA) {
+		uint32_t blobIndex = SIS_GetLocalWord(-0x3);
+		fprintf(stdout, "01E7:0BBA: Mirroring - Blob index = %.4x\n", blobIndex);
+		return;
 	}
 
 }
@@ -5081,6 +5086,8 @@ void SIS_HandleBlobLoading2(Bitu seg, Bitu off) {
 		          blobSeg,
 		          blobOff);
 	}
+
+	
 }
 
 void SIS_HandleFunctionInjection(Bitu seg, Bitu off) {
