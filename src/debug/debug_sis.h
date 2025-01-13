@@ -33,6 +33,10 @@ const std::string SIS_FrameUpdate("frame_update");
 extern std::map<std::string, SIS_ChannelID> channelIDNames;
 extern std::map<SIS_ChannelID, bool> debugLogEnabledID;
 
+// Addresses for the font
+uint16_t SIS_FontAddresses[0x502 / 2][2];
+bool SIS_FontInitialized = false;
+
 inline bool isChannelActive(const std::string& name)
 {
 	// TODO: Consider a safety mode
@@ -103,6 +107,8 @@ uint16_t SIS_1480_AnimOff;
 uint16_t SIS_1480_AnimSeg;
 void SIS_Handle1480(Bitu seg, Bitu off);
 void SIS_Handle1480Short(Bitu seg, Bitu off);
+
+void SIS_HandleFont(Bitu seg, Bitu off);
 
 
 constexpr uint16_t SIS_Arg7 = +0x12;
