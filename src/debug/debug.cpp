@@ -5430,6 +5430,12 @@ uint16_t lastFramePosY;
 uint8_t lastFrameColor;
 
 void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
+	if (seg == 0x01F7 && off == 0x1765) {
+		uint16_t x = SIS_GetLocalWord(+0x18);
+		uint16_t y = SIS_GetLocalWord(+0x16);
+		SIS_DrawHorizontalLine(x, x + 30, y, 0xAB);
+		return;
+	}
 	if (seg != 0x01E7) {
 		return;
 	}
@@ -5444,8 +5450,8 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 		        GetAddress(SegValue(es), reg_di + 0x211));
 		uint16_t y2 = mem_readw_inline(
 		        GetAddress(SegValue(es), reg_di + 0x213));
-		SIS_DrawHorizontalLine(x1, x2, y1);
-		SIS_DrawHorizontalLine(x1, x2, y2);
+		//SIS_DrawHorizontalLine(x1, x2, y1);
+		//SIS_DrawHorizontalLine(x1, x2, y2);
 		SIS_DrawVerticalLine(x1, y1, y2);
 		SIS_DrawVerticalLine(x2, y1, y2);
 		SIS_Debug("Character rendering args: %.4x %.4x %.4x %.4x\n",
@@ -5898,15 +5904,17 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 
 }
 
-void SIS_DrawHorizontalLine(uint16_t x1, uint16_t x2, uint16_t y) {
+void SIS_DrawHorizontalLine(uint16_t x1, uint16_t x2, uint16_t y, uint8_t value)
+{
 	for (uint16_t x = x1; x <= x2; x++) {
-		SIS_SetPixel(x, y, 0xFF);
+		SIS_SetPixel(x, y, value);
 	}
 }
 
-void SIS_DrawVerticalLine(uint16_t x, uint16_t y1, uint16_t y2) {
+void SIS_DrawVerticalLine(uint16_t x, uint16_t y1, uint16_t y2, uint8_t value)
+{
 	for (uint16_t y = y1; y <= y2; y++) {
-		SIS_SetPixel(x, y, 0xFF);
+		SIS_SetPixel(x, y, value);
 	}
 }
 

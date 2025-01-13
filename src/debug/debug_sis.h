@@ -239,8 +239,8 @@ void SIS_HandleMovementSpeedMod(Bitu seg, Bitu off);
 void SIS_HandlePathfinding2(Bitu seg, Bitu off);
 void SIS_HandlePathfinding3(Bitu seg, Bitu off);
 
-void SIS_DrawHorizontalLine(uint16_t x1, uint16_t x2, uint16_t y);
-void SIS_DrawVerticalLine(uint16_t x, uint16_t y1, uint16_t y2);
+void SIS_DrawHorizontalLine(uint16_t x1, uint16_t x2, uint16_t y, uint8_t value = 0xFF);
+void SIS_DrawVerticalLine(uint16_t x, uint16_t y1, uint16_t y2, uint8_t value = 0xFF);
 inline void SIS_SetPixel(uint16_t x, uint16_t y, uint8_t value)
 {
 	mem_writeb_inline(GetAddress(0xA000, y * 320 + x), value);
