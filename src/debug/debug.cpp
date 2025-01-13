@@ -5433,6 +5433,29 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	if (seg != 0x01E7) {
 		return;
 	}
+	// Handle the character drawing
+	if (off == 0x9AA8) {
+		SIS_PrintLocal("Character index: ", -0x0A, 2);
+		uint16_t x1 = mem_readw_inline(
+		        GetAddress(SegValue(es), reg_di + 0x20D));
+		uint16_t y1 = mem_readw_inline(
+		        GetAddress(SegValue(es), reg_di + 0x20F));
+		uint16_t x2 = mem_readw_inline(
+		        GetAddress(SegValue(es), reg_di + 0x211));
+		uint16_t y2 = mem_readw_inline(
+		        GetAddress(SegValue(es), reg_di + 0x213));
+		SIS_DrawHorizontalLine(x1, x2, y1);
+		SIS_DrawHorizontalLine(x1, x2, y2);
+		SIS_DrawVerticalLine(x1, y1, y2);
+		SIS_DrawVerticalLine(x2, y1, y2);
+		SIS_Debug("Character rendering args: %.4x %.4x %.4x %.4x\n",
+			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x20D)),
+			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x20F)),
+			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x211)),
+			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x213))
+			);
+	}
+
 	if (off != 0x1B8F) {
 		return;
 	}
@@ -5449,6 +5472,7 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	uint16_t charOrientation = mem_readw_inline(
 	        GetAddress(protSeg, protOff + 0x6));
 	// fprintf(stdout, "Player orientation: %.4x\n", charOrientation);
+	SIS_Debug("Protagonist position: %.4x %.4x\n", charX, charY);
 	
 	lastFramePosX = charX;
 	lastFramePosY = charY;
@@ -5872,6 +5896,18 @@ void SIS_HandlePathfinding3(Bitu seg, Bitu off) {
 		return;
 	}
 
+}
+
+void SIS_DrawHorizontalLine(uint16_t x1, uint16_t x2, uint16_t y) {
+	for (uint16_t x = x1; x <= x2; x++) {
+		SIS_SetPixel(x, y, 0xFF);
+	}
+}
+
+void SIS_DrawVerticalLine(uint16_t x, uint16_t y1, uint16_t y2) {
+	for (uint16_t y = y1; y <= y2; y++) {
+		SIS_SetPixel(x, y, 0xFF);
+	}
 }
 
 void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off) {
