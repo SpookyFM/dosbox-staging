@@ -6580,23 +6580,16 @@ void SIS_Handle1480Short(Bitu seg, Bitu off)
 
 void SIS_HandleFont(Bitu seg, Bitu off) {
 	if (!SIS_FontInitialized) {
-		// Make sure we are inside the actual program
-		uint32_t callerSeg;
-		uint16_t callerOff;
-		SIS_GetCaller(callerSeg, callerOff);
-		if (callerSeg != 0x01E7) {
-			return;
-		}
-		if (seg == 0x01F7 && off == 0x208D) {
+		if (seg == 0x01E7 && off == 0x34AA) {
 			for (uint16_t i = 0; i < 0x502 / 2; i++) {
 				SIS_FontAddresses[i][0] = mem_readw_inline(
-				        GetAddress(SegValue(ds), reg_si + i * 4));
+				        GetAddress(0x0227, 0x1044 + i * 4));
 				SIS_FontAddresses[i][1] = mem_readw_inline(
-				        GetAddress(SegValue(ds), reg_si + i * 4 + 2));
+				        GetAddress(0x0227, 0x1044 + i * 4 + 2));
 			}
+			SIS_FontInitialized = true;
+			return;
 		}
-		SIS_FontInitialized = true;
-		return;
 	}
 	
 
