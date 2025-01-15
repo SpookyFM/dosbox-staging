@@ -6596,6 +6596,12 @@ void SIS_HandleFont(Bitu seg, Bitu off) {
 	
 }
 
+void SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data) {
+	// Second word is w
+	// Third word is a
+	// I think after this comes a sprite?
+}
+
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
                                                       uint16_t seg, uint16_t off)
 {
