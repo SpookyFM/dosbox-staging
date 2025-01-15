@@ -6597,9 +6597,11 @@ void SIS_HandleFont(Bitu seg, Bitu off) {
 }
 
 void SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data) {
-	// Second word is w
-	// Third word is a
-	// I think after this comes a sprite?
+	uint16_t(&address)[2] = SIS_FontAddresses[c];
+	uint32_t addr         = GetAddress(address[0], address[1]);
+	w                     = mem_readw_inline(addr + 0x1);
+	h = mem_readw_inline(addr+0x2);
+	data = addr + 0x3;
 }
 
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
