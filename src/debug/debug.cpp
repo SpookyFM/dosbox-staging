@@ -3914,6 +3914,23 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 
 // SIS Debug code below
 
+void SIS_DrawString(const std::string& s, uint16_t x, uint16_t y) {
+	uint16_t currentX = x;
+	for (char c : s) {
+		uint16_t w;
+		uint16_t h;
+		uint32_t data;
+		SIS_GetFontCharacterData(c, w, h, data);
+		for (int yy = 0; yy < h; yy++) {
+			for (int xx = 0; xx < w; xx++) {
+				uint8_t v = mem_readw_inline(data + yy * w + xx);
+				SIS_SetPixel(currentX + xx, y + yy, v);
+			}
+		}
+		currentX += w + 1;
+	}
+}
+
 void SIS_Init()
 {
 	channelIDNames = std::map<std::string, SIS_ChannelID>{
@@ -5487,6 +5504,9 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 
 	mem_writeb_inline(GetAddress(0xA000, charY * 320 + charX), 0xFF); 
 
+	// Let's try writing a string there as well
+	// SIS_DrawString("Hello, world", charX, charY);
+
 	// TODO: Find a good place (after character drawing)
 	// Write at least one pixel for the position (maybe a cross)
 	/*
@@ -6583,9 +6603,13 @@ void SIS_HandleFont(Bitu seg, Bitu off) {
 		if (seg == 0x01E7 && off == 0x34AA) {
 			for (uint16_t i = 0; i < 0x502 / 2; i++) {
 				SIS_FontAddresses[i][0] = mem_readw_inline(
-				        GetAddress(0x0227, 0x1044 + i * 4));
+				        GetAddress(0x0227, 0x1546 + i * 4));
 				SIS_FontAddresses[i][1] = mem_readw_inline(
-				        GetAddress(0x0227, 0x1044 + i * 4 + 2));
+				        GetAddress(0x0227, 0x1546 + i * 4 + 2));
+				uint32_t addr = GetAddress(SIS_FontAddresses[i][0],
+				                           SIS_FontAddresses[i][1]);
+				uint8_t ascii = mem_readw_inline(addr);
+				SIS_FontAddressesASCII[ascii] = addr;
 			}
 			SIS_FontInitialized = true;
 			return;
@@ -6597,10 +6621,11 @@ void SIS_HandleFont(Bitu seg, Bitu off) {
 }
 
 void SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data) {
-	uint16_t(&address)[2] = SIS_FontAddresses[c];
-	uint32_t addr         = GetAddress(address[0], address[1]);
-	w                     = mem_readw_inline(addr + 0x1);
-	h = mem_readw_inline(addr+0x2);
+	uint32_t addr = SIS_FontAddressesASCII[c];
+	// First byte is the ASCII character associated with this glyph
+	uint8_t ascii = mem_readw_inline(addr);
+	w                     = mem_readw_inline(addr + 0x2);
+	h = mem_readw_inline(addr+0x4);
 	data = addr + 0x3;
 }
 

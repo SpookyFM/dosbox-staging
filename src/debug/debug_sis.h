@@ -37,6 +37,10 @@ extern std::map<SIS_ChannelID, bool> debugLogEnabledID;
 uint16_t SIS_FontAddresses[0x502 / 2][2];
 bool SIS_FontInitialized = false;
 
+uint32_t SIS_FontAddressesASCII[0x502 / 2];
+
+void SIS_DrawString(const std::string& s, uint16_t x, uint16_t y);
+
 inline bool isChannelActive(const std::string& name)
 {
 	// TODO: Consider a safety mode
