@@ -113,7 +113,7 @@ void SIS_Handle1480(Bitu seg, Bitu off);
 void SIS_Handle1480Short(Bitu seg, Bitu off);
 
 void SIS_HandleFont(Bitu seg, Bitu off);
-void SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data);
+bool SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data);
 
 
 constexpr uint16_t SIS_Arg7 = +0x12;

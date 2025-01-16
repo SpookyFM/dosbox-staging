@@ -3920,7 +3920,12 @@ void SIS_DrawString(const std::string& s, uint16_t x, uint16_t y) {
 		uint16_t w;
 		uint16_t h;
 		uint32_t data;
-		SIS_GetFontCharacterData(c, w, h, data);
+		bool hasData = SIS_GetFontCharacterData(c, w, h, data);
+		if (!hasData) {
+			// Just advance a certain amount
+			currentX += 0x8 + 0x1;
+			continue;
+		}
 		for (int yy = 0; yy < h; yy++) {
 			for (int xx = 0; xx < w; xx++) {
 				uint8_t v = mem_readw_inline(data + yy * w + xx);
@@ -5505,7 +5510,7 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	mem_writeb_inline(GetAddress(0xA000, charY * 320 + charX), 0xFF); 
 
 	// Let's try writing a string there as well
-	// SIS_DrawString("Hello, world", charX, charY);
+	SIS_DrawString("Hello, world", charX, charY);
 
 	// TODO: Find a good place (after character drawing)
 	// Write at least one pixel for the position (maybe a cross)
@@ -6600,12 +6605,13 @@ void SIS_Handle1480Short(Bitu seg, Bitu off)
 
 void SIS_HandleFont(Bitu seg, Bitu off) {
 	if (!SIS_FontInitialized) {
-		if (seg == 0x01E7 && off == 0x34AA) {
-			for (uint16_t i = 0; i < 0x502 / 2; i++) {
-				SIS_FontAddresses[i][0] = mem_readw_inline(
-				        GetAddress(0x0227, 0x1546 + i * 4));
+		if (seg == 0x01E7 && off == 0x3472) {
+
+			for (uint16_t i = 0; i < 0x100; i++) {
 				SIS_FontAddresses[i][1] = mem_readw_inline(
-				        GetAddress(0x0227, 0x1546 + i * 4 + 2));
+				        GetAddress(0x0227, 0x1546 + 0x102 + i * 4));
+				SIS_FontAddresses[i][0] = mem_readw_inline(
+				        GetAddress(0x0227, 0x1546 + 0x102 + i * 4 + 2));
 				uint32_t addr = GetAddress(SIS_FontAddresses[i][0],
 				                           SIS_FontAddresses[i][1]);
 				uint8_t ascii = mem_readw_inline(addr);
@@ -6620,13 +6626,19 @@ void SIS_HandleFont(Bitu seg, Bitu off) {
 	
 }
 
-void SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data) {
-	uint32_t addr = SIS_FontAddressesASCII[c];
+bool SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data) {
+	uint16_t(&segOff)[2] = SIS_FontAddresses[c];
+	if (segOff[0] + segOff[1] == 0) {
+		return false;
+	}
+	uint32_t addr        = GetAddress(segOff[0], segOff[1]);
+		// SIS_FontAddressesASCII[c];
 	// First byte is the ASCII character associated with this glyph
 	uint8_t ascii = mem_readw_inline(addr);
 	w                     = mem_readw_inline(addr + 0x2);
 	h = mem_readw_inline(addr+0x4);
-	data = addr + 0x3;
+	data = addr + 0x6;
+	return true;
 }
 
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
