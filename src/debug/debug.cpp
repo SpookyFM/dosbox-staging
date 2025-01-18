@@ -4866,6 +4866,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleRLEDecoding(seg, off);
 	// SIS_HandlePaletteChange(seg, off);
 	SIS_HandleCharacterPos(seg, off);
+	SIS_HandleProtagonistDebugText(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
 	SIS_Handle1480(seg, off);
@@ -5509,8 +5510,8 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 
 	mem_writeb_inline(GetAddress(0xA000, charY * 320 + charX), 0xFF); 
 
-	// Let's try writing a string there as well
-	SIS_DrawString("Hello, world", charX, charY);
+	// Draw the character debug text next to this 
+	SIS_DrawString(SIS_ProtagonistDebugText, charX, charY);
 
 	// TODO: Find a good place (after character drawing)
 	// Write at least one pixel for the position (maybe a cross)
@@ -6639,6 +6640,15 @@ bool SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& dat
 	h = mem_readw_inline(addr+0x4);
 	data = addr + 0x6;
 	return true;
+}
+
+void SIS_HandleProtagonistDebugText(Bitu seg, Bitu off) {
+	if (seg == 0x01E7 && off == 0x953A) {
+		uint16_t offset = reg_ax;
+		std::stringstream ss;
+		ss << offset;
+		SIS_ProtagonistDebugText = ss.str();
+	}	
 }
 
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
