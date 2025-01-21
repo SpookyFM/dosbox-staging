@@ -5465,7 +5465,7 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 	}
 	// Handle the character drawing
 	if (off == 0x9AA8) {
-		SIS_PrintLocal("Character index: ", -0x0A, 2);
+		// SIS_PrintLocal("Character index: ", -0x0A, 2);
 		uint16_t x1 = mem_readw_inline(
 		        GetAddress(SegValue(es), reg_di + 0x20D));
 		uint16_t y1 = mem_readw_inline(
@@ -5478,12 +5478,13 @@ void SIS_HandleCharacterPos(Bitu seg, Bitu off) {
 		//SIS_DrawHorizontalLine(x1, x2, y2);
 		SIS_DrawVerticalLine(x1, y1, y2);
 		SIS_DrawVerticalLine(x2, y1, y2);
-		SIS_Debug("Character rendering args: %.4x %.4x %.4x %.4x\n",
+		/* SIS_Debug(
+		        "Character rendering args: %.4x %.4x %.4x %.4x\n",
 			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x20D)),
 			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x20F)),
 			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x211)),
 			mem_readw_inline(GetAddress(SegValue(es), reg_di + 0x213))
-			);
+			); */
 	}
 
 	if (off != 0x1B8F) {
