@@ -4861,7 +4861,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleInventoryIcons(seg, off);
 	// SIS_HandleDrawingFunction(seg, off);
 	// SIS_HandleDataLoadvFunction(seg, off);
-	SIS_HandleBlobLoading(seg, off);
+	// SIS_HandleBlobLoading(seg, off);
 	// SIS_HandleBlobLoading2(seg, off);
 	// SIS_HandleRLEDecoding(seg, off);
 	// SIS_HandlePaletteChange(seg, off);
