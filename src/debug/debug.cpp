@@ -6643,6 +6643,27 @@ bool SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& dat
 	return true;
 }
 
+void HandleMovementSpeed(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	if (off == 0x1B96) {
+		SIS_PrintLocal("Movement Speed - Character ID: ", +0x6, 2);
+	}
+
+	if (off == 0x1C23) {
+		SIS_Debug("Movement Speed - [bp-4h]: %u", reg_ax);
+	}
+
+	if (off == 0x1C3D) {
+		SIS_Debug("Movement Speed - x comparison %u to %u", reg_ax, mem_readw_inline(GetAddress(SegValue(es), reg_di)));
+	}
+
+	if (off == 0x1C60) {
+		SIS_Debug("Movement Speed - y comparison %u to %u", reg_ax, mem_readw_inline(GetAddress(SegValue(es), reg_di + 2)));
+	}
+}
+
 void SIS_HandleProtagonistDebugText(Bitu seg, Bitu off) {
 	if (seg == 0x01E7 && off == 0x953A) {
 		uint16_t offset = reg_ax;

@@ -115,6 +115,8 @@ void SIS_Handle1480Short(Bitu seg, Bitu off);
 void SIS_HandleFont(Bitu seg, Bitu off);
 bool SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& data);
 
+void HandleMovementSpeed(Bitu seg, Bitu off);
+
 std::string SIS_ProtagonistDebugText;
 void SIS_HandleProtagonistDebugText(Bitu seg, Bitu off);
 
