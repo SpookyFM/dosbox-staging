@@ -4865,7 +4865,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleBlobLoading2(seg, off);
 	// SIS_HandleRLEDecoding(seg, off);
 	// SIS_HandlePaletteChange(seg, off);
-	SIS_HandleCharacterPos(seg, off);
+	// SIS_HandleCharacterPos(seg, off);
 	SIS_HandleProtagonistDebugText(seg, off);
 	// SIS_HandleStopWalking(seg, off);
 	// SIS_HandleCharacterDrawing(seg, off);
@@ -4877,6 +4877,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleFunctionInjection(seg, off);
 	SIS_HandleInitialSceneOverride(seg, off);
 	SIS_HandleFont(seg, off);
+	HandleMovementSpeed(seg, off);
 	
 	// SIS_HandleScalingCalculation(seg, off);
 }
@@ -6648,20 +6649,42 @@ void HandleMovementSpeed(Bitu seg, Bitu off) {
 		return;
 	}
 	if (off == 0x1B96) {
-		SIS_PrintLocal("Movement Speed - Character ID: ", +0x6, 2);
+		SIS_PrintLocal("Movement Speed - Character ID", +0x6, 2);
 	}
 
 	if (off == 0x1C23) {
-		SIS_Debug("Movement Speed - [bp-4h]: %u", reg_ax);
+		SIS_Debug("Movement Speed - [bp-4h]: %u\n", reg_ax);
 	}
 
 	if (off == 0x1C3D) {
-		SIS_Debug("Movement Speed - x comparison %u to %u", reg_ax, mem_readw_inline(GetAddress(SegValue(es), reg_di)));
+		SIS_Debug("Movement Speed - x comparison %u to %u\n", reg_ax, mem_readw_inline(GetAddress(SegValue(es), reg_di)));
 	}
 
 	if (off == 0x1C60) {
-		SIS_Debug("Movement Speed - y comparison %u to %u", reg_ax, mem_readw_inline(GetAddress(SegValue(es), reg_di + 2)));
+		SIS_Debug("Movement Speed - y comparison %u to %u\n", reg_ax, mem_readw_inline(GetAddress(SegValue(es), reg_di + 2)));
 	}
+
+	if (off == 0x1EBC) {
+		SIS_PrintLocal("Movement Speed - loop variable", -0x6, 2);
+	}
+
+	if (off == 0x1EFC) {
+		SIS_Debug("Decrementing y\n");
+	}
+
+	if (off == 0x1F10) {
+		SIS_Debug("Incrementing y\n");
+	}
+
+	if (off == 0x1F40) {
+		SIS_Debug("Decrementing x\n");
+	}
+
+	if (off == 0x1F51) {
+		SIS_Debug("Incrementing x\n");
+	}
+
+
 }
 
 void SIS_HandleProtagonistDebugText(Bitu seg, Bitu off) {
@@ -6688,7 +6711,7 @@ void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...)
 	const char* offsetSign = offset >= 0 ? "+" : "-";
 	uint16_t positiveOffset = offset >= 0 ? offset : -offset;
 	
-	SIS_Debug("[bp%s%.2x]: ", offsetSign, positiveOffset);
+	SIS_Debug("[bp%s%.2x] (%s): ", offsetSign, positiveOffset, format);
 	SIS_PrintLocalShort(offset, numBytes);
 	SIS_Debug("\n");
 
