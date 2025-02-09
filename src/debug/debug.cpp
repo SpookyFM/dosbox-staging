@@ -6645,11 +6645,22 @@ bool SIS_GetFontCharacterData(uint8_t c, uint16_t& w, uint16_t& h, uint32_t& dat
 }
 
 void HandleMovementSpeed(Bitu seg, Bitu off) {
+	if (seg == 0x01D7 && off == 0x0770) {
+		SIS_Debug("Main Loop iteration\n");
+	}
+	
 	if (seg != 0x01E7) {
 		return;
 	}
 	if (off == 0x1B96) {
+		SIS_PrintCaller(1);
+		SIS_PrintCaller(2);
+		SIS_PrintCaller(3);
 		SIS_PrintLocal("Movement Speed - Character ID", +0x6, 2);
+	}
+	
+	if (off == 0x1C1A) {
+		SIS_Debug("Movement Speed - Movement speed factor %u\n", reg_ax);
 	}
 
 	if (off == 0x1C23) {
