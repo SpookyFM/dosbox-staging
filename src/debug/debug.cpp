@@ -4877,7 +4877,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleFunctionInjection(seg, off);
 	SIS_HandleInitialSceneOverride(seg, off);
 	SIS_HandleFont(seg, off);
-	HandleMovementSpeed(seg, off);
+	// HandleMovementSpeed(seg, off);
 	
 	// SIS_HandleScalingCalculation(seg, off);
 }
