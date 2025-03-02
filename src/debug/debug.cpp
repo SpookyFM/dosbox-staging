@@ -4880,6 +4880,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// HandleMovementSpeed(seg, off);
 	
 	// SIS_HandleScalingCalculation(seg, off);
+	SIS_HandleAdlibSeek(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5953,12 +5954,61 @@ void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off) {
 		reg_ax = SIS_InitialSceneOverride;
 
 		// While we're at it, let's also disable sound
-		mem_writeb_inline(GetAddress(0x0227, 0x1F4C), SIS_UseSound);
+		// 1mem_writeb_inline(GetAddress(0x0227, 0x1F4C), SIS_UseSound);
 	}
 	else if (seg == 0x01E7 && off == 0x7686) {
 		// And also disable sound after loading
 		mem_writeb_inline(GetAddress(0x0227, 0x1F4C), SIS_UseSound);
 	}
+}
+
+void SIS_HandleAdlibSeek(Bitu seg, Bitu off)
+{
+	if ((seg != 0x01D7) || (off != 0x19FF)) {
+		return;
+	}
+	// Read the far pointer from local memory.
+	// The pointer is stored at offset SIS_Arg2 (offset part) and SIS_Arg3
+	// (segment part).
+	uint16_t inputOff = SIS_GetLocalWord(SIS_Arg2);
+	uint16_t inputSeg = SIS_GetLocalWord(SIS_Arg3);
+
+	// Read the offset parameter from local offset SIS_Arg1.
+	uint16_t offsetParam = SIS_GetLocalWord(SIS_Arg1);
+
+	// Get the caller's address (assume level 1).
+	uint32_t callerSeg;
+	uint16_t callerOff;
+	SIS_GetCaller(callerSeg, callerOff, 1);
+
+	// Compute the result mimicking the assembler code:
+	// Save the original pointer
+	uint16_t computedSeg = inputSeg;
+	uint16_t computedOff = inputOff;
+
+	// If the offset parameter is greater than 0xF8, restrict the offset to
+	// its lower nibble.
+	if (offsetParam > 0xF8) {
+		computedOff &= 0xF;
+	}
+
+	// Add the offset parameter.
+	computedOff += offsetParam;
+
+	// Print out the debugging information.
+	SIS_Debug("Caller Address: %04X:%04X\n", callerSeg, callerOff);
+	SIS_Debug("Input Pointer: %04X:%04X\n", inputSeg, inputOff);
+	SIS_Debug("Offset Parameter: %04X\n", offsetParam);
+	SIS_Debug("Result: %04X:%04X\n", computedSeg, computedOff);
+
+	// Read the reference globals stored at address 0227:2250 (segment) and
+	// 0227:2252 (offset)
+	uint32_t refSeg;
+	uint16_t refOff;
+	SIS_ReadAddress(0x0227, 0x2250, refSeg, refOff);
+	// Cast the segment to 16-bit for printing.
+	uint16_t refSeg16 = static_cast<uint16_t>(refSeg);
+	SIS_Debug("Reference Globals: %04X:%04X\n\n", refSeg16, refOff);
 }
 
 void SIS_WatchPath(Bitu seg, Bitu off) {

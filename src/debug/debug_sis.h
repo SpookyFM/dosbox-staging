@@ -266,6 +266,11 @@ uint16_t SIS_InitialSceneOverride = 0x06;
 constexpr uint8_t SIS_UseSound    = 0;
 void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off);
 
+#include "debug_sis.h"
+
+void SIS_HandleAdlibSeek(Bitu seg, Bitu off);
+
+
 bool SIS_FlagWatchPath = false;
 void SIS_WatchPath(Bitu seg, Bitu off);
 
