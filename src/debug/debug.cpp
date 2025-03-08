@@ -6011,6 +6011,32 @@ void SIS_HandleAdlibSeek(Bitu seg, Bitu off)
 	SIS_Debug("Reference Globals: %04X:%04X\n\n", refSeg16, refOff);
 }
 
+void SIS_HandleAdlib(Bitu seg, Bitu off) {
+	if (seg != 0x01D7) {
+		return;	
+	}
+	if (off == 0x1AA7) {
+		SIS_Debug("Entered OnTimer\n");
+	}
+	if (off == 0x1B21) {
+		SIS_Debug("Loop iteration, [2250] value: %.2X", reg_al);
+	}
+}
+
+void SIS_LogEntry(Bitu seg, Bitu off, Bitu targetSeg, Bitu targetOff, std::string msg)
+{
+	if (seg == targetSeg && off == targetOff) {
+		if (msg.empty()) {
+			SIS_Debug("Entered %.4X:%.4X\n", seg, off);		
+		} else {
+			SIS_Debug(msg.c_str());
+		}
+	}
+
+}
+
+
+
 void SIS_WatchPath(Bitu seg, Bitu off) {
 	static bool initialized;
 	static uint32_t pSeg;

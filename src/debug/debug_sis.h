@@ -270,6 +270,10 @@ void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off);
 
 void SIS_HandleAdlibSeek(Bitu seg, Bitu off);
 
+void SIS_HandleAdlib(Bitu seg, Bitu off);
+void SIS_LogEntry(Bitu seg, Bitu off, Bitu targetSeg, Bitu targetOff,
+                  std::string msg = "");
+
 
 bool SIS_FlagWatchPath = false;
 void SIS_WatchPath(Bitu seg, Bitu off);
