@@ -4880,7 +4880,8 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// HandleMovementSpeed(seg, off);
 	
 	// SIS_HandleScalingCalculation(seg, off);
-	SIS_HandleAdlibSeek(seg, off);
+	// SIS_HandleAdlibSeek(seg, off);
+	SIS_HandleAdlib(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -6019,8 +6020,35 @@ void SIS_HandleAdlib(Bitu seg, Bitu off) {
 		SIS_Debug("Entered OnTimer\n");
 	}
 	if (off == 0x1B21) {
-		SIS_Debug("Loop iteration, [2250] value: %.2X", reg_al);
+		uint16_t offset = mem_readw_inline(GetAddress(0x0227, 0x2250));
+		SIS_Debug("Loop iteration, [2250] value: %.2X at offset %.2X}\n", reg_al, offset);
 	}
+
+	// Handle all the entry logs
+	SIS_LogEntry(seg, off, 0x01D7, 0x1ABD);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1ACE);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1AEF);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1B03);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1B27);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1BA1);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1BAA);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1BE4);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1E94);
+	SIS_LogEntry(seg, off, 0x01D7, 0x2097);
+	SIS_LogEntry(seg, off, 0x01D7, 0x20A7);
+	SIS_LogEntry(seg, off, 0x01D7, 0x20E1);
+	SIS_LogEntry(seg, off, 0x01D7, 0x21B5);
+	SIS_LogEntry(seg, off, 0x01D7, 0x21EB);
+	SIS_LogEntry(seg, off, 0x01D7, 0x221C);
+	SIS_LogEntry(seg, off, 0x01D7, 0x2231);
+	SIS_LogEntry(seg, off, 0x01D7, 0x225C);
+	SIS_LogEntry(seg, off, 0x01D7, 0x22C5);
+	SIS_LogEntry(seg, off, 0x01D7, 0x2327);
+	SIS_LogEntry(seg, off, 0x01D7, 0x235E);
+	SIS_LogEntry(seg, off, 0x01D7, 0x2387);
+	SIS_LogEntry(seg, off, 0x01D7, 0x23DB);
+	SIS_LogEntry(seg, off, 0x01D7, 0x23F1);
+	SIS_LogEntry(seg, off, 0x01D7, 0x242E);
 }
 
 void SIS_LogEntry(Bitu seg, Bitu off, Bitu targetSeg, Bitu targetOff, std::string msg)
