@@ -120,6 +120,8 @@ void HandleMovementSpeed(Bitu seg, Bitu off);
 std::string SIS_ProtagonistDebugText;
 void SIS_HandleProtagonistDebugText(Bitu seg, Bitu off);
 
+void SIS_HandleOPLWrite(Bitu seg, Bitu off);
+
 
 constexpr uint16_t SIS_Arg7 = +0x12;
 constexpr uint16_t SIS_Arg6 = +0x10;

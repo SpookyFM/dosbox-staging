@@ -4746,42 +4746,7 @@ l0017_27D3:
 		return;
 	}
 
-	uint32_t ret_seg;
-	uint16_t ret_off;
-	SIS_GetCaller(ret_seg, ret_off);
-
-	if (off == 0x279C) { // || off == 0x27C8)
 	
-	
-		uint8_t value = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x06));
-		uint8_t registerIndex = mem_readb_inline(GetAddress(SegValue(ss), reg_bp + 0x08));
-
-		if (ret_seg == 0x01D7 && ret_off == 0x275F) {
-			// Filter out the big initialization where we set all registers to 0
-			return;
-		}
-	
-			
-		// Outs
-		fprintf(stdout,
-		        "OPL: Write %.2x to port %.2x (caller: %.4x:%.4x - %.8x) - %4.x:%.4x\n",
-		        value,
-				registerIndex,
-		        ret_seg,
-		        ret_off,
-		        cycle_count,
-				SegValue(ds),
-				reg_si);
-		std::string output = SIS_OpcodeID::IdentifyOPLWrite(registerIndex,
-		                                                    value);
-		fprintf(stdout, "%s\n", output.c_str());
-
-	} /* else if (off == 0x2789 || off == 0x27D7) {
-	        // Ins
-	        fprintf(stdout,
-	                "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x -
-	%.8x)\n", reg_al, reg_dx, ret_seg, ret_off, cycle_count);
-	} */
 }
 
 void SIS_HandlePalette(Bitu seg, Bitu off) {
@@ -4882,6 +4847,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleScalingCalculation(seg, off);
 	// SIS_HandleAdlibSeek(seg, off);
 	SIS_HandleAdlib(seg, off);
+	SIS_HandleOPLWrite(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -6809,6 +6775,47 @@ void SIS_HandleProtagonistDebugText(Bitu seg, Bitu off) {
 		ss << offset;
 		SIS_ProtagonistDebugText = ss.str();
 	}	
+}
+
+void SIS_HandleOPLWrite(Bitu seg, Bitu off) {
+
+	if (seg == 0x01D7 && off == 0x279C) { // || off == 0x27C8)
+
+		uint32_t ret_seg;
+		uint16_t ret_off;
+		SIS_GetCaller(ret_seg, ret_off);
+
+		uint8_t value = mem_readb_inline(
+		        GetAddress(SegValue(ss), reg_bp + 0x06));
+		uint8_t registerIndex = mem_readb_inline(
+		        GetAddress(SegValue(ss), reg_bp + 0x08));
+
+		if (ret_seg == 0x01D7 && ret_off == 0x275F) {
+			// Filter out the big initialization where we set all
+			// registers to 0
+			return;
+		}
+
+		// Outs
+		fprintf(stdout,
+		        "OPL: Write %.2x to port %.2x (caller: %.4x:%.4x - %.8x) - %4.x:%.4x\n",
+		        value,
+		        registerIndex,
+		        ret_seg,
+		        ret_off,
+		        cycle_count,
+		        SegValue(ds),
+		        reg_si);
+		std::string output = SIS_OpcodeID::IdentifyOPLWrite(registerIndex,
+		                                                    value);
+		fprintf(stdout, "%s\n", output.c_str());
+
+	} /* else if (off == 0x2789 || off == 0x27D7) {
+	        // Ins
+	        fprintf(stdout,
+	                "OPL: Read %.2x from port %.4x (caller: %.4x:%.4x -
+	%.8x)\n", reg_al, reg_dx, ret_seg, ret_off, cycle_count);
+	} */
 }
 
 SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
