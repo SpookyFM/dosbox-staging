@@ -81,6 +81,10 @@ uint8_t SIS_currentOpcode1;
 bool SIS_ScriptIsSkipping = false;
 bool SIS_LastOpcodeTriggeredSkip = false;
 
+// Break if the first read in the Adlib timer function is read from this offset
+// Default value of 0 will never break
+uint16_t SIS_AdlibLoopBPOffset = 0;
+
 
 void SIS_Init();
 

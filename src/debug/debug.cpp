@@ -4041,6 +4041,20 @@ bool SIS_IsBreakpoint(Bitu seg, Bitu off)
 		return true;
 	} 
 
+	if (SIS_AdlibLoopBPOffset != 0) {
+		if (seg == 0x01D7 && off == 0x1B1A) {
+			uint16_t currentOffset = mem_readw_inline(GetAddress(0x0227, 0x2250));
+			bool result = SIS_AdlibLoopBPOffset == currentOffset;
+			
+			if (result) {
+				// Reset so we don't hit it again right after
+				// when trying to continue
+				SIS_AdlibLoopBPOffset = 0;
+			}
+			return result;
+		}
+	}
+
 
 	return false;
 }
@@ -5987,7 +6001,7 @@ void SIS_HandleAdlib(Bitu seg, Bitu off) {
 	}
 	if (off == 0x1B21) {
 		uint16_t offset = mem_readw_inline(GetAddress(0x0227, 0x2250));
-		SIS_Debug("Loop iteration, [2250] value: %.2X at offset %.2X}\n", reg_al, offset);
+		SIS_Debug("Loop iteration, [2250] value: %.2X at offset %.2X\n", reg_al, offset);
 	}
 
 	// Handle all the entry logs
@@ -6478,6 +6492,17 @@ bool SIS_ParseCommand(char* found, std::string command)
 		SIS_InitialSceneOverride = (uint16_t)GetHexValue(found, found);
 		found++;
 		DEBUG_ShowMsg("DEBUG: Setting initial scene override to %.x.", SIS_InitialSceneOverride);
+		return true;
+	}
+
+	if (command == "ABP") {
+		// Adlib offset breakpoint
+
+		SIS_AdlibLoopBPOffset = (uint16_t)GetHexValue(found, found);
+		DEBUG_ShowMsg("DEBUG: Setting Adlib break target offset to %.x.",
+		              SIS_AdlibLoopBPOffset);
+		
+
 		return true;
 	}
 
