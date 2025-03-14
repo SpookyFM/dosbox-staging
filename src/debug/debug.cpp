@@ -6885,6 +6885,7 @@ SIS_DeferredGetter<uint16_t>* SIS_GetLocalWordDeferred(int16_t localOff,
 		uint16_t lambdaResult = SIS_GetLocalWord(localOff);
 		return lambdaResult;
 	};
+	return result;
 }
 
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes, ...)
