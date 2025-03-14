@@ -4861,6 +4861,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleScalingCalculation(seg, off);
 	// SIS_HandleAdlibSeek(seg, off);
 	SIS_HandleAdlib(seg, off);
+	SIS_HandleAdlibSeekShort(seg, off);
 	SIS_HandleOPLWrite(seg, off);
 }
 
@@ -5992,6 +5993,27 @@ void SIS_HandleAdlibSeek(Bitu seg, Bitu off)
 	SIS_Debug("Reference Globals: %04X:%04X\n\n", refSeg16, refOff);
 }
 
+void SIS_HandleAdlibSeekShort(Bitu seg, Bitu off) {
+
+	if ((seg != 0x01D7) || (off != 0x19FF)) {
+		return;
+	}
+	
+	// Get the caller's address (assume level 1).
+	uint32_t callerSeg;
+	uint16_t callerOff;
+	SIS_GetCaller(callerSeg, callerOff, 1);
+
+	// Read the offset parameter from local offset SIS_Arg1.
+	uint16_t offsetParam = SIS_GetLocalWord(SIS_Arg1);
+	uint16_t newOffset = reg_ax;
+	SIS_Debug("Adlib seek by %.2x new offset %04x (%04x:%04X)\n",
+		offsetParam, newOffset, callerSeg, callerOff);
+		
+
+
+}
+
 void SIS_HandleAdlib(Bitu seg, Bitu off) {
 	if (seg != 0x01D7) {
 		return;	
@@ -6029,6 +6051,18 @@ void SIS_HandleAdlib(Bitu seg, Bitu off) {
 	SIS_LogEntry(seg, off, 0x01D7, 0x23DB);
 	SIS_LogEntry(seg, off, 0x01D7, 0x23F1);
 	SIS_LogEntry(seg, off, 0x01D7, 0x242E);
+
+	if (off == 0x1A6E) {
+		uint8_t bp1 = SIS_GetLocalByte(-1);
+		uint32_t nextTimer = 0;
+		uint16_t currentOffset = mem_readw_inline(GetAddress(0x0227, 0x2250));
+		MEM_BlockRead(GetAddress(0x0227, 0x2254), &nextTimer, 4);
+		SIS_Debug("1A03 iteration - Value: %.2x at offset %.4x Next timer: %.8x Continuation: %.2x\n",
+		      bp1,
+		          currentOffset,
+		      nextTimer,
+		      reg_al);
+	}
 }
 
 void SIS_LogEntry(Bitu seg, Bitu off, Bitu targetSeg, Bitu targetOff, std::string msg)
