@@ -6051,6 +6051,10 @@ void SIS_HandleAdlib(Bitu seg, Bitu off) {
 	SIS_LogEntry(seg, off, 0x01D7, 0x23DB);
 	SIS_LogEntry(seg, off, 0x01D7, 0x23F1);
 	SIS_LogEntry(seg, off, 0x01D7, 0x242E);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1C27);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1C44);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1C8B);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1CFF);
 
 	if (off == 0x1A6E) {
 		uint8_t bp1 = SIS_GetLocalByte(-1);
