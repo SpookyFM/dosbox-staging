@@ -284,16 +284,27 @@ struct MemWatchConfig {
 	Bitu endOff;
 };
 
-uint8_t SIS_MemWatchesInitializationState;
-uint16_t* SIS_MemWatches;
+bool SIS_MemWatchesInitialized = false;
+uint16_t* SIS_MemWatches   = nullptr;
 uint16_t SIS_MemWatchIndex = 0;
 
 void SIS_StartMemWatches();
+void SIS_FinishMemWatches();
+
+std::string SIS_StringFormat(const char* format, ...);
 
 // TODO: Consider start and end of function tracking for also getting it if 
 // globals change in a called function
-void SIS_HandleMemWatch(Bitu seg, Bitu off, MemWatchConfig& config,
+void SIS_HandleMemWatch(Bitu seg, Bitu off,
                        uint32_t varAddress, uint8_t varSize, const char* varName);
+
+void SIS_HandleLocalsWatch(Bitu seg, Bitu off,
+						 int16_t varOffset, uint8_t varSize);
+
+void SIS_HandleGlobalsWatch(Bitu seg, Bitu off,
+                           Bitu globalSeg, Bitu globalOff, uint8_t globalSize);
+
+
 
 void SIS_HandleAdlib(Bitu seg, Bitu off);
 void SIS_LogEntry(Bitu seg, Bitu off, Bitu targetSeg, Bitu targetOff,

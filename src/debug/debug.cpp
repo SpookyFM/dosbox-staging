@@ -6015,17 +6015,99 @@ void SIS_HandleAdlibSeekShort(Bitu seg, Bitu off) {
 }
 
 
-void SIS_StartMemWatches() {}
+void SIS_StartMemWatches() {
+	SIS_MemWatchIndex = 0;
+	if (SIS_MemWatches == nullptr) {
+		SIS_MemWatches = new uint16_t[255];
+	}
+}
 
-void SIS_HandleMemWatch(Bitu seg, Bitu off, MemWatchConfig& config,
-                        uint32_t varAddress, uint8_t varSize, const char* varName)
-{}
+void SIS_FinishMemWatches() {
+	SIS_MemWatchesInitialized = true;
+	SIS_MemWatchIndex         = 0;
+}
+
+std::string SIS_StringFormat(const char* format, ...)
+{
+	// Initialize a variable argument list
+	va_list args;
+	va_start(args, format);
+	std::string result = SIS_DebugFormat(format, args);
+	va_end(args);
+
+	return result;
+}
+
+void SIS_HandleMemWatch(Bitu seg, Bitu off, uint32_t varAddress, uint8_t varSize, const char* varName)
+{
+	uint16_t newValue = 0;
+	switch (varSize) {
+	case 1: 
+		newValue = mem_readb_inline(varAddress);
+		break;
+		case 2: newValue = mem_readw_inline(varAddress);
+			break;
+			default:
+				SIS_Debug("Invalid memory watch size!\n");
+				return;
+	}
+	// Check if we are initializing
+	if (!SIS_MemWatchesInitialized) {
+		SIS_MemWatches[SIS_MemWatchIndex] = newValue;
+	}
+	else {
+		if (SIS_MemWatches[SIS_MemWatchIndex] != newValue) {
+			SIS_Debug("Mem watch: %s %.4x -> %.4x (%.4x:%4.x)\n",
+			          varName,
+			          SIS_MemWatches[SIS_MemWatchIndex],
+			          newValue,
+			          seg,
+			          off);
+		}
+		SIS_MemWatches[SIS_MemWatchIndex] = newValue;
+	}
+	SIS_MemWatchIndex++;
+}
+
+void SIS_HandleLocalsWatch(Bitu seg, Bitu off, int16_t varOffset,
+                           uint8_t varSize)
+{
+	uint32_t address = GetAddress(SegValue(ss), reg_bp + varOffset);
+	std::string name = SIS_StringFormat("[bp % c % x]",
+	                                    (varOffset < 0) ? '-' : '+',
+	                                    (varOffset < 0) ? -varOffset : varOffset);
+	SIS_HandleMemWatch(seg, off, address, varSize, name.c_str());
+}
+
+void SIS_HandleGlobalsWatch(Bitu seg, Bitu off, Bitu globalSeg, Bitu globalOff,
+                            uint8_t globalSize)
+{
+	uint32_t address = GetAddress(globalSeg, globalOff);
+	std::string name = SIS_StringFormat("[%.4x:%.4x]", globalSeg, globalOff);
+	SIS_HandleMemWatch(seg, off, address, globalSize, name.c_str());
+}
+
+
 
 void SIS_HandleAdlib(Bitu seg, Bitu off)
 {
 	if (seg != 0x01D7) {
 		return;	
 	}
+
+	if (off == 0x1AA7 + 0x4) {
+		SIS_StartMemWatches();
+	}
+
+	if (off > 0x1AA7 && off < 0x2443) {
+		SIS_HandleGlobalsWatch(seg, off, SIS_GlobalOffset, 0x2291, 2);
+		SIS_HandleLocalsWatch(seg, off, -0x8, 1);
+		SIS_HandleLocalsWatch(seg, off, -0x16, 2);
+		SIS_HandleLocalsWatch(seg, off, -0xA, 2);
+		SIS_HandleLocalsWatch(seg, off, -0xC, 2);
+		SIS_FinishMemWatches();
+	}
+
 	if (off == 0x1AA7) {
 		SIS_Debug("Entered OnTimer\n");
 	}
