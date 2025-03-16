@@ -6014,7 +6014,15 @@ void SIS_HandleAdlibSeekShort(Bitu seg, Bitu off) {
 
 }
 
-void SIS_HandleAdlib(Bitu seg, Bitu off) {
+
+void SIS_StartMemWatches() {}
+
+void SIS_HandleMemWatch(Bitu seg, Bitu off, MemWatchConfig& config,
+                        uint32_t varAddress, uint8_t varSize, const char* varName)
+{}
+
+void SIS_HandleAdlib(Bitu seg, Bitu off)
+{
 	if (seg != 0x01D7) {
 		return;	
 	}
