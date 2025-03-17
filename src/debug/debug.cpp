@@ -6144,6 +6144,7 @@ void SIS_HandleAdlib(Bitu seg, Bitu off)
 	SIS_LogEntry(seg, off, 0x01D7, 0x1C27);
 	SIS_LogEntry(seg, off, 0x01D7, 0x1C44);
 	SIS_LogEntry(seg, off, 0x01D7, 0x1C8B);
+	SIS_LogEntry(seg, off, 0x01D7, 0x1CB1);
 	SIS_LogEntry(seg, off, 0x01D7, 0x1CFF);
 
 	if (off == 0x1A6E) {
