@@ -4860,10 +4860,11 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	
 	// SIS_HandleScalingCalculation(seg, off);
 	// SIS_HandleAdlibSeek(seg, off);
-	SIS_HandleAdlib(seg, off);
-	SIS_HandleAdlibSeekShort(seg, off);
-	SIS_HandleOPLWrite(seg, off);
-	SIS_HandleUI(seg, off);
+	// SIS_HandleAdlib(seg, off);
+	// SIS_HandleAdlibSeekShort(seg, off);
+	// SIS_HandleOPLWrite(seg, off);
+	// SIS_HandleUI(seg, off);
+	SIS_HandleInventoryScrolling(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5318,6 +5319,16 @@ void SIS_HandleUI(Bitu seg, Bitu off) {
 	          SIS_GetLocalWord(SIS_Arg1));
 	SIS_PrintCaller(1);
 	SIS_PrintCaller(2);
+}
+
+void SIS_HandleInventoryScrolling(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	if (off == 0x50C4) {
+		SIS_Debug("Inventory loop [bp-2h]: %.2x\n", reg_di);
+	}
+
 }
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
