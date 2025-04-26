@@ -3944,7 +3944,7 @@ void SIS_Init()
 	        {SIS_Palette, SIS_ChannelID::Palette},
 	        {SIS_Script, SIS_ChannelID::Script},
 	        {SIS_Script_Verbose, SIS_ChannelID::Script_Verbose},
-	        {SIS_Script_Minimal, SIS_ChannelID::Script_Mínimal},
+	        {SIS_Script_Minimal, SIS_ChannelID::Script_Mï¿½nimal},
 	        {SIS_Pathfinding, SIS_ChannelID::Pathfinding},
 	        {SIS_Scaling, SIS_ChannelID::Scaling},
 	        {SIS_RLE, SIS_ChannelID::RLE},
@@ -4864,6 +4864,11 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleAdlibSeekShort(seg, off);
 	SIS_HandleOPLWrite(seg, off);
 	SIS_HandleInventoryRedraw(seg, off);
+	// SIS_HandleAdlib(seg, off);
+	// SIS_HandleAdlibSeekShort(seg, off);
+	// SIS_HandleOPLWrite(seg, off);
+	// SIS_HandleUI(seg, off);
+	SIS_HandleInventoryScrolling(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5305,6 +5310,29 @@ void SIS_DumpPalette() {
 		uint32_t currentEntry = palette[i];
 		fprintf(stdout, "Palette color %u: %.4x\n", i, currentEntry);
 	}
+}
+
+void SIS_HandleUI(Bitu seg, Bitu off) {
+	if (seg != 0x01E7 || off != 0x373B) {
+		return;
+	}
+	SIS_Debug("3737 - x: %u y: %u w: %u fill: %u\n",
+	          SIS_GetLocalWord(SIS_Arg4),
+	          SIS_GetLocalWord(SIS_Arg3),
+	          SIS_GetLocalWord(SIS_Arg2),
+	          SIS_GetLocalWord(SIS_Arg1));
+	SIS_PrintCaller(1);
+	SIS_PrintCaller(2);
+}
+
+void SIS_HandleInventoryScrolling(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	if (off == 0x50C4) {
+		SIS_Debug("Inventory loop [bp-2h]: %.2x\n", reg_di);
+	}
+
 }
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2)
