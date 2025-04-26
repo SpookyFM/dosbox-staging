@@ -272,10 +272,10 @@ uint16_t SIS_InitialSceneOverride = 0x06;
 constexpr uint8_t SIS_UseSound    = 0;
 void SIS_HandleInitialSceneOverride(Bitu seg, Bitu off);
 
-#include "debug_sis.h"
-
 void SIS_HandleAdlibSeek(Bitu seg, Bitu off);
 void SIS_HandleAdlibSeekShort(Bitu seg, Bitu off);
+
+void SIS_HandleInventoryRedraw(Bitu seg, Bitu off);
 
 
 struct MemWatchConfig {

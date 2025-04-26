@@ -4863,6 +4863,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	SIS_HandleAdlib(seg, off);
 	SIS_HandleAdlibSeekShort(seg, off);
 	SIS_HandleOPLWrite(seg, off);
+	SIS_HandleInventoryRedraw(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -6012,6 +6013,12 @@ void SIS_HandleAdlibSeekShort(Bitu seg, Bitu off) {
 		
 
 
+}
+
+void SIS_HandleInventoryRedraw(Bitu seg, Bitu off) {
+	SIS_LogEntry(seg, off, 0x01D7, 0x09BF, "Drawing the inventory\n");
+	SIS_LogEntry(seg, off, 0x01D7, 0x0770, "Game loop start\n");
+		
 }
 
 
