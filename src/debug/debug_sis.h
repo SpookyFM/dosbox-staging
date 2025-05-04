@@ -7,7 +7,7 @@ enum class SIS_ChannelID {
 	Palette,
 	Script,
 	Script_Verbose,
-	Script_Mínimal,
+	Script_Minimal,
 	Pathfinding,
 	Scaling,
 	RLE,
@@ -70,7 +70,7 @@ class TraceHelper {
 inline bool isScriptChannelActive(){
 	
 	return isChannelActive(SIS_ChannelID::Script) ||
-	       isChannelActive(SIS_ChannelID::Script_Mínimal) ||
+	       isChannelActive(SIS_ChannelID::Script_Minimal) ||
 	       isChannelActive(SIS_ChannelID::Script_Verbose);
 }
 

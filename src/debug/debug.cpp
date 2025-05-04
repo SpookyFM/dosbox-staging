@@ -3944,7 +3944,7 @@ void SIS_Init()
 	        {SIS_Palette, SIS_ChannelID::Palette},
 	        {SIS_Script, SIS_ChannelID::Script},
 	        {SIS_Script_Verbose, SIS_ChannelID::Script_Verbose},
-	        {SIS_Script_Minimal, SIS_ChannelID::Script_M�nimal},
+	        {SIS_Script_Minimal, SIS_ChannelID::Script_Minimal},
 	        {SIS_Pathfinding, SIS_ChannelID::Pathfinding},
 	        {SIS_Scaling, SIS_ChannelID::Scaling},
 	        {SIS_RLE, SIS_ChannelID::RLE},
