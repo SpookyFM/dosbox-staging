@@ -4869,6 +4869,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleOPLWrite(seg, off);
 	// SIS_HandleUI(seg, off);
 	SIS_HandleInventoryScrolling(seg, off);
+	SIS_HandleStringDecoding(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5331,6 +5332,32 @@ void SIS_HandleInventoryScrolling(Bitu seg, Bitu off) {
 	}
 	if (off == 0x50C4) {
 		SIS_Debug("Inventory loop [bp-2h]: %.2x\n", reg_di);
+	}
+
+}
+
+void SIS_HandleStringDecoding(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	if (off == 0xA48D) {
+		SIS_Debug("Starting string decoding.\n");
+		uint16_t v1 = SIS_ReadGlobal(0x0F92);
+		uint16_t v2 = SIS_ReadGlobal(0x0F86);
+
+		SIS_Debug("[0F92h]: %u, [0F86h]: %u\n", v1, v2);
+		return;
+	}
+	if (off == 0xA4BE) {
+		uint16_t sceneID = mem_readw_inline(GetAddress(SIS_GlobalOffset, 0x077C));
+		SIS_Debug("Decoding string from current scene: %u\n", sceneID);
+		return;
+	}
+	if (off == 0xA4DD) {
+		uint16_t objectID = mem_readw_inline(
+		        GetAddress(SIS_GlobalOffset, 0x0F92));
+		SIS_Debug("Decoding string from current object: %u\n", objectID);
+		return;
 	}
 
 }
@@ -6045,7 +6072,7 @@ void SIS_HandleAdlibSeekShort(Bitu seg, Bitu off) {
 
 void SIS_HandleInventoryRedraw(Bitu seg, Bitu off) {
 	SIS_LogEntry(seg, off, 0x01D7, 0x09BF, "Drawing the inventory\n");
-	SIS_LogEntry(seg, off, 0x01D7, 0x0770, "Game loop start\n");
+	// SIS_LogEntry(seg, off, 0x01D7, 0x0770, "Game loop start\n");
 		
 }
 
@@ -7053,6 +7080,11 @@ void SIS_PrintLocalShort(int16_t offset, uint8_t numBytes) {
 	}
 		return;
 	}
+}
+
+uint16_t SIS_ReadGlobal(Bitu off)
+{
+	return mem_readw_inline(GetAddress(SIS_GlobalOffset, off));
 }
 
 

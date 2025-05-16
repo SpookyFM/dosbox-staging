@@ -178,6 +178,8 @@ constexpr uint16_t SIS_GlobalOffset = 0x0227;
 void SIS_PrintLocal(const char* format, int16_t offset, uint8_t numBytes,...);
 void SIS_PrintLocalShort(int16_t offset, uint8_t numBytes);
 
+uint16_t SIS_ReadGlobal(Bitu off);
+
  // Define a buffer for stdout
 char stdout_buffer[0xFFFF];
 
@@ -235,6 +237,8 @@ void SIS_DumpPalette();
 void SIS_HandleUI(Bitu seg, Bitu off);
 
 void SIS_HandleInventoryScrolling(Bitu seg, Bitu off);
+
+void SIS_HandleStringDecoding(Bitu seg, Bitu off);
 
 std::string SIS_IdentifyScriptOpcode(uint8_t opcode, uint8_t opcode2);
 std::string SIS_IdentifyHelperOpcode(uint8_t opcode, uint16_t value);
