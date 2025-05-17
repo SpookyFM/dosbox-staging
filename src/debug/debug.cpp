@@ -5359,6 +5359,14 @@ void SIS_HandleStringDecoding(Bitu seg, Bitu off) {
 		SIS_Debug("Decoding string from current object: %u\n", objectID);
 		return;
 	}
+	if (off == 0xA5D3) {
+		SIS_Debug("String decoding: Inner loop started\n");
+		uint32_t s;
+		uint16_t o;
+		SIS_ReadAddress(SIS_GlobalOffset, 0x0F80, s, o);
+		SIS_PrintMemoryRegion(s, o, o + 64);
+		SIS_Debug("\n");
+	}
 
 }
 
@@ -7081,6 +7089,7 @@ void SIS_PrintLocalShort(int16_t offset, uint8_t numBytes) {
 		return;
 	}
 }
+
 
 uint16_t SIS_ReadGlobal(Bitu off)
 {
