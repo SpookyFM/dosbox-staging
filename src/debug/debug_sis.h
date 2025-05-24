@@ -215,6 +215,8 @@ void SIS_HandleBlobLoading(Bitu seg, Bitu off);
 
 void SIS_HandleBlobLoading2(Bitu seg, Bitu off);
 
+void SIS_HandleMainMenuPosition(Bitu seg, Bitu off);
+
 
 bool injectFunction = false;
 uint16_t giveItemObjectID;

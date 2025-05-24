@@ -4870,6 +4870,7 @@ void SIS_HandleSIS(Bitu seg, Bitu off)
 	// SIS_HandleUI(seg, off);
 	SIS_HandleInventoryScrolling(seg, off);
 	SIS_HandleStringDecoding(seg, off);
+	SIS_HandleMainMenuPosition(seg, off);
 }
 
 void SIS_WipeMemory(Bitu seg, Bitu off, int length, uint8_t value) {
@@ -5103,6 +5104,19 @@ void SIS_HandleBlobLoading2(Bitu seg, Bitu off) {
 	}
 
 	
+}
+
+void SIS_HandleMainMenuPosition(Bitu seg, Bitu off) {
+	if (seg != 0x01E7) {
+		return;
+	}
+	if (off != 0xF182) {
+		return;
+	}
+	SIS_PrintLocal("", +0x8, 0x2);
+	SIS_PrintLocal("", -0x2, 0x2);
+	SIS_PrintLocal("", +0x6, 0x2);
+	SIS_PrintLocal("", -0x4, 0x2);
 }
 
 void SIS_HandleFunctionInjection(Bitu seg, Bitu off) {
