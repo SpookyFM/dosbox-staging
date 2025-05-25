@@ -5110,8 +5110,9 @@ void SIS_HandleMainMenuPosition(Bitu seg, Bitu off) {
 	if (seg != 0x01E7) {
 		return;
 	}
-	if (off != 0xF182) {
+	if (off != 0xF1B2) {
 		return;
+		
 	}
 	SIS_PrintLocal("", +0x8, 0x2);
 	SIS_PrintLocal("", -0x2, 0x2);
