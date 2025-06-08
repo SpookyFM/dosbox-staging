@@ -6719,6 +6719,28 @@ bool SIS_ParseCommand(char* found, std::string command)
 
 		return true;
 	}
+	if (command == "SET") {
+		// Set the value of a script variable
+		uint16_t index = (uint16_t)GetHexValue(found, found);
+		found++;
+		uint16_t v1 = (uint16_t)GetHexValue(found, found);
+		found++;
+		uint16_t v2 = (uint16_t)GetHexValue(found, found);
+
+		uint32_t s;
+		uint16_t v;
+		SIS_ReadAddress(SIS_GlobalOffset, 0x06C6, s, v);
+		v += index * 4;
+		mem_writew_inline(GetAddress(s, v - 0x4), v1);
+		mem_writew_inline(GetAddress(s, v - 0x02), v2);
+
+
+
+		DEBUG_ShowMsg("DEBUG: Setting script variable %u to %u %u",
+		              index, v1, v2);
+
+		return true;
+	}
 
 
 
