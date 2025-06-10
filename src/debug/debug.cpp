@@ -6536,6 +6536,26 @@ bool SIS_ParseCommand(char* found, std::string command)
 		
 		return true;
 	}
+	if (command == "MOTS") {
+		// Move an object to a scene
+		uint16_t objectIndex = (uint16_t)GetHexValue(found, found);
+		found++;
+		uint16_t sceneIndex = (uint16_t)GetHexValue(found, found);
+
+		uint32_t objSeg;
+		uint16_t objOff;
+		SIS_ReadAddress(0x227, 0x77C + (objectIndex << 2), objSeg, objOff);
+		mem_writew_inline(GetAddress(objSeg, objOff + 0x4), 0x400 + sceneIndex);
+
+		DEBUG_ShowMsg("DEBUG: Moving object %.4x to scene %.4x.\n", objectIndex, sceneIndex);
+
+		return true;
+	}
+	if (command == "GETSCENE") {
+		uint16_t currentSceneID = mem_readw_inline(GetAddress(0x0227, 0x077C));
+		DEBUG_ShowMsg("DEBUG: Current scene index: %.4x.\n", currentSceneID);
+		return true;
+	}
 	if (command == "GIVEITEM") {
 		// Give an item to the protagonist
 		uint16_t objectIndex = (uint16_t)GetHexValue(found, found);
